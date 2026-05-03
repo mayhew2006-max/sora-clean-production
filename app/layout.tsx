@@ -1,6 +1,6 @@
 export const metadata = {
   title: "Sora",
-  description: "AI companion",
+  description: "Someone to talk to without judgement.",
 };
 
 export default function RootLayout({
@@ -10,9 +10,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="bg-black text-white">
-        {children}
-      </body>
+      <body>{children}</body>
     </html>
   );
 }
