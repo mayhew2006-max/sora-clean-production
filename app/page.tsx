@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type Message = {
   role: "user" | "assistant";
@@ -11,12 +11,22 @@ export default function Home() {
   const [messages, setMessages] = useState<Message[]>([
     { role: "assistant", content: "Hey. I'm here. What's on your mind?" },
   ]);
-  const [input, setInput] = useState("");
+  const [listening, setListening] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [paid, setPaid] = useState(false);
 
-  async function sendMessage(msg?: string) {
-    const text = msg || input;
+  useEffect(() => {
+    const isPaid = localStorage.getItem("sora_paid") === "true";
+    setPaid(isPaid);
+  }, []);
+
+  async function sendMessage(text: string) {
     if (!text.trim()) return;
+
+    if (!paid && messages.length > 4) {
+      window.location.href = "/pay";
+      return;
+    }
 
     const newMessages: Message[] = [
       ...messages,
@@ -24,32 +34,61 @@ export default function Home() {
     ];
 
     setMessages(newMessages);
-    setInput("");
     setLoading(true);
 
-    try {
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ messages: newMessages }),
-      });
+    const res = await fetch("/api/chat", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ messages: newMessages }),
+    });
 
-      const data = await res.json();
+    const data = await res.json();
 
-      setMessages([
-        ...newMessages,
-        { role: "assistant", content: data.reply },
-      ]);
-    } catch (err) {
-      setMessages([
-        ...newMessages,
-        { role: "assistant", content: "Something went wrong." },
-      ]);
+    const updated = [
+      ...newMessages,
+      { role: "assistant", content: data.reply },
+    ];
+
+    setMessages(updated);
+    speak(data.reply);
+    setLoading(false);
+  }
+
+  function speak(text: string) {
+    const utterance = new SpeechSynthesisUtterance(text);
+    speechSynthesis.cancel();
+    speechSynthesis.speak(utterance);
+  }
+
+  function startListening() {
+    const SpeechRecognition =
+      (window as any).SpeechRecognition ||
+      (window as any).webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      alert("Speech not supported");
+      return;
     }
 
-    setLoading(false);
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = false;
+
+    recognition.onresult = (event: any) => {
+      const text =
+        event.results[event.results.length - 1][0].transcript;
+      sendMessage(text);
+    };
+
+    recognition.start();
+    setListening(true);
+  }
+
+  function stopListening() {
+    setListening(false);
+    window.location.reload();
   }
 
   return (
@@ -57,6 +96,15 @@ export default function Home() {
       {/* Header */}
       <div className="p-4 border-b border-white/10 flex justify-between">
         <h1 className="text-xl font-bold">Sora</h1>
+
+        <button
+          onClick={() =>
+            listening ? stopListening() : startListening()
+          }
+          className="px-3 py-1 border border-white/20 rounded-full text-sm"
+        >
+          {listening ? "Stop Listening" : "Always Listening"}
+        </button>
       </div>
 
       {/* Messages */}
@@ -77,24 +125,6 @@ export default function Home() {
         {loading && (
           <p className="text-zinc-500 text-sm">Sora is thinking...</p>
         )}
-      </div>
-
-      {/* Input */}
-      <div className="p-4 border-t border-white/10 flex gap-2">
-        <input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-          placeholder="Talk to Sora..."
-          className="flex-1 bg-zinc-900 border border-white/10 rounded-xl px-4 py-3 text-white outline-none"
-        />
-
-        <button
-          onClick={() => sendMessage()}
-          className="px-4 py-2 bg-white text-black rounded-xl"
-        >
-          Send
-        </button>
       </div>
     </main>
   );
