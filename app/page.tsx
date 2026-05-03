@@ -66,6 +66,8 @@ export default function Home() {
     loadingRef.current = true;
     setLoading(true);
 
+    recognitionRef.current?.stop();
+
     const updated: ChatMessage[] = [
       ...messagesRef.current,
       { role: "user", content: cleanText },
@@ -104,9 +106,15 @@ export default function Home() {
 
     loadingRef.current = false;
     setLoading(false);
+
+    if (handsFreeRef.current) {
+      setTimeout(() => startVoiceLoop(), 1800);
+    }
   }
 
   function startVoiceLoop() {
+    if (loadingRef.current) return;
+
     const SpeechRecognition =
       (window as any).SpeechRecognition ||
       (window as any).webkitSpeechRecognition;
@@ -120,39 +128,23 @@ export default function Home() {
 
     const recognition = new SpeechRecognition();
     recognition.lang = "en-US";
-    recognition.continuous = true;
-    recognition.interimResults = true;
-
-    let finalTranscript = "";
-    let silenceTimer: any;
+    recognition.continuous = false;
+    recognition.interimResults = false;
 
     recognition.onstart = () => setListening(true);
 
     recognition.onresult = (event: any) => {
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const transcript = event.results[i][0].transcript;
-
-        if (event.results[i].isFinal) {
-          finalTranscript += transcript;
-        }
-      }
-
-      clearTimeout(silenceTimer);
-
-      silenceTimer = setTimeout(() => {
-        if (finalTranscript.trim()) {
-          sendMessage(finalTranscript.trim());
-          finalTranscript = "";
-        }
-      }, 1200);
+      const text = event.results[0][0].transcript;
+      sendMessage(text);
     };
 
     recognition.onerror = () => setListening(false);
 
     recognition.onend = () => {
       setListening(false);
-      if (handsFreeRef.current) {
-        setTimeout(() => startVoiceLoop(), 700);
+
+      if (handsFreeRef.current && !loadingRef.current) {
+        setTimeout(() => startVoiceLoop(), 1400);
       }
     };
 
@@ -224,15 +216,8 @@ export default function Home() {
           </div>
         ))}
 
-        {loading && (
-          <div className="text-zinc-500 text-sm">Sora is thinking...</div>
-        )}
-
-        {listening && (
-          <div className="text-zinc-400 text-sm animate-pulse">
-            Listening...
-          </div>
-        )}
+        {loading && <div className="text-zinc-500 text-sm">Sora is thinking...</div>}
+        {listening && <div className="text-zinc-400 text-sm animate-pulse">Listening...</div>}
       </section>
 
       {locked && (
