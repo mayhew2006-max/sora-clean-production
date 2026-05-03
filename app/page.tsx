@@ -22,20 +22,43 @@ export default function Home() {
     speechSynthesis.speak(voice);
   }
 
-  function replyToUser(text: string) {
+  async function replyToUser(text: string) {
     if (!text.trim()) return;
 
-    const soraReply =
-      "I hear you. Stay with me for a second — what part of that is weighing on you the most?";
+    const userMessage: Message = { role: "user", content: text };
 
-    setMessages((prev) => [
-      ...prev,
-      { role: "user", content: text },
-      { role: "assistant", content: soraReply },
-    ]);
-
+    setMessages((prev) => [...prev, userMessage]);
     setInput("");
-    speak(soraReply);
+
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        body: JSON.stringify({ message: text }),
+      });
+
+      const data = await res.json();
+
+      const reply =
+        data.reply ||
+        "I hear you. Stay with me for a second — what’s weighing on you most?";
+
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: reply },
+      ]);
+
+      speak(reply);
+    } catch {
+      const fallback =
+        "Something glitched, but I’m still here with you.";
+
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: fallback },
+      ]);
+
+      speak(fallback);
+    }
   }
 
   function startTalking() {
@@ -44,17 +67,14 @@ export default function Home() {
       (window as any).webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
-      alert("Speech recognition is not supported on this browser.");
+      alert("Speech recognition not supported");
       return;
     }
 
     const recognition = new SpeechRecognition();
     recognition.lang = "en-US";
-    recognition.continuous = false;
-    recognition.interimResults = false;
 
     recognition.onstart = () => setListening(true);
-
     recognition.onend = () => setListening(false);
 
     recognition.onresult = (event: any) => {
@@ -66,18 +86,15 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top,#27272a,#09090b_45%,#000)] text-white flex flex-col">
+    <main className="min-h-screen bg-black text-white flex flex-col">
       <header className="p-5 border-b border-white/10">
         <h1 className="text-4xl font-bold">Sora</h1>
-        <p className="text-zinc-400 text-sm">
-          Someone to talk to without judgment.
-        </p>
       </header>
 
       <section className="flex-1 overflow-y-auto p-5 space-y-4">
-        {messages.map((message, index) => (
+        {messages.map((message, i) => (
           <div
-            key={index}
+            key={i}
             className={
               message.role === "user"
                 ? "ml-auto max-w-2xl bg-white text-black rounded-3xl px-5 py-4"
@@ -108,7 +125,7 @@ export default function Home() {
             if (e.key === "Enter") replyToUser(input);
           }}
           placeholder="Talk to Sora..."
-          className="flex-1 bg-zinc-900 border border-white/10 rounded-2xl px-4 py-4 text-white outline-none"
+          className="flex-1 bg-zinc-900 border border-white/10 rounded-2xl px-4 py-4 text-white"
         />
 
         <button
