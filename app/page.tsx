@@ -8,7 +8,6 @@ type ChatMessage = {
 };
 
 const FREE_LIMIT = 20;
-const STRIPE_LINK = "https://buy.stripe.com/14A3cw1AZfbD2bM6Pc1gs00";
 
 export default function Home() {
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -18,13 +17,13 @@ export default function Home() {
   const [paid, setPaid] = useState(false);
   const [loading, setLoading] = useState(false);
   const [voiceOn, setVoiceOn] = useState(true);
-  const [alwaysListening, setAlwaysListening] = useState(false);
+  const [handsFree, setHandsFree] = useState(false);
   const [listening, setListening] = useState(false);
 
   const messagesRef = useRef<ChatMessage[]>(messages);
   const loadingRef = useRef(false);
+  const handsFreeRef = useRef(false);
   const recognitionRef = useRef<any>(null);
-  const alwaysRef = useRef(false);
 
   useEffect(() => {
     const savedMessages = localStorage.getItem("sora_messages");
@@ -107,7 +106,7 @@ export default function Home() {
     setLoading(false);
   }
 
-  function startVoice(continuous: boolean) {
+  function startVoiceLoop() {
     const SpeechRecognition =
       (window as any).SpeechRecognition ||
       (window as any).webkitSpeechRecognition;
@@ -121,25 +120,39 @@ export default function Home() {
 
     const recognition = new SpeechRecognition();
     recognition.lang = "en-US";
-    recognition.continuous = continuous;
-    recognition.interimResults = false;
+    recognition.continuous = true;
+    recognition.interimResults = true;
+
+    let finalTranscript = "";
+    let silenceTimer: any;
 
     recognition.onstart = () => setListening(true);
 
     recognition.onresult = (event: any) => {
-      const result = event.results[event.results.length - 1];
-      if (!result?.isFinal) return;
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
 
-      const text = result[0].transcript;
-      sendMessage(text);
+        if (event.results[i].isFinal) {
+          finalTranscript += transcript;
+        }
+      }
+
+      clearTimeout(silenceTimer);
+
+      silenceTimer = setTimeout(() => {
+        if (finalTranscript.trim()) {
+          sendMessage(finalTranscript.trim());
+          finalTranscript = "";
+        }
+      }, 1200);
     };
 
     recognition.onerror = () => setListening(false);
 
     recognition.onend = () => {
       setListening(false);
-      if (alwaysRef.current) {
-        setTimeout(() => startVoice(true), 700);
+      if (handsFreeRef.current) {
+        setTimeout(() => startVoiceLoop(), 700);
       }
     };
 
@@ -147,16 +160,16 @@ export default function Home() {
     recognition.start();
   }
 
-  function toggleAlwaysListening() {
-    if (alwaysListening) {
-      alwaysRef.current = false;
-      setAlwaysListening(false);
+  function toggleHandsFree() {
+    if (handsFree) {
+      handsFreeRef.current = false;
+      setHandsFree(false);
       recognitionRef.current?.stop();
       setListening(false);
     } else {
-      alwaysRef.current = true;
-      setAlwaysListening(true);
-      startVoice(true);
+      handsFreeRef.current = true;
+      setHandsFree(true);
+      startVoiceLoop();
     }
   }
 
@@ -185,14 +198,14 @@ export default function Home() {
           </button>
 
           <button
-            onClick={toggleAlwaysListening}
+            onClick={toggleHandsFree}
             className={`border px-4 py-2 rounded-full text-sm ${
-              alwaysListening
+              handsFree
                 ? "bg-white text-black border-white"
                 : "bg-white/5 border-white/15"
             }`}
           >
-            {alwaysListening ? "Hands-Free On" : "Hands-Free"}
+            {handsFree ? "Hands-Free On" : "Hands-Free"}
           </button>
         </div>
       </header>
@@ -238,7 +251,7 @@ export default function Home() {
 
       <div className="p-4 border-t border-white/10 flex gap-3">
         <button
-          onClick={() => startVoice(false)}
+          onClick={startVoiceLoop}
           disabled={locked}
           className="bg-zinc-800 border border-white/10 px-4 rounded-2xl disabled:opacity-50"
         >
@@ -262,10 +275,7 @@ export default function Home() {
           Send
         </button>
 
-        <button
-          onClick={resetSora}
-          className="text-xs text-zinc-500 px-2"
-        >
+        <button onClick={resetSora} className="text-xs text-zinc-500 px-2">
           Reset
         </button>
       </div>
