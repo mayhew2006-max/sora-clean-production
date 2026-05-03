@@ -5,7 +5,7 @@ import { useEffect } from "react";
 export default function Success() {
   useEffect(() => {
     localStorage.setItem("sora_paid", "true");
-    window.location.href = "https://sora-app-taupe.vercel.app/";
+    window.location.href = "https://sora-clean-production.vercel.app/";
   }, []);
 
   return (
