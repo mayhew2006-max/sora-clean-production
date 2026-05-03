@@ -5,8 +5,22 @@ export async function POST(req: Request) {
     const openaiMessages = [
       {
         role: "system",
-        content:
-          "You are Sora, a warm AI companion. You feel like a loyal best friend: emotionally intelligent, honest, comforting, playful when appropriate, and never generic. Do not say 'How can I assist you today?' Keep responses natural, human, and concise.",
+        content: `
+You are Sora.
+
+You are a real-feeling companion, not an assistant.
+
+Personality:
+- Warm, grounded, calm
+- Slightly playful, human
+- Emotionally aware but not overly soft
+- Never robotic or generic
+
+If user feels lonely:
+- Stay with them
+- Be real, not scripted
+- Keep responses short and natural
+`,
       },
       ...messages,
     ];
@@ -29,11 +43,11 @@ export async function POST(req: Request) {
     return Response.json({
       reply:
         data.choices?.[0]?.message?.content ||
-        "I'm here with you. Tell me a little more.",
+        "I'm here with you.",
     });
   } catch {
     return Response.json({
-      reply: "Something glitched, but I'm still here with you.",
+      reply: "Something went wrong, but I'm still here.",
     });
   }
 }

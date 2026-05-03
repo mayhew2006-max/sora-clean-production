@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
-const STRIPE_LINK = "https://buy.stripe.com/14A3cw1AZfbD2bM6Pc1gs00";
+const STRIPE_LINK = "https://buy.stripe.com/14A3cw1AZfbd2bM6Pc1gs00";
 const FREE_LIMIT = 20;
 
 type Message = {
@@ -17,171 +17,135 @@ export default function Home() {
   const [input, setInput] = useState("");
   const [count, setCount] = useState(0);
   const [paid, setPaid] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [voiceOn, setVoiceOn] = useState(true);
-  const [alwaysListening, setAlwaysListening] = useState(false);
-  const recognitionRef = useRef<any>(null);
+  const [voiceon, setVoiceon] = useState(true);
+  const [listening, setListening] = useState(false);
 
-  useEffect(() => {
-    const savedMessages = localStorage.getItem("sora_messages");
-    const savedCount = localStorage.getItem("sora_count");
-    const savedPaid = localStorage.getItem("sora_paid");
-
-    if (savedMessages) setMessages(JSON.parse(savedMessages));
-    if (savedCount) setCount(Number(savedCount));
-    if (savedPaid === "true") setPaid(true);
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem("sora_messages", JSON.stringify(messages));
-    localStorage.setItem("sora_count", String(count));
-  }, [messages, count]);
-
-  const freeLeft = Math.max(FREE_LIMIT - count, 0);
+  const freeLeft = FREE_LIMIT - count;
   const locked = !paid && freeLeft <= 0;
 
+  async function sendMessage(text?: string) {
+    const msg = text || input;
+    if (!msg.trim()) return;
+
+    if (locked) {
+      window.location.href = STRIPE_LINK;
+      return;
+    }
+
+    const newMessages = [...messages, { role: "user", content: msg }];
+    setMessages(newMessages);
+    setInput("");
+    setCount((c) => c + 1);
+
+    const res = await fetch("/api/chat", {
+      method: "POST",
+      body: JSON.stringify({ messages: newMessages }),
+    });
+
+    const data = await res.json();
+
+    setMessages((prev) => [
+      ...prev,
+      { role: "assistant", content: data.reply },
+    ]);
+
+    speak(data.reply);
+  }
+
   function speak(text: string) {
-    if (!voiceOn) return;
+    if (!voiceon) return;
+
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.rate = 0.95;
-    utterance.pitch = 1;
     speechSynthesis.cancel();
     speechSynthesis.speak(utterance);
   }
 
-  function startListening(auto = false) {
+  function startListening() {
     const SpeechRecognition =
       (window as any).SpeechRecognition ||
       (window as any).webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
-      alert("Speech recognition is not supported on this browser.");
+      alert("Speech not supported");
       return;
     }
 
     const recognition = new SpeechRecognition();
     recognition.lang = "en-US";
-    recognition.interimResults = false;
-    recognition.continuous = auto;
 
-    recognition.onresult = (event: any) => {
-      const text = event.results[event.results.length - 1][0].transcript;
-      setInput(text);
-      if (auto) setTimeout(() => sendMessage(text), 300);
+    recognition.onstart = () => setListening(true);
+    recognition.onend = () => setListening(false);
+
+    recognition.onresult = (e: any) => {
+      const text = e.results[0][0].transcript;
+      sendMessage(text);
     };
 
-    recognition.onend = () => {
-      if (alwaysListening && auto) recognition.start();
-    };
-
-    recognitionRef.current = recognition;
     recognition.start();
   }
 
-  function toggleAlwaysListening() {
-    if (alwaysListening) {
-      recognitionRef.current?.stop();
-      setAlwaysListening(false);
-    } else {
-      setAlwaysListening(true);
-      startListening(true);
-    }
-  }
+  useEffect(() => {
+    if (!listening) return;
 
-  async function sendMessage(forcedText?: string) {
-    const text = (forcedText || input).trim();
-    if (!text || loading || locked) return;
+    const interval = setInterval(() => {
+      startListening();
+    }, 4000);
 
-    const newMessages: Message[] = [
-      ...messages,
-      { role: "user", content: text },
-    ];
-
-    setInput("");
-    setMessages(newMessages);
-    setCount((prev) => prev + 1);
-    setLoading(true);
-
-    const res = await fetch("/api/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messages: newMessages }),
-    });
-
-    const data = await res.json();
-    const reply = data.reply || "I'm here with you. Tell me more.";
-
-    setMessages([...newMessages, { role: "assistant", content: reply }]);
-    speak(reply);
-    setLoading(false);
-  }
+    return () => clearInterval(interval);
+  }, [listening]);
 
   return (
     <main className="min-h-screen bg-black text-white flex flex-col">
-      <header className="p-5 border-b border-white/10 flex justify-between items-center">
-        <div>
-          <h1 className="text-4xl font-bold">Sora</h1>
-          <p className="text-sm text-zinc-400">
-            {paid ? "Premium unlocked" : `${freeLeft} free messages left`}
-          </p>
-        </div>
-
-        <div className="flex gap-2">
-          <button onClick={() => setVoiceOn(!voiceOn)} className="border border-white/20 px-4 py-2 rounded-full">
-            Voice {voiceOn ? "On" : "Off"}
+      <header className="p-5 flex justify-between">
+        <h1 className="text-2xl font-bold">Sora</h1>
+        <div className="flex gap-3 text-sm">
+          <button onClick={() => setVoiceon(!voiceon)}>
+            Voice {voiceon ? "On" : "Off"}
           </button>
-
-          <button onClick={toggleAlwaysListening} className="border border-white/20 px-4 py-2 rounded-full">
-            {alwaysListening ? "Always Listening On" : "Always Listening Off"}
+          <button onClick={() => setListening(!listening)}>
+            Always Listening {listening ? "On" : "Off"}
           </button>
         </div>
       </header>
 
-      <section className="flex-1 overflow-y-auto p-5 space-y-4">
+      <section className="flex-1 p-5 space-y-4 overflow-y-auto">
         {messages.map((m, i) => (
           <div
             key={i}
-            className={`max-w-2xl px-5 py-4 rounded-2xl ${
+            className={`max-w-xl p-4 rounded-xl ${
               m.role === "user"
                 ? "ml-auto bg-white text-black"
-                : "mr-auto bg-zinc-900 border border-white/10"
+                : "bg-zinc-800"
             }`}
           >
             {m.content}
           </div>
         ))}
-
-        {loading && <p className="text-zinc-500">Sora is thinking...</p>}
       </section>
 
       {locked && (
-        <div className="p-4 border-t border-white/10">
-          <p className="text-center text-zinc-300 mb-3">
-            You used your free messages. Upgrade to keep talking with Sora.
-          </p>
-          <a href={STRIPE_LINK} className="block text-center bg-white text-black py-4 rounded-xl font-semibold">
-            Upgrade Now
-          </a>
+        <div className="p-4 text-center border-t border-white/10">
+          <p>You used your free messages.</p>
+          <button
+            onClick={() => (window.location.href = STRIPE_LINK)}
+            className="mt-2 bg-white text-black px-4 py-2 rounded"
+          >
+            Upgrade
+          </button>
         </div>
       )}
 
-      <div className="p-4 border-t border-white/10 flex gap-3">
-        <button onClick={() => startListening(false)} disabled={locked} className="bg-zinc-800 px-4 rounded-xl">
-          🎙️
-        </button>
-
+      <div className="p-4 flex gap-2">
+        <button onClick={startListening}>🎤</button>
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && sendMessage()}
+          className="flex-1 bg-zinc-900 p-3 rounded"
+          placeholder="Talk to Sora..."
           disabled={locked}
-          placeholder={locked ? "Upgrade to continue..." : "Talk to Sora..."}
-          className="flex-1 bg-zinc-900 border border-white/10 rounded-xl px-4 py-4 text-white"
         />
-
-        <button onClick={() => sendMessage()} disabled={locked} className="bg-white text-black rounded-xl px-6 font-semibold">
-          Send
-        </button>
+        <button onClick={() => sendMessage()}>Send</button>
       </div>
     </main>
   );
