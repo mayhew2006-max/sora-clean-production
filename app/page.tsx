@@ -1,11 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
-type Message = {
-  role: "user" | "assistant";
-  content: string;
-};
+type Message = { role: "user" | "assistant"; content: string };
 
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([
@@ -13,15 +10,9 @@ export default function Home() {
   ]);
   const [input, setInput] = useState("");
   const [listening, setListening] = useState(false);
-  const [paid, setPaid] = useState(false);
-
-  useEffect(() => {
-    setPaid(localStorage.getItem("sora_paid") === "true");
-  }, []);
 
   function speak(text: string) {
     const voice = new SpeechSynthesisUtterance(text);
-    voice.rate = 0.95;
     speechSynthesis.cancel();
     speechSynthesis.speak(voice);
   }
@@ -30,14 +21,14 @@ export default function Home() {
     if (!text.trim()) return;
 
     const userCount = messages.filter((m) => m.role === "user").length;
+    const paid = localStorage.getItem("sora_paid") === "true";
 
     if (!paid && userCount >= 4) {
       window.location.href = "/pay";
       return;
     }
 
-    const reply =
-      "I hear you. Stay with me for a second — what part of that is weighing on you the most?";
+    const reply = "I hear you. Tell me more about that.";
 
     setMessages((prev) => [
       ...prev,
@@ -49,13 +40,13 @@ export default function Home() {
     speak(reply);
   }
 
-  function startTalking() {
+  function startMic() {
     const SpeechRecognition =
       (window as any).SpeechRecognition ||
       (window as any).webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
-      alert("Speech recognition is not supported on this browser.");
+      alert("Mic speech recognition is not supported in this browser. Open Sora in Chrome.");
       return;
     }
 
@@ -66,6 +57,7 @@ export default function Home() {
 
     recognition.onstart = () => setListening(true);
     recognition.onend = () => setListening(false);
+    recognition.onerror = () => setListening(false);
 
     recognition.onresult = (event: any) => {
       const text = event.results[0][0].transcript;
@@ -76,13 +68,10 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top,#27272a,#09090b_45%,#000)] text-white flex flex-col">
+    <main className="min-h-screen bg-black text-white flex flex-col">
       <header className="p-5 border-b border-white/10">
         <h1 className="text-5xl font-bold">Sora</h1>
         <p className="text-zinc-400 mt-2">Someone to talk to without judgment.</p>
-        <p className="text-xs text-zinc-500 mt-2">
-          {paid ? "Sora Pro unlocked" : "Free trial active"}
-        </p>
       </header>
 
       <section className="flex-1 overflow-y-auto p-5 space-y-4">
@@ -104,10 +93,10 @@ export default function Home() {
 
       <footer className="p-4 border-t border-white/10 flex gap-3">
         <button
-          onClick={startTalking}
-          className="bg-zinc-800 border border-white/10 px-4 rounded-2xl"
+          onClick={startMic}
+          className="bg-blue-600 text-white px-5 py-4 rounded-2xl font-bold"
         >
-          🎤
+          🎤 Talk
         </button>
 
         <input
