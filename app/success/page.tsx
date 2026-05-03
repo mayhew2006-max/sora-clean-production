@@ -7,7 +7,7 @@ export default function Success() {
     localStorage.setItem("sora_paid", "true");
     setTimeout(() => {
       window.location.href = "/";
-    }, 1000);
+    }, 1200);
   }, []);
 
   return (

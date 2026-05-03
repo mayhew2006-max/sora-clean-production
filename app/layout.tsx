@@ -1,6 +1,8 @@
+import "./globals.css";
+
 export const metadata = {
   title: "Sora",
-  description: "Someone to talk to without judgement.",
+  description: "Someone to talk to without judgment.",
 };
 
 export default function RootLayout({
