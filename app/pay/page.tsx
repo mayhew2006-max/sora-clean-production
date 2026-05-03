@@ -1,20 +1,25 @@
-const STRIPE_LINK = "https://buy.stripe.com/3cI4gAcfD3sVaIiflI1gs02";
+"use client";
 
 export default function Pay() {
+  async function subscribe() {
+    const res = await fetch("/api/create-checkout", { method: "POST" });
+    const data = await res.json();
+
+    if (data.url) {
+      window.location.href = data.url;
+    } else {
+      alert("Checkout failed.");
+    }
+  }
+
   return (
-    <main className="min-h-screen bg-black text-white flex items-center justify-center px-6">
-      <div className="max-w-md text-center bg-zinc-900 border border-white/10 rounded-3xl p-8">
-        <h1 className="text-4xl font-bold mb-4">Unlock Sora Pro</h1>
-        <p className="text-zinc-400 mb-8">
-          Keep talking with Sora without limits.
-        </p>
-        <a
-          href={STRIPE_LINK}
-          className="block bg-white text-black py-4 rounded-2xl font-semibold"
-        >
-          Subscribe Now
-        </a>
-      </div>
+    <main className="min-h-screen bg-black text-white flex items-center justify-center">
+      <button
+        onClick={subscribe}
+        className="bg-white text-black px-8 py-4 rounded-2xl font-bold"
+      >
+        Subscribe to Sora Pro
+      </button>
     </main>
   );
 }

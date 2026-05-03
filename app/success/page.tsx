@@ -9,8 +9,8 @@ export default function Success() {
   }, []);
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-black text-white">
-      <h1>Unlocking Sora...</h1>
+    <main className="min-h-screen bg-black text-white flex items-center justify-center">
+      <h1>Payment successful. Unlocking Sora...</h1>
     </main>
   );
 }
