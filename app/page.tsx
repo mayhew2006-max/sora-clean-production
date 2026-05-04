@@ -17,9 +17,13 @@ export default function Home() {
   const [paid, setPaid] = useState(false);
   const [loading, setLoading] = useState(false);
   const [voiceOn, setVoiceOn] = useState(true);
+  const [handsFree, setHandsFree] = useState(false);
   const [listening, setListening] = useState(false);
 
   const messagesRef = useRef<Message[]>(messages);
+  const loadingRef = useRef(false);
+  const handsFreeRef = useRef(false);
+  const recognitionRef = useRef<any>(null);
 
   useEffect(() => {
     setPaid(localStorage.getItem("sora_paid") === "true");
@@ -33,24 +37,47 @@ export default function Home() {
   const freeLeft = Math.max(FREE_LIMIT - userCount, 0);
   const locked = !paid && freeLeft <= 0;
 
+  function getBestVoice() {
+    const voices = speechSynthesis.getVoices();
+
+    return (
+      voices.find((v) => v.name.toLowerCase().includes("google us english")) ||
+      voices.find((v) => v.name.toLowerCase().includes("microsoft aria")) ||
+      voices.find((v) => v.name.toLowerCase().includes("samantha")) ||
+      voices.find((v) => v.lang === "en-US") ||
+      voices[0]
+    );
+  }
+
   function speak(text: string) {
     if (!voiceOn) return;
+
     const voice = new SpeechSynthesisUtterance(text);
-    voice.rate = 0.95;
+    const bestVoice = getBestVoice();
+
+    if (bestVoice) voice.voice = bestVoice;
+
+    voice.rate = 0.9;
+    voice.pitch = 0.85;
+    voice.volume = 1;
+
     speechSynthesis.cancel();
     speechSynthesis.speak(voice);
   }
 
   async function sendMessage(text: string) {
     const clean = text.trim();
-    if (!clean || loading) return;
+    if (!clean || loadingRef.current) return;
 
     if (locked) {
       window.location.href = "/pay";
       return;
     }
 
+    loadingRef.current = true;
     setLoading(true);
+
+    recognitionRef.current?.stop();
 
     const nextMessages: Message[] = [
       ...messagesRef.current,
@@ -78,10 +105,15 @@ export default function Home() {
       speak(reply);
     }
 
+    loadingRef.current = false;
     setLoading(false);
+
+    if (handsFreeRef.current) {
+      setTimeout(() => startListeningLoop(), 1800);
+    }
   }
 
-  function startMic() {
+  function startListeningLoop() {
     const SpeechRecognition =
       (window as any).SpeechRecognition ||
       (window as any).webkitSpeechRecognition;
@@ -91,21 +123,51 @@ export default function Home() {
       return;
     }
 
+    if (loadingRef.current) return;
+
+    recognitionRef.current?.stop();
+
     const recognition = new SpeechRecognition();
     recognition.lang = "en-US";
     recognition.continuous = false;
     recognition.interimResults = false;
 
     recognition.onstart = () => setListening(true);
-    recognition.onend = () => setListening(false);
-    recognition.onerror = () => setListening(false);
 
     recognition.onresult = (event: any) => {
       const text = event.results[0][0].transcript;
       sendMessage(text);
     };
 
+    recognition.onerror = () => {
+      setListening(false);
+    };
+
+    recognition.onend = () => {
+      setListening(false);
+
+      if (handsFreeRef.current && !loadingRef.current) {
+        setTimeout(() => startListeningLoop(), 900);
+      }
+    };
+
+    recognitionRef.current = recognition;
     recognition.start();
+  }
+
+  function toggleHandsFree() {
+    if (handsFreeRef.current) {
+      handsFreeRef.current = false;
+      setHandsFree(false);
+      setListening(false);
+      recognitionRef.current?.stop();
+      speechSynthesis.cancel();
+      return;
+    }
+
+    handsFreeRef.current = true;
+    setHandsFree(true);
+    startListeningLoop();
   }
 
   return (
@@ -119,12 +181,23 @@ export default function Home() {
           </p>
         </div>
 
-        <button
-          onClick={() => setVoiceOn(!voiceOn)}
-          className="border border-white/10 rounded-full px-4 py-2 text-sm"
-        >
-          Voice {voiceOn ? "On" : "Off"}
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setVoiceOn(!voiceOn)}
+            className="border border-white/10 rounded-full px-4 py-2 text-sm"
+          >
+            Voice {voiceOn ? "On" : "Off"}
+          </button>
+
+          <button
+            onClick={toggleHandsFree}
+            className={`rounded-full px-4 py-2 text-sm ${
+              handsFree ? "bg-blue-600 text-white" : "border border-white/10"
+            }`}
+          >
+            {handsFree ? "Always Listening On" : "Always Listening"}
+          </button>
+        </div>
       </header>
 
       <section className="flex-1 overflow-y-auto p-5 space-y-4">
@@ -159,7 +232,7 @@ export default function Home() {
 
       <footer className="p-4 border-t border-white/10 flex gap-3">
         <button
-          onClick={startMic}
+          onClick={startListeningLoop}
           disabled={locked}
           className="bg-blue-600 text-white px-5 py-4 rounded-2xl font-bold disabled:opacity-40"
         >
