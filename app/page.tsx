@@ -14,6 +14,7 @@ export default function Home() {
     { role: "assistant", content: "Hey. I'm here. What's on your mind?" },
   ]);
   const [input, setInput] = useState("");
+  const [memory, setMemory] = useState("");
   const [paid, setPaid] = useState(false);
   const [loading, setLoading] = useState(false);
   const [voiceOn, setVoiceOn] = useState(true);
@@ -21,44 +22,66 @@ export default function Home() {
   const [listening, setListening] = useState(false);
 
   const messagesRef = useRef<Message[]>(messages);
+  const memoryRef = useRef("");
   const loadingRef = useRef(false);
   const handsFreeRef = useRef(false);
   const recognitionRef = useRef<any>(null);
 
   useEffect(() => {
-    setPaid(localStorage.getItem("sora_paid") === "true");
+    const savedMessages = localStorage.getItem("sora_messages");
+    const savedMemory = localStorage.getItem("sora_memory");
+    const savedPaid = localStorage.getItem("sora_paid");
+
+    if (savedMessages) setMessages(JSON.parse(savedMessages));
+    if (savedMemory) {
+      setMemory(savedMemory);
+      memoryRef.current = savedMemory;
+    }
+    if (savedPaid === "true") setPaid(true);
   }, []);
 
   useEffect(() => {
     messagesRef.current = messages;
+    localStorage.setItem("sora_messages", JSON.stringify(messages));
   }, [messages]);
 
   const userCount = messages.filter((m) => m.role === "user").length;
   const freeLeft = Math.max(FREE_LIMIT - userCount, 0);
   const locked = !paid && freeLeft <= 0;
 
-  function getBestVoice() {
-    const voices = speechSynthesis.getVoices();
+  function updateMemory(text: string) {
+    const lower = text.toLowerCase();
+    let current = memoryRef.current;
 
-    return (
-      voices.find((v) => v.name.toLowerCase().includes("google us english")) ||
-      voices.find((v) => v.name.toLowerCase().includes("microsoft aria")) ||
-      voices.find((v) => v.name.toLowerCase().includes("samantha")) ||
-      voices.find((v) => v.lang === "en-US") ||
-      voices[0]
-    );
+    const important =
+      lower.includes("my name is") ||
+      lower.includes("i lost") ||
+      lower.includes("my dad") ||
+      lower.includes("my mom") ||
+      lower.includes("i feel") ||
+      lower.includes("i like") ||
+      lower.includes("i hate") ||
+      lower.includes("i struggle") ||
+      lower.includes("i'm scared") ||
+      lower.includes("im scared") ||
+      lower.includes("remember");
+
+    if (!important) return;
+
+    const addition = `User said: ${text}`;
+    const updated = `${current}\n${addition}`.trim().slice(-2500);
+
+    memoryRef.current = updated;
+    setMemory(updated);
+    localStorage.setItem("sora_memory", updated);
   }
 
   function speak(text: string) {
     if (!voiceOn) return;
 
     const voice = new SpeechSynthesisUtterance(text);
-    const bestVoice = getBestVoice();
-
-    if (bestVoice) voice.voice = bestVoice;
-
     voice.rate = 0.9;
-    voice.pitch = 0.85;
+    voice.pitch = 0.9;
     voice.volume = 1;
 
     speechSynthesis.cancel();
@@ -74,9 +97,10 @@ export default function Home() {
       return;
     }
 
+    updateMemory(clean);
+
     loadingRef.current = true;
     setLoading(true);
-
     recognitionRef.current?.stop();
 
     const nextMessages: Message[] = [
@@ -91,7 +115,10 @@ export default function Home() {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: nextMessages }),
+        body: JSON.stringify({
+          messages: nextMessages,
+          memory: memoryRef.current,
+        }),
       });
 
       const data = await res.json();
@@ -139,13 +166,10 @@ export default function Home() {
       sendMessage(text);
     };
 
-    recognition.onerror = () => {
-      setListening(false);
-    };
+    recognition.onerror = () => setListening(false);
 
     recognition.onend = () => {
       setListening(false);
-
       if (handsFreeRef.current && !loadingRef.current) {
         setTimeout(() => startListeningLoop(), 900);
       }
@@ -170,6 +194,13 @@ export default function Home() {
     startListeningLoop();
   }
 
+  function resetSora() {
+    localStorage.removeItem("sora_messages");
+    localStorage.removeItem("sora_memory");
+    localStorage.removeItem("sora_paid");
+    window.location.reload();
+  }
+
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top,#262626,#09090b_45%,#000)] text-white flex flex-col">
       <header className="p-5 border-b border-white/10 flex justify-between items-start">
@@ -179,6 +210,7 @@ export default function Home() {
           <p className="text-xs text-zinc-500 mt-2">
             {paid ? "Sora Pro unlocked" : `${freeLeft} free messages left`}
           </p>
+          {memory && <p className="text-xs text-blue-400 mt-1">Memory active</p>}
         </div>
 
         <div className="flex gap-2">
@@ -254,6 +286,10 @@ export default function Home() {
           className="bg-white text-black rounded-2xl px-6 font-semibold disabled:opacity-40"
         >
           Send
+        </button>
+
+        <button onClick={resetSora} className="text-xs text-zinc-500 px-2">
+          Reset
         </button>
       </footer>
     </main>
