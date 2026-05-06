@@ -7,11 +7,11 @@ type Message = {
   content: string;
 };
 
-const FREE_LIMIT = 6;
+const FREE_LIMIT = 30;
 
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([
-    { role: "assistant", content: "Hey. I'm here. What's on your mind?" },
+    { role: "assistant", content: "Hey… I’m Grace. I’m here with you." },
   ]);
   const [input, setInput] = useState("");
   const [memory, setMemory] = useState("");
@@ -26,10 +26,11 @@ export default function Home() {
   const loadingRef = useRef(false);
   const handsFreeRef = useRef(false);
   const recognitionRef = useRef<any>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
-    const savedMessages = localStorage.getItem("sora_messages");
-    const savedMemory = localStorage.getItem("sora_memory");
+    const savedMessages = localStorage.getItem("grace_messages");
+    const savedMemory = localStorage.getItem("grace_memory");
     const savedPaid = localStorage.getItem("sora_paid");
 
     if (savedMessages) setMessages(JSON.parse(savedMessages));
@@ -42,7 +43,7 @@ export default function Home() {
 
   useEffect(() => {
     messagesRef.current = messages;
-    localStorage.setItem("sora_messages", JSON.stringify(messages));
+    localStorage.setItem("grace_messages", JSON.stringify(messages));
   }, [messages]);
 
   const userCount = messages.filter((m) => m.role === "user").length;
@@ -69,23 +70,41 @@ export default function Home() {
     if (!important) return;
 
     const addition = `User said: ${text}`;
-    const updated = `${current}\n${addition}`.trim().slice(-2500);
+    const updated = `${current}\n${addition}`.trim().slice(-3000);
 
     memoryRef.current = updated;
     setMemory(updated);
-    localStorage.setItem("sora_memory", updated);
+    localStorage.setItem("grace_memory", updated);
   }
 
-  function speak(text: string) {
+  async function speak(text: string) {
     if (!voiceOn) return;
 
-    const voice = new SpeechSynthesisUtterance(text);
-    voice.rate = 0.9;
-    voice.pitch = 0.9;
-    voice.volume = 1;
+    try {
+      audioRef.current?.pause();
 
-    speechSynthesis.cancel();
-    speechSynthesis.speak(voice);
+      const res = await fetch("/api/speak", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+
+      if (!res.ok) throw new Error("Voice failed");
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+
+      audioRef.current = audio;
+      audio.onended = () => URL.revokeObjectURL(url);
+      await audio.play();
+    } catch {
+      const fallback = new SpeechSynthesisUtterance(text);
+      fallback.rate = 0.9;
+      fallback.pitch = 0.9;
+      speechSynthesis.cancel();
+      speechSynthesis.speak(fallback);
+    }
   }
 
   async function sendMessage(text: string) {
@@ -125,11 +144,11 @@ export default function Home() {
       const reply = data.reply || "I'm here with you. Tell me more.";
 
       setMessages([...nextMessages, { role: "assistant", content: reply }]);
-      speak(reply);
+      await speak(reply);
     } catch {
       const reply = "Something glitched, but I'm still here with you.";
       setMessages([...nextMessages, { role: "assistant", content: reply }]);
-      speak(reply);
+      await speak(reply);
     }
 
     loadingRef.current = false;
@@ -185,6 +204,7 @@ export default function Home() {
       setHandsFree(false);
       setListening(false);
       recognitionRef.current?.stop();
+      audioRef.current?.pause();
       speechSynthesis.cancel();
       return;
     }
@@ -194,9 +214,9 @@ export default function Home() {
     startListeningLoop();
   }
 
-  function resetSora() {
-    localStorage.removeItem("sora_messages");
-    localStorage.removeItem("sora_memory");
+  function resetGrace() {
+    localStorage.removeItem("grace_messages");
+    localStorage.removeItem("grace_memory");
     localStorage.removeItem("sora_paid");
     window.location.reload();
   }
@@ -205,10 +225,12 @@ export default function Home() {
     <main className="min-h-screen bg-[radial-gradient(circle_at_top,#262626,#09090b_45%,#000)] text-white flex flex-col">
       <header className="p-5 border-b border-white/10 flex justify-between items-start">
         <div>
-          <h1 className="text-5xl font-bold tracking-tight">Sora</h1>
-          <p className="text-zinc-400 mt-2">Someone to talk to without judgment.</p>
+          <h1 className="text-5xl font-bold tracking-tight">Grace</h1>
+          <p className="text-zinc-400 mt-2">
+            Someone who listens when no one else is there.
+          </p>
           <p className="text-xs text-zinc-500 mt-2">
-            {paid ? "Sora Pro unlocked" : `${freeLeft} free messages left`}
+            {paid ? "Grace Pro unlocked" : `${freeLeft} free messages left`}
           </p>
           {memory && <p className="text-xs text-blue-400 mt-1">Memory active</p>}
         </div>
@@ -246,18 +268,20 @@ export default function Home() {
           </div>
         ))}
 
-        {loading && <p className="text-zinc-500 animate-pulse">Sora is thinking...</p>}
+        {loading && <p className="text-zinc-500 animate-pulse">Grace is thinking...</p>}
         {listening && <p className="text-blue-400 animate-pulse">Listening...</p>}
       </section>
 
       {locked && (
         <div className="p-4 border-t border-white/10 text-center bg-zinc-950">
-          <p className="text-zinc-300 mb-3">Your free trial is over. Upgrade to keep talking.</p>
+          <p className="text-zinc-300 mb-3">
+            You used your free messages. Upgrade to keep talking with Grace.
+          </p>
           <a
             href="/pay"
             className="inline-block bg-white text-black rounded-2xl px-8 py-4 font-bold"
           >
-            Upgrade Sora Pro
+            Upgrade Grace Pro
           </a>
         </div>
       )}
@@ -276,7 +300,7 @@ export default function Home() {
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && sendMessage(input)}
           disabled={locked}
-          placeholder="Talk to Sora..."
+          placeholder="Talk to Grace..."
           className="flex-1 bg-zinc-900 border border-white/10 rounded-2xl px-4 py-4 text-white outline-none disabled:opacity-40"
         />
 
@@ -288,7 +312,7 @@ export default function Home() {
           Send
         </button>
 
-        <button onClick={resetSora} className="text-xs text-zinc-500 px-2">
+        <button onClick={resetGrace} className="text-xs text-zinc-500 px-2">
           Reset
         </button>
       </footer>

@@ -1,8 +1,8 @@
 import "./globals.css";
 
 export const metadata = {
-  title: "Sora",
-  description: "Someone to talk to without judgment.",
+  title: "Grace",
+  description: "Someone who listens when no one else is there.",
   manifest: "/manifest.json",
 };
 
