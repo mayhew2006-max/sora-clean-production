@@ -13,21 +13,72 @@ export default function Home() {
   const [messages, setMessages] = useState<Message[]>([
     { role: "assistant", content: "Hey… I’m Grace. I’m here with you." },
   ]);
-
   const [input, setInput] = useState("");
+  const [memory, setMemory] = useState("");
+  const [paid, setPaid] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [listening, setListening] = useState(false);
-  const [wakeMode, setWakeMode] = useState(false);
   const [voiceOn, setVoiceOn] = useState(true);
+  const [conversationMode, setConversationMode] = useState(false);
+  const [listening, setListening] = useState(false);
 
+  const messagesRef = useRef<Message[]>(messages);
+  const memoryRef = useRef("");
+  const loadingRef = useRef(false);
+  const conversationRef = useRef(false);
   const recognitionRef = useRef<any>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const loadingRef = useRef(false);
-  const wakeModeRef = useRef(false);
 
   useEffect(() => {
-    wakeModeRef.current = wakeMode;
-  }, [wakeMode]);
+    const savedMessages = localStorage.getItem("grace_messages");
+    const savedMemory = localStorage.getItem("grace_memory");
+    const savedPaid = localStorage.getItem("sora_paid");
+
+    if (savedMessages) setMessages(JSON.parse(savedMessages));
+    if (savedMemory) {
+      setMemory(savedMemory);
+      memoryRef.current = savedMemory;
+    }
+    if (savedPaid === "true") setPaid(true);
+  }, []);
+
+  useEffect(() => {
+    messagesRef.current = messages;
+    localStorage.setItem("grace_messages", JSON.stringify(messages));
+  }, [messages]);
+
+  const userCount = messages.filter((m) => m.role === "user").length;
+  const freeLeft = Math.max(FREE_LIMIT - userCount, 0);
+  const locked = !paid && freeLeft <= 0;
+
+  function updateMemory(text: string) {
+    const lower = text.toLowerCase();
+
+    const important =
+      lower.includes("my name is") ||
+      lower.includes("remember") ||
+      lower.includes("i lost") ||
+      lower.includes("my dad") ||
+      lower.includes("my mom") ||
+      lower.includes("my daughter") ||
+      lower.includes("my son") ||
+      lower.includes("i feel") ||
+      lower.includes("i like") ||
+      lower.includes("i hate") ||
+      lower.includes("i struggle") ||
+      lower.includes("i'm scared") ||
+      lower.includes("im scared") ||
+      lower.includes("i miss") ||
+      lower.includes("i love");
+
+    if (!important) return;
+
+    const addition = `User said: ${text}`;
+    const updated = `${memoryRef.current}\n${addition}`.trim().slice(-3500);
+
+    memoryRef.current = updated;
+    setMemory(updated);
+    localStorage.setItem("grace_memory", updated);
+  }
 
   async function speak(text: string) {
     if (!voiceOn) return;
@@ -37,179 +88,82 @@ export default function Home() {
 
       const res = await fetch("/api/speak", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text }),
       });
 
+      if (!res.ok) throw new Error("Voice failed");
+
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
-
       const audio = new Audio(url);
+
       audioRef.current = audio;
 
       audio.onended = () => {
         URL.revokeObjectURL(url);
 
-        if (wakeModeRef.current) {
-          setTimeout(() => {
-            startWakeListening();
-          }, 800);
+        if (conversationRef.current) {
+          setTimeout(() => startConversationListening(), 1200);
         }
       };
 
       await audio.play();
     } catch {
-      console.log("voice failed");
+      const fallback = new SpeechSynthesisUtterance(text);
+      fallback.rate = 0.9;
+      fallback.pitch = 0.9;
+      speechSynthesis.cancel();
+      speechSynthesis.speak(fallback);
     }
-  }
-
-  function getGreeting() {
-    const hour = new Date().getHours();
-
-    if (hour >= 5 && hour < 12) {
-      return "Good morning. I’m here with you.";
-    }
-
-    if (hour >= 12 && hour < 17) {
-      return "Good afternoon. I’m here with you.";
-    }
-
-    if (hour >= 17 && hour < 22) {
-      return "Good evening. I’m here with you.";
-    }
-
-    return "Hey… I’m here with you.";
   }
 
   async function sendMessage(text: string) {
-    if (!text.trim() || loadingRef.current) return;
+    const clean = text.trim();
+    if (!clean || loadingRef.current) return;
+
+    if (locked) {
+      window.location.href = "/pay";
+      return;
+    }
+
+    updateMemory(clean);
 
     loadingRef.current = true;
     setLoading(true);
-
     recognitionRef.current?.stop();
 
     const nextMessages: Message[] = [
-      ...messages,
-      {
-        role: "user",
-        content: text,
-      },
+      ...messagesRef.current,
+      { role: "user", content: clean },
     ];
 
     setMessages(nextMessages);
+    setInput("");
 
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           messages: nextMessages,
+          memory: memoryRef.current,
         }),
       });
 
       const data = await res.json();
+      const reply = data.reply || "I'm here with you. Tell me more.";
 
-      const reply =
-        data.reply || "I’m here with you.";
-
-      const updated: Message[] = [
-        ...nextMessages,
-        {
-          role: "assistant",
-          content: reply,
-        },
-      ];
-
-      setMessages(updated);
-
+      setMessages([...nextMessages, { role: "assistant", content: reply }]);
       await speak(reply);
     } catch {
-      const updated: Message[] = [
-        ...nextMessages,
-        {
-          role: "assistant",
-          content: "Something glitched, but I’m still here.",
-        },
-      ];
-
-      setMessages(updated);
+      const reply = "Something glitched, but I'm still here with you.";
+      setMessages([...nextMessages, { role: "assistant", content: reply }]);
+      await speak(reply);
     }
 
     loadingRef.current = false;
     setLoading(false);
-  }
-
-  function startWakeListening() {
-    if (!wakeModeRef.current) return;
-
-    const SpeechRecognition =
-      (window as any).SpeechRecognition ||
-      (window as any).webkitSpeechRecognition;
-
-    if (!SpeechRecognition) {
-      alert("Use Chrome for Wake Mode.");
-      return;
-    }
-
-    recognitionRef.current?.stop();
-
-    const recognition = new SpeechRecognition();
-
-    recognition.lang = "en-US";
-    recognition.continuous = true;
-    recognition.interimResults = false;
-
-    recognition.onstart = () => {
-      setListening(true);
-    };
-
-    recognition.onresult = async (event: any) => {
-      const transcript =
-        event.results[event.results.length - 1][0]
-          .transcript
-          .toLowerCase();
-
-      console.log(transcript);
-
-      const wakeDetected =
-        transcript.includes("grace") ||
-        transcript.includes("hey grace");
-
-      if (wakeDetected) {
-        recognition.stop();
-
-        const greeting = getGreeting();
-
-        await speak(greeting);
-
-        setTimeout(() => {
-          startConversationListening();
-        }, 1200);
-      }
-    };
-
-    recognition.onend = () => {
-      setListening(false);
-
-      if (wakeModeRef.current && !loadingRef.current) {
-        setTimeout(() => {
-          startWakeListening();
-        }, 1200);
-      }
-    };
-
-    recognition.onerror = () => {
-      setListening(false);
-    };
-
-    recognitionRef.current = recognition;
-
-    recognition.start();
   }
 
   function startConversationListening() {
@@ -218,103 +172,93 @@ export default function Home() {
       (window as any).webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
+      alert("Voice works best in Chrome with microphone permission allowed.");
       return;
     }
 
-    const recognition = new SpeechRecognition();
+    if (loadingRef.current) return;
 
+    recognitionRef.current?.stop();
+
+    const recognition = new SpeechRecognition();
     recognition.lang = "en-US";
     recognition.continuous = false;
     recognition.interimResults = false;
 
-    recognition.onstart = () => {
-      setListening(true);
+    recognition.onstart = () => setListening(true);
+
+    recognition.onresult = (event: any) => {
+      const text = event.results[0][0].transcript;
+      sendMessage(text);
     };
 
-    recognition.onresult = async (event: any) => {
-      const transcript =
-        event.results[0][0].transcript;
-
-      await sendMessage(transcript);
-    };
+    recognition.onerror = () => setListening(false);
 
     recognition.onend = () => {
       setListening(false);
-
-      if (wakeModeRef.current && !loadingRef.current) {
-        setTimeout(() => {
-          startWakeListening();
-        }, 1200);
+      if (conversationRef.current && !loadingRef.current) {
+        setTimeout(() => startConversationListening(), 1400);
       }
     };
 
-    recognition.onerror = () => {
-      setListening(false);
-    };
-
     recognitionRef.current = recognition;
-
     recognition.start();
   }
 
-  function toggleWakeMode() {
-    if (wakeModeRef.current) {
-      wakeModeRef.current = false;
-      setWakeMode(false);
+  function toggleConversationMode() {
+    if (conversationRef.current) {
+      conversationRef.current = false;
+      setConversationMode(false);
+      setListening(false);
       recognitionRef.current?.stop();
+      audioRef.current?.pause();
+      speechSynthesis.cancel();
       return;
     }
 
-    wakeModeRef.current = true;
-    setWakeMode(true);
+    conversationRef.current = true;
+    setConversationMode(true);
+    speak("Conversation mode is on. I’m here with you.");
+  }
 
-    speak("Wake mode activated.");
-
-    setTimeout(() => {
-      startWakeListening();
-    }, 1200);
+  function resetGrace() {
+    localStorage.removeItem("grace_messages");
+    localStorage.removeItem("grace_memory");
+    localStorage.removeItem("sora_paid");
+    window.location.reload();
   }
 
   return (
-    <main className="min-h-screen bg-black text-white flex flex-col">
-      <header className="p-5 border-b border-white/10">
-        <h1 className="text-5xl font-bold">
-          Grace
-        </h1>
+    <main className="min-h-screen bg-[radial-gradient(circle_at_top,#262626,#09090b_45%,#000)] text-white flex flex-col">
+      <header className="p-5 border-b border-white/10 flex justify-between items-start">
+        <div>
+          <h1 className="text-5xl font-bold tracking-tight">Grace</h1>
+          <p className="text-zinc-400 mt-2">
+            Someone who listens when no one else is there.
+          </p>
+          <p className="text-xs text-zinc-500 mt-2">
+            {paid ? "Grace Pro unlocked" : `${freeLeft} free messages left`}
+          </p>
+          {memory && <p className="text-xs text-blue-400 mt-1">Memory active</p>}
+        </div>
 
-        <p className="text-zinc-400 mt-2">
-          Someone who listens when no one else is there.
-        </p>
-
-        <div className="flex gap-3 mt-5">
+        <div className="flex gap-2">
           <button
-            onClick={toggleWakeMode}
-            className={`px-5 py-3 rounded-2xl font-semibold ${
-              wakeMode
-                ? "bg-green-600"
-                : "bg-zinc-800"
-            }`}
-          >
-            {wakeMode
-              ? "Wake Mode On"
-              : "Wake Mode"}
-          </button>
-
-          <button
-            onClick={() =>
-              setVoiceOn(!voiceOn)
-            }
-            className="px-5 py-3 rounded-2xl bg-zinc-800"
+            onClick={() => setVoiceOn(!voiceOn)}
+            className="border border-white/10 rounded-full px-4 py-2 text-sm"
           >
             Voice {voiceOn ? "On" : "Off"}
           </button>
-        </div>
 
-        {listening && (
-          <p className="text-green-400 mt-4 animate-pulse">
-            Listening…
-          </p>
-        )}
+          <button
+            onClick={toggleConversationMode}
+            className={`rounded-full px-4 py-2 text-sm ${
+              conversationMode ? "bg-blue-600 text-white" : "border border-white/10"
+            }`}
+          >
+            {conversationMode ? "Conversation On" : "Conversation Mode"}
+          </button>
+        </div>
       </header>
 
       <section className="flex-1 overflow-y-auto p-5 space-y-4">
@@ -323,7 +267,7 @@ export default function Home() {
             key={index}
             className={
               message.role === "user"
-                ? "ml-auto max-w-2xl bg-white text-black rounded-3xl px-5 py-4"
+                ? "ml-auto max-w-2xl bg-white text-black rounded-3xl px-5 py-4 shadow-xl"
                 : "mr-auto max-w-2xl bg-zinc-900 border border-white/10 rounded-3xl px-5 py-4"
             }
           >
@@ -331,34 +275,52 @@ export default function Home() {
           </div>
         ))}
 
-        {loading && (
-          <p className="text-zinc-500 animate-pulse">
-            Grace is thinking...
-          </p>
-        )}
+        {loading && <p className="text-zinc-500 animate-pulse">Grace is thinking...</p>}
+        {listening && <p className="text-blue-400 animate-pulse">Listening...</p>}
       </section>
 
+      {locked && (
+        <div className="p-4 border-t border-white/10 text-center bg-zinc-950">
+          <p className="text-zinc-300 mb-3">
+            You used your free messages. Upgrade to keep talking with Grace.
+          </p>
+          <a
+            href="/pay"
+            className="inline-block bg-white text-black rounded-2xl px-8 py-4 font-bold"
+          >
+            Upgrade Grace Pro
+          </a>
+        </div>
+      )}
+
       <footer className="p-4 border-t border-white/10 flex gap-3">
+        <button
+          onClick={startConversationListening}
+          disabled={locked}
+          className="bg-blue-600 text-white px-5 py-4 rounded-2xl font-bold disabled:opacity-40"
+        >
+          🎤 Talk
+        </button>
+
         <input
           value={input}
-          onChange={(e) =>
-            setInput(e.target.value)
-          }
-          onKeyDown={(e) =>
-            e.key === "Enter" &&
-            sendMessage(input)
-          }
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && sendMessage(input)}
+          disabled={locked}
           placeholder="Talk to Grace..."
-          className="flex-1 bg-zinc-900 border border-white/10 rounded-2xl px-4 py-4 text-white outline-none"
+          className="flex-1 bg-zinc-900 border border-white/10 rounded-2xl px-4 py-4 text-white outline-none disabled:opacity-40"
         />
 
         <button
-          onClick={() =>
-            sendMessage(input)
-          }
-          className="bg-white text-black rounded-2xl px-6 font-semibold"
+          onClick={() => sendMessage(input)}
+          disabled={locked}
+          className="bg-white text-black rounded-2xl px-6 font-semibold disabled:opacity-40"
         >
           Send
+        </button>
+
+        <button onClick={resetGrace} className="text-xs text-zinc-500 px-2">
+          Reset
         </button>
       </footer>
     </main>
