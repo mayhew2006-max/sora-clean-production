@@ -31,6 +31,7 @@ export default function GraceChat() {
 
   const recognitionRef = useRef<any>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+const bottomRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const savedMessages = localStorage.getItem("grace_messages");
@@ -470,6 +471,7 @@ export default function GraceChat() {
           </p>
         )}
 
+      <div ref={bottomRef} />
       </section>
 
       {locked && (
