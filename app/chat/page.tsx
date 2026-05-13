@@ -390,27 +390,27 @@ const bottomRef = useRef<HTMLDivElement | null>(null);
   }
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,#fff1f7,#f5f0ff_35%,#eef8ff_70%,#ffffff)] text-zinc-900 flex flex-col">
+    <main className="min-h-screen bg-[radial-gradient(circle_at_top,#312e81_0%,#140f2d_35%,#09090f_100%)] text-white flex flex-col">
 
-      <header className="p-5 border-b border-zinc-200 flex justify-between items-start">
+      <header className="p-5 border-b border-white/10 flex justify-between items-start">
 
         <div>
           <h1 className="text-5xl font-bold">
             Grace
           </h1>
 
-          <p className="text-zinc-600 mt-2">
+          <p className="text-zinc-300 mt-2">
             Technology that feels more human.
           </p>
 
-          <p className="text-xs text-zinc-500 mt-2">
+          <p className="text-xs text-zinc-400 mt-2">
             {paid
               ? "Grace Pro unlocked"
               : `${freeLeft} free messages left`}
           </p>
 
           {memory && (
-            <p className="text-xs text-violet-600 mt-1">
+            <p className="text-xs text-cyan-300 mt-1">
               Memory active
             </p>
           )}
@@ -422,7 +422,7 @@ const bottomRef = useRef<HTMLDivElement | null>(null);
             onClick={() =>
               setVoiceOn(!voiceOn)
             }
-            className="border border-zinc-200 bg-white/70 rounded-full px-4 py-2 text-sm shadow-sm"
+            className="border border-white/10 bg-white/70 rounded-full px-4 py-2 text-sm shadow-sm"
           >
             Voice {voiceOn ? "On" : "Off"}
           </button>
@@ -432,7 +432,7 @@ const bottomRef = useRef<HTMLDivElement | null>(null);
             className={`rounded-full px-4 py-2 text-sm font-semibold ${
               wakeMode
                 ? "bg-gradient-to-r from-cyan-300 via-violet-300 to-pink-300 text-black"
-                : "border border-zinc-200 bg-white/70 shadow-sm"
+                : "border border-white/10 bg-white/70 shadow-sm"
             }`}
           >
             "Talk to Grace"
@@ -448,8 +448,8 @@ const bottomRef = useRef<HTMLDivElement | null>(null);
             key={index}
             className={
               message.role === "user"
-                ? "ml-auto max-w-2xl bg-gradient-to-r from-violet-100 via-pink-100 to-cyan-100 text-zinc-900 rounded-3xl px-5 py-4 shadow-sm"
-                : "mr-auto max-w-2xl bg-white border border-zinc-200 text-zinc-900 rounded-3xl px-5 py-4 shadow-sm"
+                ? "ml-auto max-w-2xl bg-gradient-to-r from-cyan-300 via-violet-300 to-pink-300 text-black rounded-3xl px-5 py-4 shadow-xl"
+                : "mr-auto max-w-2xl bg-white border border-white/10 text-white rounded-3xl px-5 py-4 shadow-sm"
             }
           >
             {message.content}
@@ -457,13 +457,13 @@ const bottomRef = useRef<HTMLDivElement | null>(null);
         ))}
 
         {loading && (
-          <p className="text-zinc-600 animate-pulse">
+          <p className="text-zinc-300 animate-pulse">
             Grace is thinking...
           </p>
         )}
 
         {listening && (
-          <p className="text-violet-600 animate-pulse">
+          <p className="text-cyan-300 animate-pulse">
             Ready when you are.
           </p>
         )}
@@ -472,7 +472,7 @@ const bottomRef = useRef<HTMLDivElement | null>(null);
       </section>
 
       {locked && (
-        <div className="p-4 border-t border-zinc-200 text-center bg-white/80">
+        <div className="p-4 border-t border-white/10 text-center bg-black/30 backdrop-blur">
           <p className="text-zinc-300 mb-3">
             You used your free messages.
             Upgrade to keep talking with Grace.
@@ -487,7 +487,7 @@ const bottomRef = useRef<HTMLDivElement | null>(null);
         </div>
       )}
 
-      <footer className="p-4 border-t border-zinc-200 flex gap-3">
+      <footer className="p-4 border-t border-white/10 flex gap-3">
 
         <button
           onClick={startConversationCapture}
@@ -508,7 +508,7 @@ const bottomRef = useRef<HTMLDivElement | null>(null);
           }
           disabled={locked}
           placeholder="Say anything to Grace..."
-          className="flex-1 bg-white border border-zinc-200 rounded-2xl px-4 py-4 text-zinc-900 outline-none disabled:opacity-40 shadow-sm"
+          className="flex-1 bg-white border border-white/10 rounded-2xl px-4 py-4 text-white outline-none disabled:opacity-40 shadow-sm"
         />
 
         <button
@@ -523,7 +523,7 @@ const bottomRef = useRef<HTMLDivElement | null>(null);
 
         <button
           onClick={resetGrace}
-          className="text-xs text-zinc-500 px-2"
+          className="text-xs text-zinc-400 px-2"
         >
           Reset
         </button>
