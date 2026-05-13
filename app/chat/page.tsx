@@ -441,7 +441,7 @@ const bottomRef = useRef<HTMLDivElement | null>(null);
         </div>
       </header>
 
-      <section className="flex-1 overflow-y-auto p-5 space-y-4">
+      <section className="flex-1 bg-white/10 backdrop-blur border border-white/10 rounded-2xl px-4 py-4 text-white placeholder:text-zinc-400 outline-none disabled:opacity-40">
 
         {messages.map((message, index) => (
           <div
@@ -508,7 +508,7 @@ const bottomRef = useRef<HTMLDivElement | null>(null);
           }
           disabled={locked}
           placeholder="Say anything to Grace..."
-          className="flex-1 bg-white border border-white/10 rounded-2xl px-4 py-4 text-white outline-none disabled:opacity-40 shadow-sm"
+          className="flex-1 bg-white/10 backdrop-blur border border-white/10 rounded-2xl px-4 py-4 text-white placeholder:text-zinc-400 outline-none disabled:opacity-40"
         />
 
         <button
