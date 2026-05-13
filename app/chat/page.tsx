@@ -51,7 +51,14 @@ const bottomRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     messagesRef.current = messages;
     localStorage.setItem("grace_messages", JSON.stringify(messages));
-  }, [messages]);
+
+    setTimeout(() => {
+      bottomRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "end",
+      });
+    }, 100);
+  }, [messages, loading, listening]);
 
   const userCount = messages.filter((m) => m.role === "user").length;
 
