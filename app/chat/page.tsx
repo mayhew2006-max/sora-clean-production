@@ -218,11 +218,11 @@ export default function GraceChat() {
   }
 
   return (
-    <main className="min-h-screen bg-black text-white flex flex-col">
-      <header className="p-5 border-b border-white/10 flex justify-between items-start">
+    <main className="min-h-screen bg-[#080711] text-white flex flex-col">
+      <header className="p-5 border-b border-white/15 flex justify-between items-start">
         <div>
           <h1 className="text-5xl font-bold">Grace</h1>
-          <p className="text-zinc-400 mt-2">Someone who listens when no one else is there.</p>
+          <p className="text-zinc-400 mt-2">Technology that feels more human.</p>
           <p className="text-xs text-zinc-500 mt-2">
             {paid ? "Grace Pro unlocked" : `${freeLeft} free messages left`}
           </p>
@@ -230,14 +230,14 @@ export default function GraceChat() {
         </div>
 
         <div className="flex gap-2">
-          <button onClick={() => setVoiceOn(!voiceOn)} className="border border-white/10 rounded-full px-4 py-2 text-sm">
+          <button onClick={() => setVoiceOn(!voiceOn)} className="border border-white/15 rounded-full px-4 py-2 text-sm">
             Voice {voiceOn ? "On" : "Off"}
           </button>
 
           <button
             onClick={toggleConversationMode}
             className={`rounded-full px-4 py-2 text-sm ${
-              conversationMode ? "bg-blue-600 text-white" : "border border-white/10"
+              conversationMode ? "bg-gradient-to-r from-cyan-300 via-violet-300 to-pink-300 text-black" : "border border-white/15"
             }`}
           >
             {conversationMode ? "Conversation On" : "Conversation Mode"}
@@ -251,8 +251,8 @@ export default function GraceChat() {
             key={index}
             className={
               message.role === "user"
-                ? "ml-auto max-w-2xl bg-white text-black rounded-3xl px-5 py-4"
-                : "mr-auto max-w-2xl bg-zinc-900 border border-white/10 rounded-3xl px-5 py-4"
+                ? "ml-auto max-w-2xl bg-gradient-to-r from-cyan-200 via-violet-200 to-pink-200 text-black rounded-3xl px-5 py-4"
+                : "mr-auto max-w-2xl bg-white/10 border border-white/15 rounded-3xl px-5 py-4"
             }
           >
             {message.content}
@@ -264,16 +264,16 @@ export default function GraceChat() {
       </section>
 
       {locked && (
-        <div className="p-4 border-t border-white/10 text-center bg-zinc-950">
+        <div className="p-4 border-t border-white/15 text-center bg-zinc-950">
           <p className="text-zinc-300 mb-3">You used your free messages. Upgrade to keep talking with Grace.</p>
-          <a href="/pay" className="inline-block bg-white text-black rounded-2xl px-8 py-4 font-bold">
+          <a href="/pay" className="inline-block bg-gradient-to-r from-cyan-200 via-violet-200 to-pink-200 text-black rounded-2xl px-8 py-4 font-bold">
             Upgrade Grace Pro
           </a>
         </div>
       )}
 
-      <footer className="p-4 border-t border-white/10 flex gap-3">
-        <button onClick={startConversationListening} disabled={locked} className="bg-blue-600 text-white px-5 py-4 rounded-2xl font-bold disabled:opacity-40">
+      <footer className="p-4 border-t border-white/15 flex gap-3">
+        <button onClick={startConversationListening} disabled={locked} className="bg-gradient-to-r from-cyan-300 via-violet-300 to-pink-300 text-black px-5 py-4 rounded-2xl font-bold disabled:opacity-40">
           🎤 Talk
         </button>
 
@@ -282,11 +282,11 @@ export default function GraceChat() {
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && sendMessage(input)}
           disabled={locked}
-          placeholder="Talk to Grace..."
-          className="flex-1 bg-zinc-900 border border-white/10 rounded-2xl px-4 py-4 text-white outline-none disabled:opacity-40"
+          placeholder="Say anything to Grace..."
+          className="flex-1 bg-white/10 border border-white/15 rounded-2xl px-4 py-4 text-white outline-none disabled:opacity-40"
         />
 
-        <button onClick={() => sendMessage(input)} disabled={locked} className="bg-white text-black rounded-2xl px-6 font-semibold disabled:opacity-40">
+        <button onClick={() => sendMessage(input)} disabled={locked} className="bg-gradient-to-r from-cyan-200 via-violet-200 to-pink-200 text-black rounded-2xl px-6 font-semibold disabled:opacity-40">
           Send
         </button>
 
