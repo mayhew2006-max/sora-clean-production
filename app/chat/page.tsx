@@ -116,11 +116,7 @@ const bottomRef = useRef<HTMLDivElement | null>(null);
       audio.onended = () => {
         URL.revokeObjectURL(url);
 
-        if (wakeModeRef.current) {
-          setTimeout(() => {
-            startWakeListening();
-          }, 1000);
-        }
+        // wake loop removed for stability
       };
 
       await audio.play();
@@ -256,11 +252,7 @@ const bottomRef = useRef<HTMLDivElement | null>(null);
           startConversationCapture();
         }, 1500);
       } else {
-        if (wakeModeRef.current) {
-          setTimeout(() => {
-            startWakeListening();
-          }, 1000);
-        }
+        // wake loop removed for stability
       }
     };
 
@@ -361,12 +353,12 @@ const bottomRef = useRef<HTMLDivElement | null>(null);
       return;
     }
 
-    wakeModeRef.current = true;
+    wakeModeRef.current = false;
 
-    setWakeMode(true);
+    setWakeMode(false);
 
     speak(
-      "Listen for Grace is now active."
+      "Talk to Grace is now active."
     );
 
     setTimeout(() => {
@@ -429,16 +421,14 @@ const bottomRef = useRef<HTMLDivElement | null>(null);
           </button>
 
           <button
-            onClick={toggleWakeMode}
+            onClick={startConversationCapture}
             className={`rounded-full px-4 py-2 text-sm font-semibold ${
               wakeMode
                 ? "bg-gradient-to-r from-cyan-300 via-violet-300 to-pink-300 text-black"
                 : "border border-white/15"
             }`}
           >
-            {wakeMode
-              ? "Listening for Grace"
-              : "Listen for Grace"}
+            "Talk to Grace"
           </button>
 
         </div>
@@ -467,7 +457,7 @@ const bottomRef = useRef<HTMLDivElement | null>(null);
 
         {listening && (
           <p className="text-cyan-300 animate-pulse">
-            Listening for “Grace”...
+            Ready when you are.
           </p>
         )}
 
