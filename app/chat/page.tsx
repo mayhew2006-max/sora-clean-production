@@ -390,7 +390,7 @@ const bottomRef = useRef<HTMLDivElement | null>(null);
   }
 
   return (
-    <main className="h-[100dvh] max-h-[100dvh] overflow-hidden bg-[radial-gradient(circle_at_top,#312e81_0%,#140f2d_35%,#09090f_100%)] text-white flex flex-col">
+    <main className="min-h-[100dvh] bg-[radial-gradient(circle_at_top,#312e81_0%,#140f2d_35%,#09090f_100%)] text-white flex flex-col">
 
       <header className="p-5 border-b border-white/10 flex justify-between items-start">
 
@@ -487,7 +487,7 @@ const bottomRef = useRef<HTMLDivElement | null>(null);
         </div>
       )}
 
-      <footer className="shrink-0 sticky bottom-0 z-20 p-3 border-t border-white/10 bg-[#09090f]/95 backdrop-blur flex gap-2 items-end">
+      <footer className="fixed bottom-0 left-0 right-0 z-20 p-3 border-t border-white/10 bg-[#09090f]/95 backdrop-blur flex gap-2 items-end">
 
         <button
           onClick={startConversationCapture}
