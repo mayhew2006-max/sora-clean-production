@@ -390,7 +390,7 @@ const bottomRef = useRef<HTMLDivElement | null>(null);
   }
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top,#312e81_0%,#140f2d_35%,#09090f_100%)] text-white flex flex-col">
+    <main className="h-[100dvh] max-h-[100dvh] overflow-hidden bg-[radial-gradient(circle_at_top,#312e81_0%,#140f2d_35%,#09090f_100%)] text-white flex flex-col">
 
       <header className="p-5 border-b border-white/10 flex justify-between items-start">
 
@@ -441,7 +441,7 @@ const bottomRef = useRef<HTMLDivElement | null>(null);
         </div>
       </header>
 
-      <section className="flex-1 bg-white/10 backdrop-blur border border-white/10 rounded-2xl px-4 py-4 text-white placeholder:text-zinc-400 outline-none disabled:opacity-40">
+      <section className="flex-1 min-w-0 bg-white/10 backdrop-blur border border-white/10 rounded-2xl px-4 py-3 text-white placeholder:text-zinc-400 outline-none disabled:opacity-40">
 
         {messages.map((message, index) => (
           <div
@@ -487,12 +487,12 @@ const bottomRef = useRef<HTMLDivElement | null>(null);
         </div>
       )}
 
-      <footer className="p-4 border-t border-white/10 flex gap-3">
+      <footer className="shrink-0 sticky bottom-0 z-20 p-3 border-t border-white/10 bg-[#09090f]/95 backdrop-blur flex gap-2 items-end">
 
         <button
           onClick={startConversationCapture}
           disabled={locked}
-          className="bg-gradient-to-r from-cyan-300 via-violet-300 to-pink-300 text-black px-5 py-4 rounded-2xl font-bold disabled:opacity-40"
+          className="bg-gradient-to-r from-cyan-300 via-violet-300 to-pink-300 text-black px-4 py-3 rounded-2xl font-bold disabled:opacity-40"
         >
           🎤 Talk
         </button>
@@ -508,7 +508,7 @@ const bottomRef = useRef<HTMLDivElement | null>(null);
           }
           disabled={locked}
           placeholder="Say anything to Grace..."
-          className="flex-1 bg-white/10 backdrop-blur border border-white/10 rounded-2xl px-4 py-4 text-white placeholder:text-zinc-400 outline-none disabled:opacity-40"
+          className="flex-1 min-w-0 bg-white/10 backdrop-blur border border-white/10 rounded-2xl px-4 py-3 text-white placeholder:text-zinc-400 outline-none disabled:opacity-40"
         />
 
         <button
@@ -516,7 +516,7 @@ const bottomRef = useRef<HTMLDivElement | null>(null);
             sendMessage(input)
           }
           disabled={locked}
-          className="bg-gradient-to-r from-cyan-200 via-violet-200 to-pink-200 text-black rounded-2xl px-6 font-semibold disabled:opacity-40"
+          className="bg-gradient-to-r from-cyan-200 via-violet-200 to-pink-200 text-black rounded-2xl px-4 py-3 font-semibold disabled:opacity-40"
         >
           Send
         </button>
