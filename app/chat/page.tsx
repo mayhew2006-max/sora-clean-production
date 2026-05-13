@@ -487,7 +487,7 @@ const bottomRef = useRef<HTMLDivElement | null>(null);
         </div>
       )}
 
-      <footer className="fixed bottom-0 left-0 right-0 z-20 p-3 border-t border-white/10 bg-[#09090f]/95 backdrop-blur flex gap-2 items-end">
+      <footer className="fixed bottom-0 left-0 right-0 z-20 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] border-t border-white/10 bg-[#09090f]/95 backdrop-blur flex gap-2 items-end">
 
         <button
           onClick={startConversationCapture}
@@ -497,18 +497,21 @@ const bottomRef = useRef<HTMLDivElement | null>(null);
           🎤 Talk
         </button>
 
-        <input
+        <textarea
           value={input}
           onChange={(e) =>
             setInput(e.target.value)
           }
-          onKeyDown={(e) =>
-            e.key === "Enter" &&
-            sendMessage(input)
-          }
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              sendMessage(input);
+            }
+          }}
           disabled={locked}
+          rows={1}
           placeholder="Say anything to Grace..."
-          className="flex-1 min-w-0 bg-white/10 backdrop-blur border border-white/10 rounded-2xl px-4 py-3 text-white placeholder:text-zinc-400 outline-none disabled:opacity-40"
+          className="flex-1 min-w-0 max-h-32 resize-none bg-white/10 backdrop-blur border border-white/10 rounded-2xl px-4 py-3 text-white placeholder:text-zinc-400 outline-none disabled:opacity-40"
         />
 
         <button
@@ -519,13 +522,6 @@ const bottomRef = useRef<HTMLDivElement | null>(null);
           className="bg-gradient-to-r from-cyan-200 via-violet-200 to-pink-200 text-black rounded-2xl px-4 py-3 font-semibold disabled:opacity-40"
         >
           Send
-        </button>
-
-        <button
-          onClick={resetGrace}
-          className="text-xs text-zinc-400 px-2"
-        >
-          Reset
         </button>
 
       </footer>
