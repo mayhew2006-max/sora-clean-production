@@ -449,7 +449,7 @@ const bottomRef = useRef<HTMLDivElement | null>(null);
             className={
               message.role === "user"
                 ? "ml-auto max-w-2xl bg-gradient-to-r from-cyan-300 via-violet-300 to-pink-300 text-black rounded-3xl px-5 py-4 shadow-xl"
-                : "mr-auto max-w-2xl bg-white border border-white/10 text-white rounded-3xl px-5 py-4 shadow-sm"
+                : "mr-auto max-w-2xl bg-white/10 backdrop-blur border border-white/10 text-white rounded-3xl px-5 py-4 shadow-xl"
             }
           >
             {message.content}
