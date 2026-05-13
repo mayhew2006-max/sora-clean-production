@@ -373,6 +373,37 @@ const bottomRef = useRef<HTMLDivElement | null>(null);
     }, 1500);
   }
 
+  function tapToTalk() {
+    const SpeechRecognition =
+      (window as any).SpeechRecognition ||
+      (window as any).webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      alert("Voice input works best in Chrome with microphone permission allowed.");
+      return;
+    }
+
+    recognitionRef.current?.stop();
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = "en-US";
+    recognition.continuous = false;
+    recognition.interimResults = false;
+
+    recognition.onstart = () => setListening(true);
+
+    recognition.onresult = (event: any) => {
+      const text = event.results[0][0].transcript;
+      sendMessage(text);
+    };
+
+    recognition.onerror = () => setListening(false);
+    recognition.onend = () => setListening(false);
+
+    recognitionRef.current = recognition;
+    recognition.start();
+  }
+
   function resetGrace() {
     localStorage.removeItem(
       "grace_messages"
@@ -428,7 +459,7 @@ const bottomRef = useRef<HTMLDivElement | null>(null);
           </button>
 
           <button
-            onClick={startConversationCapture}
+            onClick={tapToTalk}
             className={`rounded-full px-4 py-2 text-sm font-semibold ${
               wakeMode
                 ? "bg-gradient-to-r from-cyan-300 via-violet-300 to-pink-300 text-black"
@@ -490,7 +521,7 @@ const bottomRef = useRef<HTMLDivElement | null>(null);
       <footer className="fixed bottom-0 left-0 right-0 z-20 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] border-t border-white/10 bg-[#09090f]/95 backdrop-blur flex gap-2 items-end">
 
         <button
-          onClick={startConversationCapture}
+          onClick={tapToTalk}
           disabled={locked}
           className="bg-gradient-to-r from-cyan-300 via-violet-300 to-pink-300 text-black px-4 py-3 rounded-2xl font-bold disabled:opacity-40"
         >
