@@ -499,7 +499,7 @@ const bottomRef = useRef<HTMLDivElement | null>(null);
           </p>
         )}
 
-      <div ref={bottomRef} />
+      <div ref={bottomRef} className="h-40" />
       </section>
 
       {locked && (
