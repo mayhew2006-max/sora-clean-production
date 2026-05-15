@@ -9,6 +9,10 @@ type Message = {
 
 const FREE_LIMIT = 50;
 
+function trackEvent(name: string) {
+  console.log("event:", name);
+}
+
 export default function GraceChat() {
   const [messages, setMessages] = useState<Message[]>([
     { role: "assistant", content: "Hey… I’m Grace. I’m here with you." },
@@ -452,14 +456,14 @@ const bottomRef = useRef<HTMLDivElement | null>(null);
     <main className="min-h-[100dvh] bg-[radial-gradient(circle_at_top,#312e81_0%,#140f2d_35%,#09090f_100%)] text-white flex flex-col">
 
       <header className="p-5 border-b border-white/10 flex justify-between items-start">
-
         <div>
           <h1 className="text-5xl font-bold">
             Grace
           </h1>
+
           <div className="mt-4 flex items-center gap-4">
             <div className={`relative w-20 h-20 rounded-full overflow-hidden border border-white/20 shadow-[0_0_35px_rgba(168,85,247,0.55)] ${
-              listening || loading ? "grace-speaking" : ""
+              listening || loading ? "animate-pulse" : ""
             }`}>
               <img
                 src="/grace-avatar.png"
@@ -478,36 +482,12 @@ const bottomRef = useRef<HTMLDivElement | null>(null);
             </div>
           </div>
 
-          <div className="mt-4 flex items-center gap-4">
-            <div className={`relative w-20 h-20 rounded-full overflow-hidden border border-white/20 shadow-[0_0_35px_rgba(168,85,247,0.55)] ${
-              listening || loading ? "grace-speaking" : ""
-            }`}>
-              <img
-                src="/grace-avatar.png"
-                alt="Grace"
-                className="w-full h-full object-cover"
-              />
-            </div>
-
-            <div className="text-sm text-zinc-300">
-              <p className="font-semibold text-white">
-                {loading ? "Grace is thinking..." : listening ? "Grace is listening..." : "Grace is here"}
-              </p>
-              <p>
-                {loading ? "Thinking..." : listening ? "Listening..." : "Ready when you are"}
-              </p>
-            </div>
-          </div>
-
-
-          <p className="text-zinc-300 mt-2">
+          <p className="text-zinc-400 mt-4">
             Technology that feels more human.
           </p>
 
           <p className="text-xs text-zinc-400 mt-2">
-            {paid
-              ? "Grace Pro unlocked"
-              : `${freeLeft} free messages left`}
+            {paid ? "Grace Pro unlocked" : `${freeLeft} free messages left`}
           </p>
 
           {memory && (
@@ -518,27 +498,19 @@ const bottomRef = useRef<HTMLDivElement | null>(null);
         </div>
 
         <div className="flex gap-2">
-
           <button
-            onClick={() =>
-              setVoiceOn(!voiceOn)
-            }
-            className="border border-white/10 bg-white/70 rounded-full px-4 py-2 text-sm shadow-sm"
+            onClick={() => setVoiceOn(!voiceOn)}
+            className="border border-white/10 bg-white/5 backdrop-blur rounded-full px-4 py-2 text-sm"
           >
             Voice {voiceOn ? "On" : "Off"}
           </button>
 
           <button
-            onClick={tapToTalk}
-            className={`rounded-full px-4 py-2 text-sm font-semibold ${
-              wakeMode
-                ? "bg-gradient-to-r from-cyan-300 via-violet-300 to-pink-300 text-black"
-                : "border border-white/10 bg-white/70 shadow-sm"
-            }`}
+            onClick={() => { trackEvent("talk_clicked"); tapToTalk(); }}
+            className="border border-white/10 bg-white/5 backdrop-blur rounded-full px-4 py-2 text-sm"
           >
-            "Talk to Grace"
+            Talk to Grace
           </button>
-
         </div>
       </header>
 
