@@ -421,6 +421,34 @@ const bottomRef = useRef<HTMLDivElement | null>(null);
   }
 
   return (
+    <>
+      <style jsx global>{`
+        @keyframes graceGlow {
+          0% { box-shadow: 0 0 15px rgba(168,85,247,0.35); }
+          50% { box-shadow: 0 0 35px rgba(168,85,247,0.9); }
+          100% { box-shadow: 0 0 15px rgba(168,85,247,0.35); }
+        }
+
+        @keyframes fadeInUp {
+          from {
+            opacity: 0;
+            transform: translateY(10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0px);
+          }
+        }
+
+        .grace-fade {
+          animation: fadeInUp 0.35s ease;
+        }
+
+        .grace-speaking {
+          animation: graceGlow 1.8s infinite;
+        }
+      `}</style>
+
     <main className="min-h-[100dvh] bg-[radial-gradient(circle_at_top,#312e81_0%,#140f2d_35%,#09090f_100%)] text-white flex flex-col">
 
       <header className="p-5 border-b border-white/10 flex justify-between items-start">
@@ -431,7 +459,7 @@ const bottomRef = useRef<HTMLDivElement | null>(null);
           </h1>
           <div className="mt-4 flex items-center gap-4">
             <div className={`relative w-20 h-20 rounded-full overflow-hidden border border-white/20 shadow-[0_0_35px_rgba(168,85,247,0.55)] ${
-              listening || loading ? "animate-pulse" : ""
+              listening || loading ? "grace-speaking" : ""
             }`}>
               <img
                 src="/grace-avatar.png"
@@ -452,7 +480,7 @@ const bottomRef = useRef<HTMLDivElement | null>(null);
 
           <div className="mt-4 flex items-center gap-4">
             <div className={`relative w-20 h-20 rounded-full overflow-hidden border border-white/20 shadow-[0_0_35px_rgba(168,85,247,0.55)] ${
-              listening || loading ? "animate-pulse" : ""
+              listening || loading ? "grace-speaking" : ""
             }`}>
               <img
                 src="/grace-avatar.png"
@@ -521,8 +549,8 @@ const bottomRef = useRef<HTMLDivElement | null>(null);
             key={index}
             className={
               message.role === "user"
-                ? "ml-auto max-w-2xl bg-gradient-to-r from-cyan-300 via-violet-300 to-pink-300 text-black rounded-3xl px-5 py-4 shadow-xl"
-                : "mr-auto max-w-2xl bg-white/10 backdrop-blur border border-white/10 text-white rounded-3xl px-5 py-4 shadow-xl"
+                ? "ml-auto max-w-2xl bg-gradient-to-r from-cyan-300 via-violet-300 to-pink-300 text-black rounded-3xl px-5 py-4 shadow-xl grace-fade"
+                : "mr-auto max-w-2xl bg-white/10 backdrop-blur border border-white/10 text-white rounded-3xl px-5 py-4 shadow-xl grace-fade"
             }
           >
             {message.content}
@@ -584,7 +612,7 @@ const bottomRef = useRef<HTMLDivElement | null>(null);
           disabled={locked}
           rows={1}
           placeholder="Say anything to Grace..."
-          className="flex-1 min-w-0 max-h-32 resize-none bg-white/10 backdrop-blur border border-white/10 rounded-2xl px-4 py-3 text-white placeholder:text-zinc-400 outline-none disabled:opacity-40"
+          className="flex-1 min-w-0 max-h-40 resize-none bg-white/10 backdrop-blur border border-white/10 rounded-2xl px-4 py-3 text-white placeholder:text-zinc-400 outline-none disabled:opacity-40"
         />
 
         <button
@@ -599,5 +627,6 @@ const bottomRef = useRef<HTMLDivElement | null>(null);
 
       </footer>
     </main>
+    </>
   );
 }
