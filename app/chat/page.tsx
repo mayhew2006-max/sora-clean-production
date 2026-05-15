@@ -450,6 +450,27 @@ const bottomRef = useRef<HTMLDivElement | null>(null);
             </div>
           </div>
 
+          <div className="mt-4 flex items-center gap-4">
+            <div className={`relative w-20 h-20 rounded-full overflow-hidden border border-white/20 shadow-[0_0_35px_rgba(168,85,247,0.55)] ${
+              listening || loading ? "animate-pulse" : ""
+            }`}>
+              <img
+                src="/grace-avatar.png"
+                alt="Grace"
+                className="w-full h-full object-cover"
+              />
+            </div>
+
+            <div className="text-sm text-zinc-300">
+              <p className="font-semibold text-white">
+                {loading ? "Grace is thinking..." : listening ? "Grace is listening..." : "Grace is here"}
+              </p>
+              <p>
+                {loading ? "Thinking..." : listening ? "Listening..." : "Ready when you are"}
+              </p>
+            </div>
+          </div>
+
 
           <p className="text-zinc-300 mt-2">
             Technology that feels more human.
