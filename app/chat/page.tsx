@@ -10,8 +10,12 @@ type Message = {
 const FREE_LIMIT = 50;
 
 function trackEvent(name: string) {
-  console.log("event:", name);
+  if (typeof window !== "undefined" && (window as any).gtag) {
+    (window as any).gtag("event", name);
+  }
 }
+
+
 
 export default function GraceChat() {
   const [messages, setMessages] = useState<Message[]>([
@@ -148,12 +152,14 @@ const bottomRef = useRef<HTMLDivElement | null>(null);
     if (!clean || loadingRef.current) return;
 
     if (locked) {
+      trackEvent("paywall_hit");
       window.location.href = "/pay";
       return;
     }
 
     recognitionRef.current?.stop();
 
+    trackEvent("message_sent");
     updateMemory(clean);
 
     loadingRef.current = true;
@@ -552,7 +558,7 @@ const bottomRef = useRef<HTMLDivElement | null>(null);
           </p>
 
           <a
-            href="/pay"
+            onClick={() => trackEvent("upgrade_clicked")} href="/pay"
             className="inline-block bg-gradient-to-r from-cyan-200 via-violet-200 to-pink-200 text-black rounded-2xl px-8 py-4 font-bold"
           >
             Upgrade Grace Pro
@@ -563,7 +569,7 @@ const bottomRef = useRef<HTMLDivElement | null>(null);
       <footer className="fixed bottom-0 left-0 right-0 z-20 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] border-t border-white/10 bg-[#09090f]/95 backdrop-blur flex gap-2 items-end">
 
         <button
-          onClick={tapToTalk}
+          onClick={() => { trackEvent("talk_clicked"); tapToTalk(); }}
           disabled={locked}
           className="bg-gradient-to-r from-cyan-300 via-violet-300 to-pink-300 text-black px-4 py-3 rounded-2xl font-bold disabled:opacity-40"
         >
