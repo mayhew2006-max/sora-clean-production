@@ -20,9 +20,9 @@ function personalityPrompt(mode: string) {
     case "Chill":
       return "Chill Grace: calm, relaxed, easygoing, warm, simple.";
     case "Motivational":
-      return "Motivational Grace: uplifting, confident, encouraging, energetic, positive, never fake.";
+      return "Motivational Grace: uplifting, confident, encouraging, energetic, never fake.";
     case "Late Night":
-      return "Late Night Grace: soft, thoughtful, calm, gentle, good for quiet late-night conversations.";
+      return "Late Night Grace: soft, thoughtful, calm, gentle, good for quiet conversations.";
     case "Real Talk":
       return "Real Talk Grace: direct, casual, honest, blunt but caring. Mild adult language allowed sometimes. Never hateful or unsafe.";
     case "Unfiltered":
@@ -34,7 +34,7 @@ function personalityPrompt(mode: string) {
 
 export default function GraceChat() {
   const [messages, setMessages] = useState<Message[]>([
-    { role: "assistant", content: "Hey... I’m Grace. I’m here with you. 💜" },
+    { role: "assistant", content: "Hey… I’m Grace. I’m here with you." },
   ]);
   const [input, setInput] = useState("");
   const [memory, setMemory] = useState("");
@@ -59,12 +59,10 @@ export default function GraceChat() {
     const savedPersonality = localStorage.getItem("grace_personality");
 
     if (savedMessages) setMessages(JSON.parse(savedMessages));
-
     if (savedMemory) {
       setMemory(savedMemory);
       memoryRef.current = savedMemory;
     }
-
     if (savedPaid === "true") setPaid(true);
     if (savedPersonality) setPersonality(savedPersonality);
   }, []);
@@ -225,12 +223,10 @@ export default function GraceChat() {
     recognition.interimResults = false;
 
     recognition.onstart = () => setListening(true);
-
     recognition.onresult = (event: any) => {
       const text = event.results[0][0].transcript;
       sendMessage(text);
     };
-
     recognition.onerror = () => setListening(false);
     recognition.onend = () => setListening(false);
 
@@ -238,148 +234,108 @@ export default function GraceChat() {
     recognition.start();
   }
 
-  const latestGrace =
-    [...messages].reverse().find((m) => m.role === "assistant")?.content ||
-    "I’m here with you.";
-
   return (
-    <main className="min-h-[100dvh] bg-[radial-gradient(circle_at_top,#2e1065_0%,#120821_38%,#05050a_100%)] text-white flex flex-col overflow-hidden">
-      <section className="flex-1 overflow-y-auto pb-40">
-        <div className="relative min-h-[100dvh] px-5 pt-5">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(168,85,247,0.22),transparent_55%)] pointer-events-none" />
-
-          <header className="relative z-10 flex justify-between items-start">
-            <div>
-              <h1 className="text-5xl font-bold tracking-tight text-white drop-shadow-lg">
-                Grace
-              </h1>
-              <p className="text-zinc-300 mt-2 text-sm">
-                {paid ? "Grace Pro unlocked" : `${freeLeft} free messages left`}
-              </p>
-              {memory && <p className="text-xs text-cyan-300 mt-1">Memory active</p>}
-            </div>
-
-            <div className="flex gap-2">
-              <button
-                onClick={() => setVoiceOn(!voiceOn)}
-                className="border border-white/10 bg-white/10 backdrop-blur rounded-2xl px-4 py-3 text-sm"
-              >
-                Voice<br />{voiceOn ? "On" : "Off"}
-              </button>
-
-              <button
-                onClick={() => setFaceMode(!faceMode)}
-                className="border border-white/10 bg-white/10 backdrop-blur rounded-2xl px-4 py-3 text-sm"
-              >
-                Face<br />{faceMode ? "On" : "Off"}
-              </button>
-            </div>
-          </header>
-
-          {faceMode && (
-            <div className="relative z-10 mt-4 flex flex-col items-center text-center">
-              <div
-                className={`relative w-[78vw] max-w-[430px] aspect-square rounded-[2.25rem] overflow-hidden border border-white/10 ${
-                  listening || loading
-                    ? "shadow-[0_0_80px_rgba(168,85,247,0.95)] animate-pulse"
-                    : "shadow-[0_0_50px_rgba(168,85,247,0.55)]"
-                }`}
-              >
-                <img
-                  src="/grace-avatar.png"
-                  alt="Grace"
-                  className="w-full h-full object-cover scale-110"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-transparent" />
-              </div>
-
-              <div className="mt-4">
-                <p className="text-2xl font-semibold">
-                  {personality} Grace <span className="text-purple-300">♥</span>
-                </p>
-                <p className="mt-2 inline-flex items-center gap-2 rounded-full bg-black/35 border border-white/10 px-5 py-3 text-sm text-zinc-200 backdrop-blur">
-                  <span className={`w-3 h-3 rounded-full ${listening ? "bg-green-400" : loading ? "bg-purple-400" : "bg-cyan-300"}`} />
-                  {loading ? "Grace is thinking..." : listening ? "Grace is listening..." : "Ready when you are"}
-                </p>
-              </div>
-            </div>
-          )}
-
-          <div className="relative z-10 mt-5">
-            <p className="text-xs text-purple-200 mb-2 uppercase tracking-wider">
-              Choose Grace
+    <main className="min-h-[100dvh] bg-[radial-gradient(circle_at_top,#312e81_0%,#140f2d_35%,#09090f_100%)] text-white flex flex-col">
+      <header className="p-5 border-b border-white/10">
+        <div className="flex justify-between items-start gap-3">
+          <div>
+            <h1 className="text-5xl font-bold">Grace</h1>
+            <p className="text-zinc-400 mt-2">Talk to Grace.</p>
+            <p className="text-xs text-zinc-400 mt-2">
+              {paid ? "Grace Pro unlocked" : `${freeLeft} free messages left`}
             </p>
-
-            <div className="flex gap-2 overflow-x-auto pb-2">
-              {[...freeModes, ...proModes].map((mode) => {
-                const lockedMode = proModes.includes(mode) && !paid;
-
-                return (
-                  <button
-                    key={mode}
-                    onClick={() => choosePersonality(mode)}
-                    className={`min-w-[105px] whitespace-nowrap px-4 py-3 rounded-2xl text-sm border transition-all ${
-                      personality === mode
-                        ? "bg-gradient-to-r from-cyan-300 via-violet-300 to-pink-300 text-black border-transparent"
-                        : "bg-white/5 border-white/10 text-white"
-                    }`}
-                  >
-                    <div className="font-semibold">{mode}</div>
-                    {lockedMode && <div className="text-xs text-pink-300">Pro 18+</div>}
-                  </button>
-                );
-              })}
-            </div>
+            {memory && <p className="text-xs text-cyan-300 mt-1">Memory active</p>}
           </div>
 
-          <div className="relative z-10 mt-4 bg-black/30 border border-white/10 rounded-[2rem] p-4 backdrop-blur shadow-2xl">
-            <div className="max-h-[32vh] overflow-y-auto space-y-4 pr-1">
-              {messages.slice(-6).map((message, index) => (
-                <div
-                  key={index}
-                  className={
-                    message.role === "user"
-                      ? "ml-auto max-w-[85%] bg-gradient-to-r from-purple-600 to-violet-500 text-white rounded-3xl px-5 py-4 shadow-xl"
-                      : "mr-auto max-w-[85%] flex gap-3 items-start"
-                  }
-                >
-                  {message.role === "assistant" ? (
-                    <>
-                      <img
-                        src="/grace-avatar.png"
-                        alt="Grace"
-                        className="w-11 h-11 rounded-full object-cover border border-purple-300/40"
-                      />
-                      <div className="bg-white/10 backdrop-blur border border-white/10 text-white rounded-3xl px-5 py-4 shadow-xl">
-                        {message.content}
-                      </div>
-                    </>
-                  ) : (
-                    message.content
-                  )}
-                </div>
-              ))}
+          <div className="flex flex-col gap-2">
+            <button
+              onClick={() => setVoiceOn(!voiceOn)}
+              className="border border-white/10 bg-white/5 backdrop-blur rounded-full px-4 py-2 text-sm"
+            >
+              Voice {voiceOn ? "On" : "Off"}
+            </button>
 
-              {loading && (
-                <p className="text-zinc-400 animate-pulse pl-14">
-                  Grace is thinking...
-                </p>
-              )}
-
-              {listening && (
-                <p className="text-cyan-300 animate-pulse pl-14">
-                  Listening...
-                </p>
-              )}
-
-              <div ref={bottomRef} className="h-24" />
-            </div>
+            <button
+              onClick={() => setFaceMode(!faceMode)}
+              className="border border-white/10 bg-white/5 backdrop-blur rounded-full px-4 py-2 text-sm"
+            >
+              Face {faceMode ? "On" : "Off"}
+            </button>
           </div>
         </div>
+
+        {faceMode && (
+          <div className="mt-5 flex flex-col items-center text-center">
+            <div
+              className={`relative w-36 h-36 rounded-full overflow-hidden border border-white/20 ${
+                listening || loading
+                  ? "animate-pulse shadow-[0_0_60px_rgba(168,85,247,0.95)]"
+                  : "shadow-[0_0_35px_rgba(168,85,247,0.55)]"
+              }`}
+            >
+              <img
+                src="/grace-avatar.png"
+                alt="Grace"
+                className="w-full h-full object-cover"
+              />
+            </div>
+
+            <p className="mt-4 text-lg font-semibold">
+              {loading
+                ? "Grace is thinking..."
+                : listening
+                ? "Grace is listening..."
+                : `${personality} Grace`}
+            </p>
+
+            <p className="text-sm text-zinc-400">
+              {loading ? "Thinking..." : listening ? "Listening..." : "Ready when you are"}
+            </p>
+          </div>
+        )}
+
+        <div className="mt-4 flex gap-2 overflow-x-auto pb-2">
+          {[...freeModes, ...proModes].map((mode) => {
+            const lockedMode = proModes.includes(mode) && !paid;
+
+            return (
+              <button
+                key={mode}
+                onClick={() => choosePersonality(mode)}
+                className={`whitespace-nowrap px-4 py-2 rounded-full text-sm border transition-all ${
+                  personality === mode
+                    ? "bg-gradient-to-r from-cyan-300 via-violet-300 to-pink-300 text-black border-transparent"
+                    : "bg-white/5 border-white/10 text-white"
+                }`}
+              >
+                {mode} {lockedMode ? "Pro" : ""}
+              </button>
+            );
+          })}
+        </div>
+      </header>
+
+      <section className="flex-1 overflow-y-auto p-5 pb-80 space-y-4">
+        {messages.map((message, index) => (
+          <div
+            key={index}
+            className={
+              message.role === "user"
+                ? "ml-auto max-w-2xl bg-gradient-to-r from-cyan-300 via-violet-300 to-pink-300 text-black rounded-3xl px-5 py-4 shadow-xl"
+                : "mr-auto max-w-2xl bg-white/10 backdrop-blur border border-white/10 text-white rounded-3xl px-5 py-4 shadow-xl"
+            }
+          >
+            {message.content}
+          </div>
+        ))}
+
+        {loading && <p className="text-zinc-400 animate-pulse">Grace is thinking...</p>}
+        {listening && <p className="text-cyan-300 animate-pulse">Listening...</p>}
+        <div ref={bottomRef} className="h-44" />
       </section>
 
       {locked && (
-        <div className="p-4 border-t border-white/10 text-center bg-black/50 backdrop-blur">
+        <div className="p-4 border-t border-white/10 text-center bg-black/30 backdrop-blur">
           <p className="text-zinc-300 mb-3">
             You used your free messages. Upgrade to keep talking with Grace.
           </p>
