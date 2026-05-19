@@ -243,9 +243,9 @@ export default function GraceChat() {
     "I’m here with you.";
 
   return (
-    <main className="h-[100dvh] max-h-[100dvh] bg-[radial-gradient(circle_at_top,#2e1065_0%,#120821_38%,#05050a_100%)] text-white flex flex-col overflow-hidden">
-      <section className="flex-1 overflow-hidden pb-28">
-        <div className="relative h-full px-5 pt-4 overflow-hidden">
+    <main className="min-h-[100dvh] bg-[radial-gradient(circle_at_top,#2e1065_0%,#120821_38%,#05050a_100%)] text-white flex flex-col overflow-hidden">
+      <section className="flex-1 overflow-y-auto pb-40">
+        <div className="relative min-h-[100dvh] px-5 pt-5">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(168,85,247,0.22),transparent_55%)] pointer-events-none" />
 
           <header className="relative z-10 flex justify-between items-start">
@@ -279,7 +279,7 @@ export default function GraceChat() {
           {faceMode && (
             <div className="relative z-10 mt-4 flex flex-col items-center text-center">
               <div
-                className={`relative w-[34vh] max-w-[310px] aspect-square rounded-[2rem] overflow-hidden border border-white/10 ${
+                className={`relative w-[78vw] max-w-[430px] aspect-square rounded-[2.25rem] overflow-hidden border border-white/10 ${
                   listening || loading
                     ? "shadow-[0_0_80px_rgba(168,85,247,0.95)] animate-pulse"
                     : "shadow-[0_0_50px_rgba(168,85,247,0.55)]"
@@ -293,7 +293,7 @@ export default function GraceChat() {
                 <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-transparent" />
               </div>
 
-              <div className="mt-2">
+              <div className="mt-4">
                 <p className="text-2xl font-semibold">
                   {personality} Grace <span className="text-purple-300">♥</span>
                 </p>
@@ -305,7 +305,7 @@ export default function GraceChat() {
             </div>
           )}
 
-          <div className="relative z-10 mt-3">
+          <div className="relative z-10 mt-5">
             <p className="text-xs text-purple-200 mb-2 uppercase tracking-wider">
               Choose Grace
             </p>
@@ -332,8 +332,8 @@ export default function GraceChat() {
             </div>
           </div>
 
-          <div className="relative z-10 mt-2 bg-black/30 border border-white/10 rounded-[2rem] p-3 backdrop-blur shadow-2xl">
-            <div className="max-h-[22vh] overflow-y-auto space-y-3 pr-1">
+          <div className="relative z-10 mt-4 bg-black/30 border border-white/10 rounded-[2rem] p-4 backdrop-blur shadow-2xl">
+            <div className="max-h-[32vh] overflow-y-auto space-y-4 pr-1">
               {messages.slice(-6).map((message, index) => (
                 <div
                   key={index}
@@ -372,7 +372,7 @@ export default function GraceChat() {
                 </p>
               )}
 
-              <div ref={bottomRef} className="h-10" />
+              <div ref={bottomRef} className="h-24" />
             </div>
           </div>
         </div>
@@ -393,7 +393,7 @@ export default function GraceChat() {
         </div>
       )}
 
-      <footer className="fixed bottom-0 left-0 right-0 z-20 p-3 pb-[calc(0.5rem+env(safe-area-inset-bottom))] border-t border-white/10 bg-[#09090f]/95 backdrop-blur flex gap-2 items-end">
+      <footer className="fixed bottom-0 left-0 right-0 z-20 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] border-t border-white/10 bg-[#09090f]/95 backdrop-blur flex gap-2 items-end">
         <button
           onClick={tapToTalk}
           disabled={locked}
