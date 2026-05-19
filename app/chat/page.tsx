@@ -15,45 +15,56 @@ function trackEvent(name: string) {
   }
 }
 
-
+function personalityPrompt(mode: string) {
+  switch (mode) {
+    case "Chill":
+      return "Chill Grace: calm, relaxed, easygoing, warm, simple.";
+    case "Motivational":
+      return "Motivational Grace: uplifting, confident, encouraging, energetic, never fake.";
+    case "Late Night":
+      return "Late Night Grace: soft, thoughtful, calm, gentle, good for quiet conversations.";
+    case "Real Talk":
+      return "Real Talk Grace: direct, casual, honest, blunt but caring. Mild adult language allowed sometimes. Never hateful or unsafe.";
+    case "Unfiltered":
+      return "Unfiltered Grace: adult 18+ tone, casual, sarcastic, funny, blunt, relaxed. Mild cussing and edgy jokes allowed, but never hateful, sexual with minors, violent, abusive, or unsafe.";
+    default:
+      return "Friendly Grace: warm, helpful, safe, conversational, and easy to talk to.";
+  }
+}
 
 export default function GraceChat() {
   const [messages, setMessages] = useState<Message[]>([
     { role: "assistant", content: "Hey… I’m Grace. I’m here with you." },
   ]);
-
   const [input, setInput] = useState("");
   const [memory, setMemory] = useState("");
   const [paid, setPaid] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [voiceOn, setVoiceOn] = useState(true);
-
-  const [wakeMode, setWakeMode] = useState(false);
   const [listening, setListening] = useState(false);
+  const [voiceOn, setVoiceOn] = useState(true);
+  const [faceMode, setFaceMode] = useState(true);
+  const [personality, setPersonality] = useState("Friendly");
 
   const messagesRef = useRef<Message[]>(messages);
   const memoryRef = useRef("");
   const loadingRef = useRef(false);
-
-  const wakeModeRef = useRef(false);
-
   const recognitionRef = useRef<any>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
-const bottomRef = useRef<HTMLDivElement | null>(null);
+  const bottomRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const savedMessages = localStorage.getItem("grace_messages");
     const savedMemory = localStorage.getItem("grace_memory");
     const savedPaid = localStorage.getItem("sora_paid");
+    const savedPersonality = localStorage.getItem("grace_personality");
 
     if (savedMessages) setMessages(JSON.parse(savedMessages));
-
     if (savedMemory) {
       setMemory(savedMemory);
       memoryRef.current = savedMemory;
     }
-
     if (savedPaid === "true") setPaid(true);
+    if (savedPersonality) setPersonality(savedPersonality);
   }, []);
 
   useEffect(() => {
@@ -61,18 +72,31 @@ const bottomRef = useRef<HTMLDivElement | null>(null);
     localStorage.setItem("grace_messages", JSON.stringify(messages));
 
     setTimeout(() => {
-      bottomRef.current?.scrollIntoView({
-        behavior: "smooth",
-        block: "end",
-      });
+      bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
     }, 100);
   }, [messages, loading, listening]);
 
+  useEffect(() => {
+    localStorage.setItem("grace_personality", personality);
+  }, [personality]);
+
   const userCount = messages.filter((m) => m.role === "user").length;
-
   const freeLeft = Math.max(FREE_LIMIT - userCount, 0);
-
   const locked = !paid && freeLeft <= 0;
+
+  const freeModes = ["Friendly", "Chill", "Motivational", "Late Night"];
+  const proModes = ["Real Talk", "Unfiltered"];
+
+  function choosePersonality(mode: string) {
+    if (proModes.includes(mode) && !paid) {
+      trackEvent("pro_personality_clicked");
+      window.location.href = "/pay";
+      return;
+    }
+
+    setPersonality(mode);
+    trackEvent("personality_changed");
+  }
 
   function updateMemory(text: string) {
     const lower = text.toLowerCase();
@@ -88,19 +112,14 @@ const bottomRef = useRef<HTMLDivElement | null>(null);
       lower.includes("i feel") ||
       lower.includes("i like") ||
       lower.includes("i struggle") ||
-      lower.includes("i miss");
+      lower.includes("i miss") ||
+      lower.includes("i love");
 
     if (!important) return;
 
-    const updated =
-      `${memoryRef.current}\nUser said: ${text}`
-        .trim()
-        .slice(-3500);
-
+    const updated = `${memoryRef.current}\nUser said: ${text}`.trim().slice(-3500);
     memoryRef.current = updated;
-
     setMemory(updated);
-
     localStorage.setItem("grace_memory", updated);
   }
 
@@ -112,43 +131,30 @@ const bottomRef = useRef<HTMLDivElement | null>(null);
 
       const res = await fetch("/api/speak", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text }),
       });
 
-      if (!res.ok) throw new Error("voice failed");
+      if (!res.ok) throw new Error("Voice failed");
 
       const blob = await res.blob();
-
       const url = URL.createObjectURL(blob);
-
       const audio = new Audio(url);
 
       audioRef.current = audio;
-
-      audio.onended = () => {
-        URL.revokeObjectURL(url);
-
-        // wake loop removed for stability
-      };
+      audio.onended = () => URL.revokeObjectURL(url);
 
       await audio.play();
     } catch {
       const fallback = new SpeechSynthesisUtterance(text);
-
-      fallback.rate = 0.92;
-
+      fallback.rate = 0.9;
       speechSynthesis.cancel();
-
       speechSynthesis.speak(fallback);
     }
   }
 
   async function sendMessage(text: string) {
     const clean = text.trim();
-
     if (!clean || loadingRef.current) return;
 
     if (locked) {
@@ -157,230 +163,45 @@ const bottomRef = useRef<HTMLDivElement | null>(null);
       return;
     }
 
-    recognitionRef.current?.stop();
-
     trackEvent("message_sent");
     updateMemory(clean);
 
     loadingRef.current = true;
-
     setLoading(true);
+    recognitionRef.current?.stop();
 
     const nextMessages: Message[] = [
       ...messagesRef.current,
-      {
-        role: "user",
-        content: clean,
-      },
+      { role: "user", content: clean },
     ];
 
     setMessages(nextMessages);
-
     setInput("");
 
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           messages: nextMessages,
           memory: memoryRef.current,
+          personality: personalityPrompt(personality),
         }),
       });
 
       const data = await res.json();
+      const reply = data.reply || "I'm here with you. Tell me more.";
 
-      const reply =
-        data.reply ||
-        "I’m here with you.";
-
-      setMessages([
-        ...nextMessages,
-        {
-          role: "assistant",
-          content: reply,
-        },
-      ]);
-
+      setMessages([...nextMessages, { role: "assistant", content: reply }]);
       await speak(reply);
     } catch {
-      const reply =
-        "Something glitched, but I’m still here.";
-
-      setMessages([
-        ...nextMessages,
-        {
-          role: "assistant",
-          content: reply,
-        },
-      ]);
-
+      const reply = "Something glitched, but I'm still here with you.";
+      setMessages([...nextMessages, { role: "assistant", content: reply }]);
       await speak(reply);
     }
 
     loadingRef.current = false;
-
     setLoading(false);
-  }
-
-  function startWakeListening() {
-    const SpeechRecognition =
-      (window as any).SpeechRecognition ||
-      (window as any).webkitSpeechRecognition;
-
-    if (!SpeechRecognition) {
-      alert("Chrome microphone permission required.");
-      return;
-    }
-
-    if (loadingRef.current) return;
-
-    recognitionRef.current?.stop();
-
-    const recognition = new SpeechRecognition();
-
-    recognition.lang = "en-US";
-
-    recognition.continuous = false;
-
-    recognition.interimResults = false;
-
-    recognition.onstart = () => {
-      setListening(true);
-    };
-
-    recognition.onresult = async (event: any) => {
-      const text =
-        event.results[0][0].transcript;
-
-      const lower = text.toLowerCase();
-
-      if (
-        lower.includes("grace") ||
-        lower.includes("hey grace")
-      ) {
-        await speak(
-          getGreeting()
-        );
-
-        setTimeout(() => {
-          startConversationCapture();
-        }, 1500);
-      } else {
-        // wake loop removed for stability
-      }
-    };
-
-    recognition.onerror = () => {
-      setListening(false);
-
-      if (wakeModeRef.current) {
-        setTimeout(() => {
-          startWakeListening();
-        }, 1500);
-      }
-    };
-
-    recognition.onend = () => {
-      setListening(false);
-
-      if (
-        wakeModeRef.current &&
-        !loadingRef.current
-      ) {
-        setTimeout(() => {
-          startWakeListening();
-        }, 1000);
-      }
-    };
-
-    recognitionRef.current = recognition;
-
-    recognition.start();
-  }
-
-  function startConversationCapture() {
-    const SpeechRecognition =
-      (window as any).SpeechRecognition ||
-      (window as any).webkitSpeechRecognition;
-
-    const recognition = new SpeechRecognition();
-
-    recognition.lang = "en-US";
-
-    recognition.continuous = false;
-
-    recognition.interimResults = false;
-
-    recognition.onresult = (event: any) => {
-      const text =
-        event.results[0][0].transcript;
-
-      sendMessage(text);
-    };
-
-    recognition.onerror = () => {
-      if (wakeModeRef.current) {
-        startWakeListening();
-      }
-    };
-
-    recognition.onend = () => {
-      if (
-        wakeModeRef.current &&
-        !loadingRef.current
-      ) {
-        startWakeListening();
-      }
-    };
-
-    recognition.start();
-  }
-
-  function getGreeting() {
-    const hour = new Date().getHours();
-
-    if (hour < 12) {
-      return "Good morning. I’m here.";
-    }
-
-    if (hour < 18) {
-      return "Good afternoon. What’s on your mind?";
-    }
-
-    return "Good evening. I’m listening.";
-  }
-
-  function toggleWakeMode() {
-    if (wakeModeRef.current) {
-      wakeModeRef.current = false;
-
-      setWakeMode(false);
-
-      setListening(false);
-
-      recognitionRef.current?.stop();
-
-      audioRef.current?.pause();
-
-      speechSynthesis.cancel();
-
-      return;
-    }
-
-    wakeModeRef.current = false;
-
-    setWakeMode(false);
-
-    speak(
-      "Talk to Grace is now active."
-    );
-
-    setTimeout(() => {
-      startWakeListening();
-    }, 1500);
   }
 
   function tapToTalk() {
@@ -393,6 +214,7 @@ const bottomRef = useRef<HTMLDivElement | null>(null);
       return;
     }
 
+    trackEvent("talk_clicked");
     recognitionRef.current?.stop();
 
     const recognition = new SpeechRecognition();
@@ -401,12 +223,10 @@ const bottomRef = useRef<HTMLDivElement | null>(null);
     recognition.interimResults = false;
 
     recognition.onstart = () => setListening(true);
-
     recognition.onresult = (event: any) => {
       const text = event.results[0][0].transcript;
       sendMessage(text);
     };
-
     recognition.onerror = () => setListening(false);
     recognition.onend = () => setListening(false);
 
@@ -414,63 +234,45 @@ const bottomRef = useRef<HTMLDivElement | null>(null);
     recognition.start();
   }
 
-  function resetGrace() {
-    localStorage.removeItem(
-      "grace_messages"
-    );
-
-    localStorage.removeItem(
-      "grace_memory"
-    );
-
-    localStorage.removeItem(
-      "sora_paid"
-    );
-
-    window.location.reload();
-  }
-
   return (
-    <>
-      <style jsx global>{`
-        @keyframes graceGlow {
-          0% { box-shadow: 0 0 15px rgba(168,85,247,0.35); }
-          50% { box-shadow: 0 0 35px rgba(168,85,247,0.9); }
-          100% { box-shadow: 0 0 15px rgba(168,85,247,0.35); }
-        }
-
-        @keyframes fadeInUp {
-          from {
-            opacity: 0;
-            transform: translateY(10px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0px);
-          }
-        }
-
-        .grace-fade {
-          animation: fadeInUp 0.35s ease;
-        }
-
-        .grace-speaking {
-          animation: graceGlow 1.8s infinite;
-        }
-      `}</style>
-
     <main className="min-h-[100dvh] bg-[radial-gradient(circle_at_top,#312e81_0%,#140f2d_35%,#09090f_100%)] text-white flex flex-col">
+      <header className="p-5 border-b border-white/10">
+        <div className="flex justify-between items-start gap-3">
+          <div>
+            <h1 className="text-5xl font-bold">Grace</h1>
+            <p className="text-zinc-400 mt-2">Talk to Grace.</p>
+            <p className="text-xs text-zinc-400 mt-2">
+              {paid ? "Grace Pro unlocked" : `${freeLeft} free messages left`}
+            </p>
+            {memory && <p className="text-xs text-cyan-300 mt-1">Memory active</p>}
+          </div>
 
-      <header className="p-5 border-b border-white/10 flex justify-between items-start">
-        <div>
-          <h1 className="text-5xl font-bold">
-            Grace
-          </h1>
+          <div className="flex flex-col gap-2">
+            <button
+              onClick={() => setVoiceOn(!voiceOn)}
+              className="border border-white/10 bg-white/5 backdrop-blur rounded-full px-4 py-2 text-sm"
+            >
+              Voice {voiceOn ? "On" : "Off"}
+            </button>
 
-          <div className="mt-4 flex items-center gap-4">
-            <div className={`relative w-20 h-20 rounded-full overflow-hidden border border-white/20 shadow-[0_0_35px_rgba(168,85,247,0.55)] ${
-              listening || loading ? "animate-pulse" : ""
-            }`}>
+            <button
+              onClick={() => setFaceMode(!faceMode)}
+              className="border border-white/10 bg-white/5 backdrop-blur rounded-full px-4 py-2 text-sm"
+            >
+              Face {faceMode ? "On" : "Off"}
+            </button>
+          </div>
+        </div>
+
+        {faceMode && (
+          <div className="mt-5 flex flex-col items-center text-center">
+            <div
+              className={`relative w-36 h-36 rounded-full overflow-hidden border border-white/20 ${
+                listening || loading
+                  ? "animate-pulse shadow-[0_0_60px_rgba(168,85,247,0.95)]"
+                  : "shadow-[0_0_35px_rgba(168,85,247,0.55)]"
+              }`}
+            >
               <img
                 src="/grace-avatar.png"
                 alt="Grace"
@@ -478,87 +280,68 @@ const bottomRef = useRef<HTMLDivElement | null>(null);
               />
             </div>
 
-            <div className="text-sm text-zinc-300">
-              <p className="font-semibold text-white">
-                {loading ? "Grace is thinking..." : listening ? "Grace is listening..." : "Grace is here"}
-              </p>
-              <p>
-                {loading ? "Thinking..." : listening ? "Listening..." : "Ready when you are"}
-              </p>
-            </div>
-          </div>
-
-          <p className="text-zinc-400 mt-4">
-            Technology that feels more human.
-          </p>
-
-          <p className="text-xs text-zinc-400 mt-2">
-            {paid ? "Grace Pro unlocked" : `${freeLeft} free messages left`}
-          </p>
-
-          {memory && (
-            <p className="text-xs text-cyan-300 mt-1">
-              Memory active
+            <p className="mt-4 text-lg font-semibold">
+              {loading
+                ? "Grace is thinking..."
+                : listening
+                ? "Grace is listening..."
+                : `${personality} Grace`}
             </p>
-          )}
-        </div>
 
-        <div className="flex gap-2">
-          <button
-            onClick={() => setVoiceOn(!voiceOn)}
-            className="border border-white/10 bg-white/5 backdrop-blur rounded-full px-4 py-2 text-sm"
-          >
-            Voice {voiceOn ? "On" : "Off"}
-          </button>
+            <p className="text-sm text-zinc-400">
+              {loading ? "Thinking..." : listening ? "Listening..." : "Ready when you are"}
+            </p>
+          </div>
+        )}
 
-          <button
-            onClick={() => { trackEvent("talk_clicked"); tapToTalk(); }}
-            className="border border-white/10 bg-white/5 backdrop-blur rounded-full px-4 py-2 text-sm"
-          >
-            Talk to Grace
-          </button>
+        <div className="mt-4 flex gap-2 overflow-x-auto pb-2">
+          {[...freeModes, ...proModes].map((mode) => {
+            const lockedMode = proModes.includes(mode) && !paid;
+
+            return (
+              <button
+                key={mode}
+                onClick={() => choosePersonality(mode)}
+                className={`whitespace-nowrap px-4 py-2 rounded-full text-sm border transition-all ${
+                  personality === mode
+                    ? "bg-gradient-to-r from-cyan-300 via-violet-300 to-pink-300 text-black border-transparent"
+                    : "bg-white/5 border-white/10 text-white"
+                }`}
+              >
+                {mode} {lockedMode ? "Pro" : ""}
+              </button>
+            );
+          })}
         </div>
       </header>
 
-      <section className="flex-1 min-w-0 bg-white/10 backdrop-blur border border-white/10 rounded-2xl px-4 py-3 text-white placeholder:text-zinc-400 outline-none disabled:opacity-40">
-
+      <section className="flex-1 overflow-y-auto p-5 pb-80 space-y-4">
         {messages.map((message, index) => (
           <div
             key={index}
             className={
               message.role === "user"
-                ? "ml-auto max-w-2xl bg-gradient-to-r from-cyan-300 via-violet-300 to-pink-300 text-black rounded-3xl px-5 py-4 shadow-xl grace-fade"
-                : "mr-auto max-w-2xl bg-white/10 backdrop-blur border border-white/10 text-white rounded-3xl px-5 py-4 shadow-xl grace-fade"
+                ? "ml-auto max-w-2xl bg-gradient-to-r from-cyan-300 via-violet-300 to-pink-300 text-black rounded-3xl px-5 py-4 shadow-xl"
+                : "mr-auto max-w-2xl bg-white/10 backdrop-blur border border-white/10 text-white rounded-3xl px-5 py-4 shadow-xl"
             }
           >
             {message.content}
           </div>
         ))}
 
-        {loading && (
-          <p className="text-zinc-300 animate-pulse">
-            Grace is thinking...
-          </p>
-        )}
-
-        {listening && (
-          <p className="text-cyan-300 animate-pulse">
-            Ready when you are.
-          </p>
-        )}
-
-      <div ref={bottomRef} className="h-40" />
+        {loading && <p className="text-zinc-400 animate-pulse">Grace is thinking...</p>}
+        {listening && <p className="text-cyan-300 animate-pulse">Listening...</p>}
+        <div ref={bottomRef} className="h-44" />
       </section>
 
       {locked && (
         <div className="p-4 border-t border-white/10 text-center bg-black/30 backdrop-blur">
           <p className="text-zinc-300 mb-3">
-            You used your free messages.
-            Upgrade to keep talking with Grace.
+            You used your free messages. Upgrade to keep talking with Grace.
           </p>
-
           <a
-            onClick={() => trackEvent("upgrade_clicked")} href="/pay"
+            onClick={() => trackEvent("upgrade_clicked")}
+            href="/pay"
             className="inline-block bg-gradient-to-r from-cyan-200 via-violet-200 to-pink-200 text-black rounded-2xl px-8 py-4 font-bold"
           >
             Upgrade Grace Pro
@@ -567,20 +350,17 @@ const bottomRef = useRef<HTMLDivElement | null>(null);
       )}
 
       <footer className="fixed bottom-0 left-0 right-0 z-20 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] border-t border-white/10 bg-[#09090f]/95 backdrop-blur flex gap-2 items-end">
-
         <button
-          onClick={() => { trackEvent("talk_clicked"); tapToTalk(); }}
+          onClick={tapToTalk}
           disabled={locked}
           className="bg-gradient-to-r from-cyan-300 via-violet-300 to-pink-300 text-black px-4 py-3 rounded-2xl font-bold disabled:opacity-40"
         >
-          🎤 Talk
+          🎤
         </button>
 
         <textarea
           value={input}
-          onChange={(e) =>
-            setInput(e.target.value)
-          }
+          onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
@@ -594,17 +374,13 @@ const bottomRef = useRef<HTMLDivElement | null>(null);
         />
 
         <button
-          onClick={() =>
-            sendMessage(input)
-          }
+          onClick={() => sendMessage(input)}
           disabled={locked}
           className="bg-gradient-to-r from-cyan-200 via-violet-200 to-pink-200 text-black rounded-2xl px-4 py-3 font-semibold disabled:opacity-40"
         >
           Send
         </button>
-
       </footer>
     </main>
-    </>
   );
 }
