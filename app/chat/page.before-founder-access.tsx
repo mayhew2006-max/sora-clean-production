@@ -56,7 +56,6 @@ export default function GraceChat() {
     const savedMessages = localStorage.getItem("grace_messages");
     const savedMemory = localStorage.getItem("grace_memory");
     const savedPaid = localStorage.getItem("sora_paid");
-    const founderAccess = localStorage.getItem("grace_founder");
     const savedPersonality = localStorage.getItem("grace_personality");
 
     if (savedMessages) setMessages(JSON.parse(savedMessages));
@@ -66,7 +65,7 @@ export default function GraceChat() {
       memoryRef.current = savedMemory;
     }
 
-    if (savedPaid === "true" || founderAccess === "true") setPaid(true);
+    if (savedPaid === "true") setPaid(true);
     if (savedPersonality) setPersonality(savedPersonality);
   }, []);
 
