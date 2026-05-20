@@ -149,10 +149,12 @@ export default function GraceChat() {
 
       await audio.play();
     } catch {
-      const fallback = new SpeechSynthesisUtterance(text);
-      fallback.rate = 0.9;
-      speechSynthesis.cancel();
-      speechSynthesis.speak(fallback);
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        const fallback = new SpeechSynthesisUtterance(text);
+        fallback.rate = 0.9;
+        speechSynthesis.cancel();
+        speechSynthesis.speak(fallback);
+      }
     }
   }
 
@@ -196,11 +198,11 @@ export default function GraceChat() {
       const reply = data.reply || "I'm here with you. Tell me more.";
 
       setMessages([...nextMessages, { role: "assistant", content: reply }]);
-      await speak(reply);
+      speak(reply).catch(() => console.log("voice playback failed"));
     } catch {
       const reply = "Something glitched, but I'm still here with you.";
       setMessages([...nextMessages, { role: "assistant", content: reply }]);
-      await speak(reply);
+      speak(reply).catch(() => console.log("voice playback failed"));
     }
 
     loadingRef.current = false;
