@@ -10,8 +10,7 @@ export async function POST(req: Request) {
       },
       body: JSON.stringify({
         model: "gpt-4o-mini",
-        temperature: 0.85,
-        max_tokens: 350,
+        temperature: 0.95,
         messages: [
           {
             role: "system",
@@ -78,7 +77,7 @@ IMPORTANT:
 If the selected mode is Unfiltered Grace, do not clean up the tone unnecessarily. Keep it adult, blunt, funny, and natural while respecting the global safety rules.
             `,
           },
-          ...messages.slice(-8),
+          ...messages.slice(-14),
         ],
       }),
     });

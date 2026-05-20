@@ -72,7 +72,7 @@ export default function GraceChat() {
 
   useEffect(() => {
     messagesRef.current = messages;
-    localStorage.setItem("grace_messages", JSON.stringify(messages.slice(-30)));
+    localStorage.setItem("grace_messages", JSON.stringify(messages));
 
     setTimeout(() => {
       bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -186,8 +186,8 @@ export default function GraceChat() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          messages: nextMessages.slice(-8),
-          memory: memoryRef.current.slice(-1500),
+          messages: nextMessages,
+          memory: memoryRef.current,
           personality: personalityPrompt(personality),
         }),
       });
