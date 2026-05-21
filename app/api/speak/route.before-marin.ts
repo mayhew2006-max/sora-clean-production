@@ -5,29 +5,31 @@ export async function POST(req: Request) {
     const response = await fetch("https://api.openai.com/v1/audio/speech", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
         "Content-Type": "application/json",
+        Authorization: "Bearer " + process.env.OPENAI_API_KEY,
       },
       body: JSON.stringify({
         model: "gpt-4o-mini-tts",
-        voice: "marin",
+        voice: "nova",
         input: text,
-        format: "mp3",
+        instructions:
+          "Speak warmly and naturally like a real supportive woman named Grace. Calm, human, gentle, not robotic, not like Siri.",
+        response_format: "mp3",
       }),
     });
 
     if (!response.ok) {
-      throw new Error("Voice generation failed");
+      return new Response("Voice failed", { status: 500 });
     }
 
-    const audioBuffer = await response.arrayBuffer();
+    const audio = await response.arrayBuffer();
 
-    return new Response(audioBuffer, {
+    return new Response(audio, {
       headers: {
         "Content-Type": "audio/mpeg",
       },
     });
-  } catch (e) {
+  } catch {
     return new Response("Voice failed", { status: 500 });
   }
 }
