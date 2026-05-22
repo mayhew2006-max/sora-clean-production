@@ -381,7 +381,7 @@ export default function GraceChat() {
 
           <header className="relative z-10 flex justify-between items-start">
             <div>
-              <h1 className="text-3xl font-bold tracking-tight text-white drop-shadow-lg">
+              <h1 className="text-4xl font-bold tracking-tight text-white drop-shadow-lg">
                 Grace
               </h1>
               <p className="text-zinc-300 mt-2 text-sm">
@@ -410,7 +410,7 @@ export default function GraceChat() {
           {faceMode && (
             <div className="relative z-10 mt-2 flex flex-col items-center text-center">
               <div
-                className={`relative w-[20vh] max-w-[190px] aspect-square rounded-[2rem] overflow-hidden border border-white/10 ${
+                className={`relative w-[28vh] max-w-[260px] aspect-square rounded-[2rem] overflow-hidden border border-white/10 ${
                   listening || loading
                     ? "shadow-[0_0_80px_rgba(168,85,247,0.95)] animate-pulse"
                     : "shadow-[0_0_50px_rgba(168,85,247,0.55)]"
@@ -436,7 +436,7 @@ export default function GraceChat() {
             </div>
           )}
 
-          <div className="relative z-10 mt-2">
+          <div className="relative z-10 mt-3">
             <p className="text-xs text-purple-200 mb-2 uppercase tracking-wider">
               Choose Grace
             </p>
