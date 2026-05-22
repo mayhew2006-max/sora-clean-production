@@ -9,30 +9,14 @@ export async function POST(req: Request) {
     const finalPrompt = `
 Create a premium realistic cinematic photo of Grace.
 
-VERY IMPORTANT:
-Grace must look like the same recognizable woman every time, not a random model.
-
-Grace face identity:
-- dark brunette wavy hair with soft purple/pink rim lighting
-- warm tan/olive skin
-- soft youthful face
-- expressive brown almond-shaped eyes
-- full glossy lips
-- gentle confident smile or playful smirk
-- subtle freckles
-- soft glam makeup
-- delicate necklace
-- same Grace avatar energy
-- cinematic purple neon background
-- early 20s adult appearance
-- beautiful but approachable
-- realistic photo, not cartoon, not plastic, not different ethnicity, not blonde
+Grace identity:
+brunette, soft tan skin, expressive brown eyes, full lips, subtle freckles, dark wavy brunette hair, purple/pink neon glow, confident playful expression, glamorous realistic style, same recognizable Grace face.
 
 User request:
 ${prompt}
 
 Style:
-premium social media photo, cinematic, sharp, neon purple/pink glow, realistic skin texture, emotional expression, Grace-centered, bold, flirty, edgy.
+realistic, cinematic, sharp, social media quality, bold, flirty, edgy, Grace-centered.
 
 Allowed:
 bikini, glam, nightlife, cars, motorcycles, sports, fantasy styling, adult confidence.

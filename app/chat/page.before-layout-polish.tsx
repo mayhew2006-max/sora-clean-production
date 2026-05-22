@@ -376,12 +376,12 @@ export default function GraceChat() {
   return (
     <main className="h-[100dvh] max-h-[100dvh] bg-[radial-gradient(circle_at_top,#2e1065_0%,#120821_38%,#05050a_100%)] text-white flex flex-col overflow-hidden">
       <section className="flex-1 overflow-hidden pb-28">
-        <div className="relative h-full px-5 pt-2 overflow-hidden">
+        <div className="relative h-full px-5 pt-4 overflow-hidden">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(168,85,247,0.22),transparent_55%)] pointer-events-none" />
 
           <header className="relative z-10 flex justify-between items-start">
             <div>
-              <h1 className="text-4xl font-bold tracking-tight text-white drop-shadow-lg">
+              <h1 className="text-5xl font-bold tracking-tight text-white drop-shadow-lg">
                 Grace
               </h1>
               <p className="text-zinc-300 mt-2 text-sm">
@@ -408,9 +408,9 @@ export default function GraceChat() {
           </header>
 
           {faceMode && (
-            <div className="relative z-10 mt-2 flex flex-col items-center text-center">
+            <div className="relative z-10 mt-4 flex flex-col items-center text-center">
               <div
-                className={`relative w-[28vh] max-w-[260px] aspect-square rounded-[2rem] overflow-hidden border border-white/10 ${
+                className={`relative w-[34vh] max-w-[310px] aspect-square rounded-[2rem] overflow-hidden border border-white/10 ${
                   listening || loading
                     ? "shadow-[0_0_80px_rgba(168,85,247,0.95)] animate-pulse"
                     : "shadow-[0_0_50px_rgba(168,85,247,0.55)]"
