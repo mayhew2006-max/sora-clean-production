@@ -1,40 +1,34 @@
 export async function POST(req: Request) {
   try {
-    const { prompt, personality, paid } = await req.json();
+    const body = await req.json();
 
-    if (!paid || personality !== "Unfiltered") {
-      return Response.json({
-        error: "Unfiltered Grace only."
-      }, { status: 403 });
-    }
+    const prompt = body.prompt || "";
 
-    const gracePrompt = `
-Grace character consistency:
-- same brunette woman
-- soft tan skin
-- attractive early 20s appearance
-- cinematic neon lighting
-- expressive eyes
-- glamorous but realistic
-- emotionally confident
+    const finalPrompt = `
+Grace character:
+- attractive brunette woman
+- neon cinematic lighting
+- emotionally expressive
+- same recognizable Grace face
+- glamorous aesthetic
+- realistic
 - edgy and playful
-- stylish aesthetic
-- maintain same recognizable Grace face
 
 User request:
 ${prompt}
 
-STYLE RULES:
-- adult glam allowed
-- bikinis allowed
-- nightlife aesthetics allowed
-- fantasy/cosplay styling allowed
-- seductive attitude allowed
-- flirty/adult tone allowed
-- never minors
-- never racial hate
-- never illegal content
-- never graphic sexual acts
+Allowed:
+- glam
+- bikinis
+- nightlife
+- fantasy aesthetics
+- flirty adult tone
+
+Never:
+- minors
+- racial hate
+- illegal content
+- graphic sexual acts
 `;
 
     const response = await fetch(
@@ -47,20 +41,32 @@ STYLE RULES:
         },
         body: JSON.stringify({
           model: "gpt-image-1",
-          prompt: gracePrompt,
-          size: "1024x1792"
+          prompt: finalPrompt,
+          size: "1024x1024",
         }),
       }
     );
 
     const data = await response.json();
 
+    console.log(data);
+
+    if (!data?.data?.[0]?.b64_json) {
+      return Response.json(
+        { error: "No image returned", details: data },
+        { status: 500 }
+      );
+    }
+
     return Response.json({
-      image: data?.data?.[0]?.b64_json || null,
+      image: data.data[0].b64_json,
     });
-  } catch {
-    return Response.json({
-      error: "Image generation failed"
-    }, { status: 500 });
+  } catch (err) {
+    return Response.json(
+      {
+        error: "Image route crashed",
+      },
+      { status: 500 }
+    );
   }
 }
