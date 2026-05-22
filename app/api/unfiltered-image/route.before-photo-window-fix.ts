@@ -1,22 +1,18 @@
 export async function POST(req: Request) {
   try {
-    const { prompt, personality, paid } = await req.json();
-
-    if (!paid || personality !== "Unfiltered") {
-      return Response.json({ error: "Unfiltered Grace only" }, { status: 403 });
-    }
+    const { prompt } = await req.json();
 
     const finalPrompt = `
-Create a premium realistic cinematic photo of Grace.
+Create a realistic cinematic photo of Grace.
 
-Grace identity:
-brunette, soft tan skin, expressive brown eyes, full lips, subtle freckles, dark wavy brunette hair, purple/pink neon glow, confident playful expression, glamorous realistic style, same recognizable Grace face.
+Grace must look consistent:
+young adult brunette woman, soft tan skin, expressive brown eyes, full lips, subtle freckles, dark wavy brunette hair, purple/pink neon glow, confident playful expression, glamorous realistic style.
 
 User request:
 ${prompt}
 
 Style:
-realistic, cinematic, sharp, social media quality, bold, flirty, edgy, Grace-centered.
+premium social media image, realistic, cinematic, sharp, beautiful lighting, Grace-centered, bold, flirty, edgy.
 
 Allowed:
 bikini, glam, nightlife, cars, motorcycles, sports, fantasy styling, adult confidence.

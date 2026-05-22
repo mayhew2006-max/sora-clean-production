@@ -208,21 +208,6 @@ export default function GraceChat() {
   }
 
  async function generateGracePhotoFromChat(text: string) {
-    const photoWindow = window.open("", "_blank");
-
-    if (photoWindow) {
-      photoWindow.document.write(`
-        <html>
-          <body style="margin:0;background:#05050a;color:white;display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;">
-            <div style="text-align:center;">
-              <h1>Grace is creating your photo...</h1>
-              <p>This may take a few seconds.</p>
-            </div>
-          </body>
-        </html>
-      `);
-    }
-
     const res = await fetch("/api/unfiltered-image", {
       method: "POST",
       headers: {
@@ -238,25 +223,16 @@ export default function GraceChat() {
     const data = await res.json();
 
     if (!res.ok || !data.image) {
-      if (photoWindow) photoWindow.close();
       throw new Error("Grace image failed");
     }
 
-    const src = "data:image/png;base64," + data.image;
-
-    if (photoWindow) {
-      photoWindow.document.open();
-      photoWindow.document.write(`
-        <html>
-          <body style="margin:0;background:#05050a;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:16px;">
-            <img src="${src}" style="max-width:100%;max-height:96vh;border-radius:24px;box-shadow:0 0 70px rgba(168,85,247,.75);" />
-          </body>
-        </html>
-      `);
-      photoWindow.document.close();
-    }
-
-    return src;
+    setMessages((prev) => [
+      ...prev,
+      {
+        role: "assistant",
+        content: "GRACE_IMAGE::" + data.image,
+      },
+    ]);
   }
 
  async function sendMessage(text: string) {
@@ -291,7 +267,7 @@ export default function GraceChat() {
           ...nextMessages,
           {
             role: "assistant",
-            content: "I made that for you. It opened in a new photo window.",
+            content: "I made that for you. Tap X to close the photo.",
           },
         ]);
       } catch {
