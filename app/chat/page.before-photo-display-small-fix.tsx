@@ -406,7 +406,7 @@ export default function GraceChat() {
           </div>
 
           <div className="relative z-10 mt-2 bg-black/30 border border-white/10 rounded-[2rem] p-3 backdrop-blur shadow-2xl">
-            <div className="max-h-[65vh] overflow-y-auto space-y-3 pr-1">
+            <div className="max-h-[22vh] overflow-y-auto space-y-3 pr-1">
               {messages.slice(-6).map((message, index) => (
                 <div
                   key={index}
@@ -428,7 +428,7 @@ export default function GraceChat() {
                         <img
                           src={"data:image/png;base64," + message.content.replace("GRACE_IMAGE::", "")}
                           alt="Generated Grace"
-                          className="w-full max-w-[520px] rounded-3xl border border-white/10 shadow-2xl mx-auto"
+                          className="w-full max-w-[420px] rounded-3xl border border-white/10 shadow-2xl"
                         />
                       ) : (
                         <div className="bg-white/10 backdrop-blur border border-white/10 text-white rounded-3xl px-5 py-4 shadow-xl">
