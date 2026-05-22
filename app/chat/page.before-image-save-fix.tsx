@@ -3,9 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 
 type Message = {
-  role: "user" | "assistant" | "assistant-image";
-  content?: string;
- image?: string;
+  role: "user" | "assistant";
+  content: string;
 };
 
 const FREE_LIMIT = 50;
@@ -417,13 +416,7 @@ export default function GraceChat() {
                       : "mr-auto max-w-[85%] flex gap-3 items-start"
                   }
                 >
-                  {message.role === "assistant-image" ? (
-                    <img
-                      src={message.image}
-                      alt="Generated Grace"
-                      className="w-full max-w-2xl rounded-3xl border border-white/10 shadow-2xl mx-auto"
-                    />
-                  ) : message.role === "assistant" ? (
+                  {message.role === "assistant" ? (
                     <>
                       <img
                         src="/grace-avatar.png"
@@ -431,9 +424,9 @@ export default function GraceChat() {
                         className="w-11 h-11 rounded-full object-cover border border-purple-300/40"
                       />
 
-                      {(message.content || "").startsWith("GRACE_IMAGE::") ? (
+                      {message.content.startsWith("GRACE_IMAGE::") ? (
                         <img
-                          src={"data:image/png;base64," + (message.content || "").replace("GRACE_IMAGE::", "")}
+                          src={"data:image/png;base64," + message.content.replace("GRACE_IMAGE::", "")}
                           alt="Generated Grace"
                           className="w-full max-w-[520px] rounded-3xl border border-white/10 shadow-2xl mx-auto"
                         />
