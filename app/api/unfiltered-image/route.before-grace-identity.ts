@@ -5,49 +5,26 @@ export async function POST(req: Request) {
     const prompt = body.prompt || "";
 
     const finalPrompt = `
-IMPORTANT:
-This is ALWAYS Grace.
-
-Grace identity:
-- same woman every time
-- brunette
-- soft tan skin
-- expressive brown eyes
-- soft full lips
-- subtle freckles
-- slim athletic body
-- cinematic purple/pink neon lighting
-- emotionally expressive face
-- early 20s appearance
-- confident but warm energy
-- glamorous realistic aesthetic
-- dark brunette wavy hair
-- same recognizable face every generation
-- highly realistic photo
+Grace character:
+- attractive brunette woman
+- neon cinematic lighting
+- emotionally expressive
+- same recognizable Grace face
+- glamorous aesthetic
+- realistic
+- edgy and playful
 
 User request:
 ${prompt}
 
-STYLE:
-- realistic photography
-- cinematic
-- sexy but classy
-- emotional
-- premium social media aesthetic
-- beautiful lighting
-- realistic skin texture
-- maintain Grace facial identity strongly
-
-ALLOWED:
+Allowed:
+- glam
 - bikinis
 - nightlife
-- fantasy styling
-- glam
-- edgy attitude
-- flirtiness
-- adult confidence
+- fantasy aesthetics
+- flirty adult tone
 
-NEVER:
+Never:
 - minors
 - racial hate
 - illegal content
@@ -65,16 +42,18 @@ NEVER:
         body: JSON.stringify({
           model: "gpt-image-1",
           prompt: finalPrompt,
-          size: "1024x1792"
+          size: "1024x1024",
         }),
       }
     );
 
     const data = await response.json();
 
+    console.log(data);
+
     if (!data?.data?.[0]?.b64_json) {
       return Response.json(
-        { error: "No image returned" },
+        { error: "No image returned", details: data },
         { status: 500 }
       );
     }
@@ -82,9 +61,11 @@ NEVER:
     return Response.json({
       image: data.data[0].b64_json,
     });
-  } catch {
+  } catch (err) {
     return Response.json(
-      { error: "Grace image generation failed" },
+      {
+        error: "Image route crashed",
+      },
       { status: 500 }
     );
   }
