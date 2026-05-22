@@ -192,12 +192,9 @@ export default function GraceChat() {
       throw new Error("Grace image failed");
     }
 
-    setMessages((prev) => [
+    setGeneratedImages((prev) => [
+      "data:image/png;base64," + data.image,
       ...prev,
-      {
-        role: "assistant",
-        content: "GRACE_IMAGE::" + data.image,
-      },
     ]);
   }
 
@@ -233,7 +230,7 @@ export default function GraceChat() {
           ...nextMessages,
           {
             role: "assistant",
-            content: "I made that for you.",
+            content: "Here you go. Unfiltered Grace photo generated.",
           },
         ]);
       } catch {
@@ -423,18 +420,9 @@ export default function GraceChat() {
                         alt="Grace"
                         className="w-11 h-11 rounded-full object-cover border border-purple-300/40"
                       />
-
-                      {message.content.startsWith("GRACE_IMAGE::") ? (
-                        <img
-                          src={"data:image/png;base64," + message.content.replace("GRACE_IMAGE::", "")}
-                          alt="Generated Grace"
-                          className="w-full max-w-[420px] rounded-3xl border border-white/10 shadow-2xl"
-                        />
-                      ) : (
-                        <div className="bg-white/10 backdrop-blur border border-white/10 text-white rounded-3xl px-5 py-4 shadow-xl">
-                          {message.content}
-                        </div>
-                      )}
+                      <div className="bg-white/10 backdrop-blur border border-white/10 text-white rounded-3xl px-5 py-4 shadow-xl">
+                        {message.content}
+                      </div>
                     </>
                   ) : (
                     message.content
@@ -443,7 +431,22 @@ export default function GraceChat() {
               ))}
 
              
-              {loading && (
+              {generatedImages.map((src, index) => (
+                <div key={"grace-img-" + index} className="mr-auto max-w-[85%] flex gap-3 items-start">
+                  <img
+                    src="/grace-avatar.png"
+                    alt="Grace"
+                    className="w-11 h-11 rounded-full object-cover border border-purple-300/40"
+                  />
+                  <img
+                    src={src}
+                    alt="Generated Grace"
+                    className="max-w-full rounded-3xl border border-white/10 shadow-2xl"
+                  />
+                </div>
+              ))}
+
+ {loading && (
                 <p className="text-zinc-400 animate-pulse pl-14">
                   Grace is thinking...
                 </p>
