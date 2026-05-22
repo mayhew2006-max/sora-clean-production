@@ -175,39 +175,7 @@ export default function GraceChat() {
     );
   }
 
- 
-  function showGracePhotoModal(src: string) {
-    if (typeof window === "undefined") return;
-
-    const old = document.getElementById("grace-photo-modal");
-    if (old) old.remove();
-
-    const wrap = document.createElement("div");
-    wrap.id = "grace-photo-modal";
-    wrap.style.position = "fixed";
-    wrap.style.inset = "0";
-    wrap.style.zIndex = "999999";
-    wrap.style.background = "rgba(0,0,0,.92)";
-    wrap.style.display = "flex";
-    wrap.style.alignItems = "center";
-    wrap.style.justifyContent = "center";
-    wrap.style.padding = "18px";
-
-    wrap.innerHTML = `
-      <div style="position:relative;max-width:520px;width:100%;">
-        <button id="grace-close-photo" style="position:absolute;right:10px;top:10px;z-index:2;border:0;border-radius:999px;background:rgba(0,0,0,.7);color:white;font-size:22px;width:42px;height:42px;">×</button>
-        <img src="${src}" style="width:100%;max-height:90vh;object-fit:contain;border-radius:24px;box-shadow:0 0 70px rgba(168,85,247,.75);" />
-      </div>
-    `;
-
-    document.body.appendChild(wrap);
-
-    document.getElementById("grace-close-photo")?.addEventListener("click", () => {
-      wrap.remove();
-    });
-  }
-
- async function generateGracePhotoFromChat(text: string) {
+  async function generateGracePhotoFromChat(text: string) {
     const res = await fetch("/api/unfiltered-image", {
       method: "POST",
       headers: {
@@ -267,7 +235,7 @@ export default function GraceChat() {
           ...nextMessages,
           {
             role: "assistant",
-            content: "I made that for you. Tap X to close the photo.",
+            content: "I made that for you.",
           },
         ]);
       } catch {
