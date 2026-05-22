@@ -374,7 +374,7 @@ export default function GraceChat() {
     "I’m here with you.";
 
   return (
-    <main className="min-h-[100dvh] max-min-h-[100dvh] bg-[radial-gradient(circle_at_top,#2e1065_0%,#120821_38%,#05050a_100%)] text-white flex flex-col overflow-hidden">
+    <main className="h-[100dvh] max-h-[100dvh] bg-[radial-gradient(circle_at_top,#2e1065_0%,#120821_38%,#05050a_100%)] text-white flex flex-col overflow-hidden">
       <section className="flex-1 overflow-hidden pb-28">
         <div className="relative h-full px-5 pt-2 overflow-hidden">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(168,85,247,0.22),transparent_55%)] pointer-events-none" />
@@ -410,7 +410,7 @@ export default function GraceChat() {
           {faceMode && (
             <div className="relative z-10 mt-2 flex flex-col items-center text-center">
               <div
-                className={`relative w-[18vh] max-w-[170px] aspect-square rounded-[2rem] overflow-hidden border border-white/10 ${
+                className={`relative w-[20vh] max-w-[190px] aspect-square rounded-[2rem] overflow-hidden border border-white/10 ${
                   listening || loading
                     ? "shadow-[0_0_80px_rgba(168,85,247,0.95)] animate-pulse"
                     : "shadow-[0_0_50px_rgba(168,85,247,0.55)]"
