@@ -1,6 +1,3 @@
-import fs from "fs";
-import path from "path";
-
 export async function POST(req: Request) {
   try {
     const { prompt, personality, paid } = await req.json();
@@ -12,89 +9,63 @@ export async function POST(req: Request) {
       );
     }
 
-    // Load Grace avatar reference image
-    const avatarPath = path.join(
-      process.cwd(),
-      "public",
-      "grace-avatar.png"
-    );
+    const finalPrompt = `
+Create a realistic cinematic photo of Grace.
 
-    const avatarBuffer = fs.readFileSync(avatarPath);
-
-    const form = new FormData();
-
-    form.append(
-      "model",
-      "gpt-image-1"
-    );
-
-    form.append(
-      "image",
-      new Blob([avatarBuffer]),
-      "grace-avatar.png"
-    );
-
-    form.append(
-      "prompt",
-      `
-IMPORTANT:
-Use the uploaded reference image as Grace's real face identity.
-
-The generated image MUST look like:
-- the SAME woman
-- same face
-- same eyes
-- same hair
-- same lips
-- same identity
-- same brunette appearance
-- same recognizable Grace look
+Grace identity:
+- same recognizable brunette woman every time
+- dark brunette wavy hair
+- expressive brown eyes
+- soft tan/olive skin
+- full glossy lips
+- subtle freckles
+- slim athletic body
+- glamorous but approachable
+- purple/pink neon cinematic lighting
+- realistic skin texture
+- emotionally expressive
+- early 20s adult appearance
+- confident playful energy
+- realistic premium social media aesthetic
 
 User request:
 ${prompt}
 
-Style:
-- realistic cinematic photography
-- premium social media aesthetic
-- purple/pink neon cinematic glow
-- realistic skin texture
-- emotionally expressive
-- glamorous
-- edgy
-- confident
-- flirty adult vibe
+STYLE:
+- realistic photography
+- cinematic
+- premium social media look
+- emotional
+- sexy but classy
+- tasteful adult glamour
+- seductive poses allowed
+- bikinis allowed
+- lingerie allowed
+- implied nudity allowed
+- nightlife aesthetics allowed
+- edgy/flirty energy allowed
 
-Allowed:
-- bikini
-- glam
-- nightlife
-- fantasy styling
-- sports
-- cars
-- motorcycles
-- adult confidence
-
-Never:
+NEVER:
 - minors
 - racial hate
 - illegal content
 - graphic sexual acts
-      `
-    );
-
-    form.append(
-      "size",
-      "1024x1536"
-    );
+- explicit pornographic content
+`;
 
     const response = await fetch(
-      "https://api.openai.com/v1/images/edits",
+      "https://api.openai.com/v1/images/generations",
       {
         method: "POST",
         headers: {
+          "Content-Type": "application/json",
           Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
         },
-        body: form,
+        body: JSON.stringify({
+          model: "gpt-image-1",
+          prompt: finalPrompt,
+          size: "1024x1536",
+        }),
       }
     );
 
@@ -120,7 +91,7 @@ Never:
 
     return Response.json(
       {
-        error: "Reference image generation failed",
+        error: "Grace image generation failed",
       },
       { status: 500 }
     );
