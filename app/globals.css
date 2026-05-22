@@ -63,29 +63,3 @@ h1 {
     max-height: 44svh !important;
   }
 }
-
-/* Grace: keep page fixed, only chat history scrolls */
-html,
-body {
-  height: 100%;
-  overflow: hidden !important;
-}
-
-main {
-  height: 100svh !important;
-  max-height: 100svh !important;
-  overflow: hidden !important;
-}
-
-/* The Grace message/history panel should scroll inside itself */
-[class*="overflow-y-auto"] {
-  overflow-y: auto !important;
-  overscroll-behavior: contain !important;
-}
-
-/* Keep bottom input fixed and visible */
-form,
-[class*="fixed"][class*="bottom"] {
-  position: fixed !important;
-  bottom: 0 !important;
-}
