@@ -44,7 +44,6 @@ export default function GraceChat() {
   const [voiceOn, setVoiceOn] = useState(true);
   const [faceMode, setFaceMode] = useState(true);
   const [personality, setPersonality] = useState("Friendly");
- const [generatedImages, setGeneratedImages] = useState<string[]>([]);
 
   const messagesRef = useRef<Message[]>(messages);
   const memoryRef = useRef("");
@@ -159,46 +158,7 @@ export default function GraceChat() {
     }
   }
 
- 
-  function wantsGracePhoto(text: string) {
-    const lower = text.toLowerCase();
-    return (
-      lower.includes("photo") ||
-      lower.includes("picture") ||
-      lower.includes("image") ||
-      lower.includes("generate") ||
-      lower.includes("show me") ||
-      lower.includes("make a pic") ||
-      lower.includes("make me a pic")
-    );
-  }
-
-  async function generateGracePhotoFromChat(text: string) {
-    const res = await fetch("/api/unfiltered-image", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        prompt: text,
-        personality,
-        paid,
-      }),
-    });
-
-    const data = await res.json();
-
-    if (!res.ok || !data.image) {
-      throw new Error("Grace image failed");
-    }
-
-    setGeneratedImages((prev) => [
-      "data:image/png;base64," + data.image,
-      ...prev,
-    ]);
-  }
-
- async function sendMessage(text: string) {
+  async function sendMessage(text: string) {
     const clean = text.trim();
     if (!clean || loadingRef.current) return;
 
@@ -222,33 +182,6 @@ export default function GraceChat() {
 
     setMessages(nextMessages);
     setInput("");
-
-    if (personality === "Unfiltered" && paid && wantsGracePhoto(clean)) {
-      try {
-        await generateGracePhotoFromChat(clean);
-        setMessages([
-          ...nextMessages,
-          {
-            role: "assistant",
-            content: "Here you go. Unfiltered Grace photo generated.",
-          },
-        ]);
-      } catch {
-        setMessages([
-          ...nextMessages,
-          {
-            role: "assistant",
-            content: "The photo generator glitched, but I’m still here.",
-          },
-        ]);
-      }
-
-      loadingRef.current = false;
-      setLoading(false);
-      return;
-    }
-
-
 
     try {
       const res = await fetch("/api/chat", {
@@ -430,23 +363,7 @@ export default function GraceChat() {
                 </div>
               ))}
 
-             
-              {generatedImages.map((src, index) => (
-                <div key={"grace-img-" + index} className="mr-auto max-w-[85%] flex gap-3 items-start">
-                  <img
-                    src="/grace-avatar.png"
-                    alt="Grace"
-                    className="w-11 h-11 rounded-full object-cover border border-purple-300/40"
-                  />
-                  <img
-                    src={src}
-                    alt="Generated Grace"
-                    className="max-w-full rounded-3xl border border-white/10 shadow-2xl"
-                  />
-                </div>
-              ))}
-
- {loading && (
+              {loading && (
                 <p className="text-zinc-400 animate-pulse pl-14">
                   Grace is thinking...
                 </p>
