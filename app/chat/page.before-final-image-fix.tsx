@@ -45,7 +45,6 @@ export default function GraceChat() {
   const [voiceOn, setVoiceOn] = useState(true);
   const [faceMode, setFaceMode] = useState(true);
   const [personality, setPersonality] = useState("Friendly");
- const [generatedPhoto, setGeneratedPhoto] = useState<string | null>(null);
  const [generatedImages, setGeneratedImages] = useState<string[]>([]);
 
   const messagesRef = useRef<Message[]>(messages);
