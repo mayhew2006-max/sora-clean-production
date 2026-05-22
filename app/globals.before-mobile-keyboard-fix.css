@@ -63,14 +63,3 @@ h1 {
     max-height: 44svh !important;
   }
 }
-
-/* Grace mobile keyboard stability */
-:root {
-  --grace-keyboard-offset: 0px;
-}
-
-@media (max-width: 768px) {
-  .grace-input-bar {
-    bottom: var(--grace-keyboard-offset) !important;
-  }
-}

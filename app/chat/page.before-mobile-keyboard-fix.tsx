@@ -86,34 +86,7 @@ export default function GraceChat() {
     localStorage.setItem("grace_personality", personality);
   }, [personality]);
 
-  
-  // grace-mobile-keyboard-fix
-  useEffect(() => {
-    function updateKeyboardOffset() {
-      if (!window.visualViewport) return;
-
-      const offset =
-        window.innerHeight -
-        window.visualViewport.height -
-        window.visualViewport.offsetTop;
-
-      document.documentElement.style.setProperty(
-        "--grace-keyboard-offset",
-        `${Math.max(0, offset)}px`
-      );
-    }
-
-    window.visualViewport?.addEventListener("resize", updateKeyboardOffset);
-    window.visualViewport?.addEventListener("scroll", updateKeyboardOffset);
-    updateKeyboardOffset();
-
-    return () => {
-      window.visualViewport?.removeEventListener("resize", updateKeyboardOffset);
-      window.visualViewport?.removeEventListener("scroll", updateKeyboardOffset);
-    };
-  }, []);
-
- const userCount = messages.filter((m) => m.role === "user").length;
+  const userCount = messages.filter((m) => m.role === "user").length;
   const freeLeft = Math.max(FREE_LIMIT - userCount, 0);
   const locked = !paid && freeLeft <= 0;
 
@@ -567,7 +540,7 @@ export default function GraceChat() {
         </div>
       )}
 
-      <footer className="grace-input-bar fixed bottom-0 left-0 right-0 z-20 p-3 pb-[calc(0.5rem+env(safe-area-inset-bottom))] border-t border-white/10 bg-[#09090f]/95 backdrop-blur flex gap-2 items-end">
+      <footer className="fixed bottom-0 left-0 right-0 z-20 p-3 pb-[calc(0.5rem+env(safe-area-inset-bottom))] border-t border-white/10 bg-[#09090f]/95 backdrop-blur flex gap-2 items-end">
         <button
           onClick={tapToTalk}
           disabled={locked}
