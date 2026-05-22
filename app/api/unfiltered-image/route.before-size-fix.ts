@@ -65,7 +65,7 @@ NEVER:
         body: JSON.stringify({
           model: "gpt-image-1",
           prompt: finalPrompt,
-          size: "1024x1536"
+          size: "1024x1792"
         }),
       }
     );
