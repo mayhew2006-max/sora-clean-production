@@ -45,7 +45,6 @@ export default function GraceChat() {
   const [voiceOn, setVoiceOn] = useState(true);
   const [faceMode, setFaceMode] = useState(true);
   const [personality, setPersonality] = useState("Friendly");
- const graceAvatar = personality === "Unfiltered" ? "/grace-unfiltered.png" : "/grace-avatar.png";
  const [generatedPhoto, setGeneratedPhoto] = useState<string | null>(null);
  const [generatedImages, setGeneratedImages] = useState<string[]>([]);
 
@@ -445,7 +444,7 @@ export default function GraceChat() {
                 }`}
               >
                 <img
-                  src={graceAvatar}
+                  src="/grace-unfiltered.png"
                   alt="Grace"
                   className="w-full h-full object-cover scale-110"
                 />
@@ -511,7 +510,7 @@ export default function GraceChat() {
                   ) : message.role === "assistant" ? (
                     <>
                       <img
-                        src={graceAvatar}
+                        src="/grace-unfiltered.png"
                         alt="Grace"
                         className="w-11 h-11 rounded-full object-cover border border-purple-300/40"
                       />
