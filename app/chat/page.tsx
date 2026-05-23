@@ -444,7 +444,7 @@ export default function GraceChat() {
                 }`}
               >
                 <img
-                  src="/grace-avatar.png"
+                  src="/grace-unfiltered.png"
                   alt="Grace"
                   className="w-full h-full object-cover scale-110"
                 />
@@ -510,7 +510,7 @@ export default function GraceChat() {
                   ) : message.role === "assistant" ? (
                     <>
                       <img
-                        src="/grace-avatar.png"
+                        src="/grace-unfiltered.png"
                         alt="Grace"
                         className="w-11 h-11 rounded-full object-cover border border-purple-300/40"
                       />

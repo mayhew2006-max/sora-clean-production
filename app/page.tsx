@@ -6,7 +6,7 @@ export default function GraceLandingPage() { return ( <main className="min-h-scr
       <div className="absolute inset-0 bg-fuchsia-500/30 blur-3xl rounded-full scale-125" />
 
       <img
-        src="/grace-avatar.png"
+        src="/grace-unfiltered.png"
         alt="Grace"
         className="relative w-[320px] max-w-[82vw] rounded-[2.5rem] border border-white/10 shadow-[0_0_80px_rgba(217,70,239,0.45)] object-cover"
       />
