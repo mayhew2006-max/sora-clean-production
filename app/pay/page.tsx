@@ -1,4 +1,4 @@
-const STRIPE_LINK = "https://buy.stripe.com/3cI4gAcfD3sVaIiflI1gs02;
+const STRIPE_LINK = "https://buy.stripe.com/3cI4gAcfD3sVaIiflI1gs02";
 
 export default function Pay() {
   return (
