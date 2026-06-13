@@ -1,6 +1,41 @@
 export default function GraceLandingPage() {
   return (
-    <main className="min-h-screen bg-black text-white overflow-hidden relative">
+    
+<div className="mx-auto mb-8 max-w-3xl rounded-3xl border border-white/10 bg-white/5 p-6 text-center">
+
+<h2 className="text-4xl font-black mb-3">
+Try Grace Free
+</h2>
+
+<p className="text-lg text-white/80">
+Get <strong>50 free messages</strong> before upgrading.
+</p>
+
+<p className="mt-3 text-white/60">
+Grace Premium is <strong>$4.99/month</strong>
+</p>
+
+<p className="text-green-300 font-semibold">
+Cancel anytime from My Account.
+</p>
+
+<p className="mt-2 text-white/40 text-sm">
+No hidden fees • No contracts • Come and go whenever you want
+</p>
+
+</div>
+
+<main className="min-h-screen bg-black text-white overflow-hidden relative">
+
+<a
+href="/account"
+className="fixed top-4 right-4 z-50 rounded-full border border-white/15 bg-black/70 px-4 py-2 text-sm font-bold text-white"
+>
+
+My Account
+
+</a>
+
       <section className="relative z-10 flex flex-col items-center justify-center px-6 pt-12 pb-20 text-center">
         <div className="relative">
           <div className="absolute inset-0 bg-fuchsia-500/30 blur-3xl rounded-full scale-125" />
@@ -105,7 +140,16 @@ export default function GraceLandingPage() {
             </div>
           ))}
         </div>
-      </section>
+      
+
+<p className="mt-5 text-sm text-white/45 text-center">
+
+$4.99/month • Cancel anytime inside Grace
+
+</p>
+
+</section>
+
 
       <div className="absolute bottom-0 left-0 right-0 h-40 bg-gradient-to-t from-black to-transparent" />
     </main>
