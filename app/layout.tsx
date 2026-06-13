@@ -14,6 +14,27 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
+
+<a
+  href="/account"
+  style={{
+    position: "fixed",
+    top: "16px",
+    left: "16px",
+    zIndex: 9999,
+    padding: "10px 14px",
+    borderRadius: "999px",
+    background: "rgba(0,0,0,.70)",
+    border: "1px solid rgba(255,255,255,.20)",
+    color: "white",
+    textDecoration: "none",
+    fontSize: "14px",
+    fontWeight: "700"
+  }}
+>
+  My Account
+</a>
+
         {children}
 
         <Script
