@@ -35,7 +35,15 @@ export default function RootLayout({
   My Account
 </a>
 
-        {children}
+        
+        <a
+          href="/tools"
+          className="fixed right-4 top-4 z-50 rounded-full bg-fuchsia-500 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-fuchsia-500/30 transition hover:bg-fuchsia-400"
+        >
+          Grace Tools
+        </a>
+
+ {children}
 
         <Script
           src="https://www.googletagmanager.com/gtag/js?id=G-Q4J04MDK1F"
