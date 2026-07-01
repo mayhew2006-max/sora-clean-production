@@ -16,36 +16,91 @@ const tools = [
   "Custom PDF"
 ];
 
+async function compressImage(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      img.onload = () => {
+        const maxDimension = 1280;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height && width > maxDimension) {
+          height = Math.round((height * maxDimension) / width);
+          width = maxDimension;
+        } else if (height > width && height > maxDimension) {
+          width = Math.round((width * maxDimension) / height);
+          height = maxDimension;
+        } else if (width === height && width > maxDimension) {
+          width = maxDimension;
+          height = maxDimension;
+        }
+
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          reject(new Error("Could not process image."));
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const compressed = canvas.toDataURL("image/jpeg", 0.72);
+        resolve(compressed);
+      };
+
+      img.onerror = () => reject(new Error("Could not load image."));
+      img.src = String(reader.result);
+    };
+
+    reader.onerror = () => reject(new Error("Could not read image."));
+    reader.readAsDataURL(file);
+  });
+}
+
 export default function GraceToolsPage() {
   const [toolType, setToolType] = useState("Business Plan");
   const [userPrompt, setUserPrompt] = useState("");
   const [images, setImages] = useState<string[]>([]);
   const [answer, setAnswer] = useState("");
   const [loading, setLoading] = useState(false);
+  const [imageStatus, setImageStatus] = useState("");
 
   async function handleImages(files: FileList | null) {
     if (!files) return;
 
-    const selected = Array.from(files).slice(0, 4);
+    const selected = Array.from(files)
+      .filter((file) => file.type.startsWith("image/"))
+      .slice(0, 4);
 
-    const converted = await Promise.all(
-      selected.map(
-        (file) =>
-          new Promise<string>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(String(reader.result));
-            reader.onerror = reject;
-            reader.readAsDataURL(file);
-          })
-      )
-    );
+    if (selected.length === 0) {
+      setImageStatus("Please choose a valid image.");
+      return;
+    }
 
-    setImages(converted);
+    setImageStatus("Preparing photo...");
+    
+    try {
+      const converted = await Promise.all(selected.map((file) => compressImage(file)));
+      setImages((prev) => [...prev, ...converted].slice(0, 4));
+      setImageStatus("Photo ready for Grace.");
+    } catch {
+      setImageStatus("Grace could not prepare that image. Try a different photo.");
+    }
+  }
+
+  function removeImage(index: number) {
+    setImages((prev) => prev.filter((_, i) => i !== index));
   }
 
   async function runGraceTool() {
     if (!userPrompt.trim() && images.length === 0) {
-      alert("Add a request or upload photos first.");
+      alert("Add a request, take a photo, or upload photos first.");
       return;
     }
 
@@ -94,7 +149,11 @@ export default function GraceToolsPage() {
         }
       }
     } catch (err: any) {
-      setAnswer("Grace ran into an issue: " + (err?.message || "Unknown error"));
+      setAnswer(
+        "Grace ran into an issue: " +
+          (err?.message || "Unknown error") +
+          "\n\nTry using 1-2 photos at a time, or take the photo again in better lighting."
+      );
     } finally {
       setLoading(false);
     }
@@ -157,7 +216,7 @@ export default function GraceToolsPage() {
               Grace Tools
             </h1>
             <p className="text-white/70 mt-2">
-              Plan ideas, analyze photos, build scopes, and create PDF-ready reports.
+              Take photos, upload images, plan ideas, build scopes, and create PDF-ready reports.
             </p>
           </div>
 
@@ -194,34 +253,68 @@ export default function GraceToolsPage() {
             <textarea
               value={userPrompt}
               onChange={(e) => setUserPrompt(e.target.value)}
-              placeholder="Example: I want to start a small property consulting business. Make me a 30-day plan and a PDF-ready business outline."
+              placeholder="Example: Look at this photo and create a scope of work, material list, safety concerns, and client-ready summary."
               className="w-full min-h-[180px] rounded-xl bg-black border border-white/20 px-4 py-3 text-white outline-none"
             />
 
-            <label className="block text-sm text-white/70 mt-5 mb-2">
-              Upload photos for Grace to analyze
-            </label>
+            <div className="mt-5 grid sm:grid-cols-2 gap-3">
+              <label className="block rounded-2xl border border-fuchsia-400/40 bg-fuchsia-500/15 px-4 py-4 text-center cursor-pointer hover:bg-fuchsia-500/25 transition">
+                <span className="font-semibold">Take Photo</span>
+                <span className="block text-xs text-white/60 mt-1">
+                  Opens camera on phone
+                </span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={(e) => handleImages(e.target.files)}
+                  className="hidden"
+                />
+              </label>
 
-            <input
-              type="file"
-              accept="image/*"
-              multiple
-              onChange={(e) => handleImages(e.target.files)}
-              className="w-full rounded-xl border border-white/20 p-3 text-sm"
-            />
+              <label className="block rounded-2xl border border-white/20 bg-white/5 px-4 py-4 text-center cursor-pointer hover:bg-white/10 transition">
+                <span className="font-semibold">Upload Photo</span>
+                <span className="block text-xs text-white/60 mt-1">
+                  Choose from gallery
+                </span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={(e) => handleImages(e.target.files)}
+                  className="hidden"
+                />
+              </label>
+            </div>
+
+            {imageStatus && (
+              <p className="mt-3 text-sm text-white/60">{imageStatus}</p>
+            )}
 
             {images.length > 0 && (
               <div className="grid grid-cols-4 gap-2 mt-3">
                 {images.map((img, i) => (
-                  <img
-                    key={i}
-                    src={img}
-                    alt={`Upload ${i + 1}`}
-                    className="h-20 w-full object-cover rounded-lg border border-white/10"
-                  />
+                  <div key={i} className="relative">
+                    <img
+                      src={img}
+                      alt={`Upload ${i + 1}`}
+                      className="h-20 w-full object-cover rounded-lg border border-white/10"
+                    />
+                    <button
+                      onClick={() => removeImage(i)}
+                      className="absolute -top-2 -right-2 rounded-full bg-red-500 text-white text-xs w-6 h-6"
+                      type="button"
+                    >
+                      ×
+                    </button>
+                  </div>
                 ))}
               </div>
             )}
+
+            <p className="mt-3 text-xs text-white/45">
+              Grace automatically resizes photos before analyzing them. Use 1-4 photos per report.
+            </p>
 
             <button
               onClick={runGraceTool}
