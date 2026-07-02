@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { jsPDF } from "jspdf";
 
 const tools = [
@@ -70,6 +70,14 @@ export default function GraceToolsPage() {
   const [answer, setAnswer] = useState("");
   const [loading, setLoading] = useState(false);
   const [imageStatus, setImageStatus] = useState("");
+ const [paid, setPaid] = useState(false);
+
+  useEffect(() => {
+    const savedPaid = localStorage.getItem("sora_paid");
+    const founderAccess = localStorage.getItem("grace_founder");
+    setPaid(savedPaid === "true" || founderAccess === "true");
+  }, []);
+
 
   async function handleImages(files: FileList | null) {
     if (!files) return;
@@ -110,7 +118,7 @@ export default function GraceToolsPage() {
     try {
       const res = await fetch("/api/tools", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-grace-paid": paid ? "true" : "false" },
         body: JSON.stringify({ toolType, userPrompt, images }),
       });
 

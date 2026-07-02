@@ -1,5 +1,19 @@
 export async function POST(req: Request) {
   try {
+    const paidHeader = req.headers.get("x-grace-paid");
+
+    if (paidHeader !== "true") {
+      return new Response(
+        JSON.stringify({
+          error: "Grace Tools are a Premium feature. Upgrade to unlock photo analysis, planning, reports, and PDFs.",
+        }),
+        {
+          status: 402,
+          headers: { "Content-Type": "application/json" },
+        }
+      );
+    }
+
     const { toolType, userPrompt, images } = await req.json();
 
     if (!process.env.OPENAI_API_KEY) {
@@ -7,7 +21,7 @@ export async function POST(req: Request) {
     }
 
     const systemPrompt = `
-You are Grace, a warm, honest, practical AI assistant.
+You are Grace, a warm, honest, practical personal assistant.
 
 You help users think clearly, plan projects, create ideas, analyze uploaded photos, and turn rough thoughts into useful plans.
 
@@ -40,16 +54,14 @@ Create a complete, useful response. If this is a report, make it PDF-ready with 
 Include practical next steps, risks/concerns, useful questions to ask, and a clear summary.
 `;
 
-    const content: any[] = [
-      { type: "text", text: templatePrompt }
-    ];
+    const content: any[] = [{ type: "text", text: templatePrompt }];
 
     if (Array.isArray(images)) {
       for (const img of images.slice(0, 4)) {
         if (typeof img === "string" && img.startsWith("data:image")) {
           content.push({
             type: "image_url",
-            image_url: { url: img }
+            image_url: { url: img },
           });
         }
       }
@@ -67,7 +79,7 @@ Include practical next steps, risks/concerns, useful questions to ask, and a cle
         stream: true,
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content }
+          { role: "user", content },
         ],
       }),
     });
