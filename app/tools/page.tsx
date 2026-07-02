@@ -71,6 +71,15 @@ export default function GraceToolsPage() {
   const [loading, setLoading] = useState(false);
   const [imageStatus, setImageStatus] = useState("");
  const [paid, setPaid] = useState(false);
+ const [checkingPremium, setCheckingPremium] = useState(true);
+
+  useEffect(() => {
+    const savedPaid = localStorage.getItem("sora_paid");
+    const founderAccess = localStorage.getItem("grace_founder");
+    setPaid(savedPaid === "true" || founderAccess === "true");
+    setCheckingPremium(false);
+  }, []);
+
 
   useEffect(() => {
     const savedPaid = localStorage.getItem("sora_paid");
@@ -107,6 +116,10 @@ export default function GraceToolsPage() {
   }
 
   async function runGraceTool() {
+    if (!paid) {
+      window.location.href = "/pay";
+      return;
+    }
     if (!userPrompt.trim() && images.length === 0) {
       alert("Add a request, take a photo, or upload photos first.");
       return;
