@@ -13,7 +13,7 @@ const tools = [
   "Client Proposal",
   "Personal Goal Plan",
   "Idea Generator",
-  "Custom PDF"
+  "Custom PDF",
 ];
 
 async function compressImage(file: File): Promise<string> {
@@ -49,9 +49,7 @@ async function compressImage(file: File): Promise<string> {
         }
 
         ctx.drawImage(img, 0, 0, width, height);
-
-        const compressed = canvas.toDataURL("image/jpeg", 0.72);
-        resolve(compressed);
+        resolve(canvas.toDataURL("image/jpeg", 0.72));
       };
 
       img.onerror = () => reject(new Error("Could not load image."));
@@ -70,8 +68,8 @@ export default function GraceToolsPage() {
   const [answer, setAnswer] = useState("");
   const [loading, setLoading] = useState(false);
   const [imageStatus, setImageStatus] = useState("");
- const [paid, setPaid] = useState(false);
- const [checkingPremium, setCheckingPremium] = useState(true);
+  const [paid, setPaid] = useState(false);
+  const [checkingPremium, setCheckingPremium] = useState(true);
 
   useEffect(() => {
     const savedPaid = localStorage.getItem("sora_paid");
@@ -79,14 +77,6 @@ export default function GraceToolsPage() {
     setPaid(savedPaid === "true" || founderAccess === "true");
     setCheckingPremium(false);
   }, []);
-
-
-  useEffect(() => {
-    const savedPaid = localStorage.getItem("sora_paid");
-    const founderAccess = localStorage.getItem("grace_founder");
-    setPaid(savedPaid === "true" || founderAccess === "true");
-  }, []);
-
 
   async function handleImages(files: FileList | null) {
     if (!files) return;
@@ -101,7 +91,7 @@ export default function GraceToolsPage() {
     }
 
     setImageStatus("Preparing photo...");
-    
+
     try {
       const converted = await Promise.all(selected.map((file) => compressImage(file)));
       setImages((prev) => [...prev, ...converted].slice(0, 4));
@@ -120,6 +110,7 @@ export default function GraceToolsPage() {
       window.location.href = "/pay";
       return;
     }
+
     if (!userPrompt.trim() && images.length === 0) {
       alert("Add a request, take a photo, or upload photos first.");
       return;
@@ -131,7 +122,10 @@ export default function GraceToolsPage() {
     try {
       const res = await fetch("/api/tools", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-grace-paid": paid ? "true" : "false" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-grace-paid": paid ? "true" : "false",
+        },
         body: JSON.stringify({ toolType, userPrompt, images }),
       });
 
@@ -164,23 +158,22 @@ export default function GraceToolsPage() {
               fullText += token;
               setAnswer(fullText);
             }
-          } catch {
-            // Ignore partial stream parsing errors.
-          }
+          } catch {}
         }
       }
     } catch (err: any) {
-      setAnswer(
-        "Grace ran into an issue: " +
-          (err?.message || "Unknown error") +
-          "\n\nTry using 1-2 photos at a time, or take the photo again in better lighting."
-      );
+      setAnswer("Grace ran into an issue: " + (err?.message || "Unknown error"));
     } finally {
       setLoading(false);
     }
   }
 
   function downloadPDF() {
+    if (!paid) {
+      window.location.href = "/pay";
+      return;
+    }
+
     if (!answer.trim()) {
       alert("Generate something first.");
       return;
@@ -228,14 +221,107 @@ export default function GraceToolsPage() {
     doc.save(`grace-${toolType.toLowerCase().replaceAll(" ", "-")}.pdf`);
   }
 
+  if (checkingPremium) {
+    return (
+      <main className="min-h-screen bg-black text-white px-4 py-10">
+        <div className="mx-auto max-w-3xl rounded-[2rem] border border-white/10 bg-white/[0.04] p-8 text-center">
+          <h1 className="text-3xl font-black">Checking Grace Premium...</h1>
+          <p className="mt-3 text-white/60">One moment while Grace loads your access.</p>
+        </div>
+      </main>
+    );
+  }
+
+  if (!paid) {
+    return (
+      <main className="min-h-screen bg-black text-white px-4 py-10">
+        <div className="mx-auto max-w-5xl">
+          <div className="rounded-[2rem] border border-fuchsia-400/30 bg-gradient-to-br from-fuchsia-500/15 to-white/[0.04] p-8 shadow-2xl">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <a
+                href="/"
+                className="rounded-full border border-white/20 px-5 py-3 text-center text-sm hover:bg-white hover:text-black transition"
+              >
+                ← Back to Grace
+              </a>
+
+              <a
+                href="/account"
+                className="rounded-full border border-white/20 px-5 py-3 text-center text-sm hover:bg-white hover:text-black transition"
+              >
+                My Account
+              </a>
+            </div>
+
+            <div className="mt-10">
+              <div className="mb-4 inline-flex rounded-full border border-fuchsia-400/30 bg-fuchsia-500/10 px-4 py-2 text-sm font-semibold text-fuchsia-200">
+                Grace Premium
+              </div>
+
+              <h1 className="text-4xl sm:text-6xl font-black tracking-tight leading-tight">
+                Unlock Grace Tools.
+              </h1>
+
+              <p className="mt-5 max-w-3xl text-lg sm:text-xl leading-8 text-white/70">
+                Grace Tools turns photos, ideas, questions, and rough notes into plans,
+                work scopes, reports, checklists, and downloadable PDFs.
+              </p>
+
+              <div className="mt-8 grid gap-4 sm:grid-cols-2">
+                {[
+                  ["📷", "Photo Analysis", "Take or upload photos and get useful observations and next steps."],
+                  ["💡", "Planning Tools", "Build business plans, project plans, goals, routines, and strategies."],
+                  ["🧰", "Work Scopes", "Create scopes of work, material lists, safety notes, and client summaries."],
+                  ["📄", "PDF Reports", "Turn Grace’s output into clean downloadable documents."],
+                ].map(([icon, title, text]) => (
+                  <div key={title} className="rounded-2xl border border-white/10 bg-white/[0.05] p-5">
+                    <div className="text-3xl">{icon}</div>
+                    <h2 className="mt-3 text-xl font-black">{title}</h2>
+                    <p className="mt-2 text-sm leading-6 text-white/65">{text}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-10 rounded-3xl border border-white/10 bg-black/40 p-6">
+                <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
+                  <div>
+                    <div className="text-sm font-bold uppercase tracking-wider text-fuchsia-300">
+                      Grace Premium
+                    </div>
+                    <div className="mt-2 flex items-end gap-2">
+                      <span className="text-6xl font-black text-fuchsia-300">$5</span>
+                      <span className="pb-2 text-white/70">/month</span>
+                    </div>
+                    <p className="mt-2 text-sm text-white/60">
+                      No tricks. No hidden upsell. Cancel anytime.
+                    </p>
+                  </div>
+
+                  <a
+                    href="/pay"
+                    className="rounded-2xl bg-fuchsia-500 px-7 py-4 text-center font-black shadow-[0_0_35px_rgba(217,33,255,0.35)] hover:bg-fuchsia-400"
+                  >
+                    Unlock Grace Tools
+                  </a>
+                </div>
+              </div>
+
+              <p className="mt-6 text-center text-sm text-white/50">
+                Already subscribed? Open Grace chat or My Account, then refresh this page.
+              </p>
+            </div>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen bg-black text-white px-4 py-8">
       <div className="max-w-5xl mx-auto">
         <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-3xl sm:text-5xl font-bold tracking-tight">
-              Grace Tools
-            </h1>
+            <h1 className="text-3xl sm:text-5xl font-bold tracking-tight">Grace Tools</h1>
             <p className="text-white/70 mt-2">
               Take photos, upload images, plan ideas, build scopes, and create PDF-ready reports.
             </p>
@@ -251,9 +337,7 @@ export default function GraceToolsPage() {
 
         <div className="grid lg:grid-cols-2 gap-6">
           <section className="rounded-3xl border border-white/10 bg-white/5 p-5 shadow-2xl">
-            <label className="block text-sm text-white/70 mb-2">
-              Choose what Grace should create
-            </label>
+            <label className="block text-sm text-white/70 mb-2">Choose what Grace should create</label>
 
             <select
               value={toolType}
@@ -267,9 +351,7 @@ export default function GraceToolsPage() {
               ))}
             </select>
 
-            <label className="block text-sm text-white/70 mt-5 mb-2">
-              Tell Grace what you need
-            </label>
+            <label className="block text-sm text-white/70 mt-5 mb-2">Tell Grace what you need</label>
 
             <textarea
               value={userPrompt}
@@ -281,9 +363,7 @@ export default function GraceToolsPage() {
             <div className="mt-5 grid sm:grid-cols-2 gap-3">
               <label className="block rounded-2xl border border-fuchsia-400/40 bg-fuchsia-500/15 px-4 py-4 text-center cursor-pointer hover:bg-fuchsia-500/25 transition">
                 <span className="font-semibold">Take Photo</span>
-                <span className="block text-xs text-white/60 mt-1">
-                  Opens camera on phone
-                </span>
+                <span className="block text-xs text-white/60 mt-1">Opens camera on phone</span>
                 <input
                   type="file"
                   accept="image/*"
@@ -295,9 +375,7 @@ export default function GraceToolsPage() {
 
               <label className="block rounded-2xl border border-white/20 bg-white/5 px-4 py-4 text-center cursor-pointer hover:bg-white/10 transition">
                 <span className="font-semibold">Upload Photo</span>
-                <span className="block text-xs text-white/60 mt-1">
-                  Choose from gallery
-                </span>
+                <span className="block text-xs text-white/60 mt-1">Choose from gallery</span>
                 <input
                   type="file"
                   accept="image/*"
@@ -308,9 +386,7 @@ export default function GraceToolsPage() {
               </label>
             </div>
 
-            {imageStatus && (
-              <p className="mt-3 text-sm text-white/60">{imageStatus}</p>
-            )}
+            {imageStatus && <p className="mt-3 text-sm text-white/60">{imageStatus}</p>}
 
             {images.length > 0 && (
               <div className="grid grid-cols-4 gap-2 mt-3">
