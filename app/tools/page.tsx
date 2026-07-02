@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { jsPDF } from "jspdf";
 
 const tools = [
@@ -15,6 +15,19 @@ const tools = [
   "Idea Generator",
   "Custom PDF",
 ];
+
+type SavedReport = {
+  id: string;
+  title: string;
+  project: string;
+  clientName: string;
+  jobLocation: string;
+  toolType: string;
+  prompt: string;
+  answer: string;
+  createdAt: string;
+  otgMode: boolean;
+};
 
 async function compressImage(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -71,12 +84,42 @@ export default function GraceToolsPage() {
   const [paid, setPaid] = useState(false);
   const [checkingPremium, setCheckingPremium] = useState(true);
 
+  const [project, setProject] = useState("General");
+  const [newProject, setNewProject] = useState("");
+  const [reportTitle, setReportTitle] = useState("");
+  const [clientName, setClientName] = useState("");
+  const [jobLocation, setJobLocation] = useState("");
+  const [otgMode, setOtgMode] = useState(false);
+  const [savedReports, setSavedReports] = useState<SavedReport[]>([]);
+
   useEffect(() => {
     const savedPaid = localStorage.getItem("sora_paid");
     const founderAccess = localStorage.getItem("grace_founder");
     setPaid(savedPaid === "true" || founderAccess === "true");
     setCheckingPremium(false);
+
+    const saved = localStorage.getItem("grace_saved_reports");
+    if (saved) {
+      try {
+        setSavedReports(JSON.parse(saved));
+      } catch {
+        setSavedReports([]);
+      }
+    }
   }, []);
+
+  useEffect(() => {
+    localStorage.setItem("grace_saved_reports", JSON.stringify(savedReports));
+  }, [savedReports]);
+
+  const projects = useMemo(() => {
+    const unique = Array.from(new Set(["General", ...savedReports.map((r) => r.project).filter(Boolean)]));
+    return unique;
+  }, [savedReports]);
+
+  function activeProjectName() {
+    return newProject.trim() || project || "General";
+  }
 
   async function handleImages(files: FileList | null) {
     if (!files) return;
@@ -105,6 +148,52 @@ export default function GraceToolsPage() {
     setImages((prev) => prev.filter((_, i) => i !== index));
   }
 
+  function saveReport(finalAnswer?: string) {
+    const textToSave = finalAnswer || answer;
+
+    if (!textToSave.trim()) {
+      alert("Generate a report first.");
+      return;
+    }
+
+    const title =
+      reportTitle.trim() ||
+      `${toolType} - ${new Date().toLocaleDateString()}`;
+
+    const report: SavedReport = {
+      id: crypto.randomUUID(),
+      title,
+      project: activeProjectName(),
+      clientName,
+      jobLocation,
+      toolType,
+      prompt: userPrompt,
+      answer: textToSave,
+      createdAt: new Date().toISOString(),
+      otgMode,
+    };
+
+    setSavedReports((prev) => [report, ...prev].slice(0, 100));
+    setProject(report.project);
+    setNewProject("");
+  }
+
+  function loadReport(report: SavedReport) {
+    setReportTitle(report.title);
+    setProject(report.project || "General");
+    setClientName(report.clientName || "");
+    setJobLocation(report.jobLocation || "");
+    setToolType(report.toolType || "Custom PDF");
+    setUserPrompt(report.prompt || "");
+    setAnswer(report.answer || "");
+    setOtgMode(Boolean(report.otgMode));
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function deleteReport(id: string) {
+    setSavedReports((prev) => prev.filter((r) => r.id !== id));
+  }
+
   async function runGraceTool() {
     if (!paid) {
       window.location.href = "/pay";
@@ -120,13 +209,24 @@ export default function GraceToolsPage() {
     setAnswer("");
 
     try {
+      const enhancedPrompt = `
+Project folder: ${activeProjectName()}
+Report title: ${reportTitle || "Untitled"}
+Client name: ${clientName || "Not provided"}
+Job/location: ${jobLocation || "Not provided"}
+Brand mode: ${otgMode ? "OTG Site Consulting / Property & Landscaping Concepts" : "Grace standard report"}
+
+User request:
+${userPrompt}
+`;
+
       const res = await fetch("/api/tools", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "x-grace-paid": paid ? "true" : "false",
         },
-        body: JSON.stringify({ toolType, userPrompt, images }),
+        body: JSON.stringify({ toolType, userPrompt: enhancedPrompt, images }),
       });
 
       if (!res.ok || !res.body) {
@@ -161,6 +261,11 @@ export default function GraceToolsPage() {
           } catch {}
         }
       }
+
+      if (fullText.trim()) {
+        const autoSave = window.confirm("Grace finished. Save this report to your history?");
+        if (autoSave) saveReport(fullText);
+      }
     } catch (err: any) {
       setAnswer("Grace ran into an issue: " + (err?.message || "Unknown error"));
     } finally {
@@ -191,12 +296,44 @@ export default function GraceToolsPage() {
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(20);
-    doc.text("Grace Assistant Report", margin, 52);
+    doc.text(otgMode ? "OTG Site Consulting" : "Grace Assistant Report", margin, 52);
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(11);
-    doc.text(`Type: ${toolType}`, margin, 75);
-    doc.text(`Created: ${new Date().toLocaleString()}`, margin, 92);
+
+    let headerY = 75;
+
+    if (otgMode) {
+      doc.text("Property & Landscaping Concepts", margin, headerY);
+      headerY += 17;
+      doc.text("Burlington, WV", margin, headerY);
+      headerY += 17;
+    }
+
+    doc.text(`Type: ${toolType}`, margin, headerY);
+    headerY += 17;
+
+    if (reportTitle) {
+      doc.text(`Title: ${reportTitle}`, margin, headerY);
+      headerY += 17;
+    }
+
+    if (clientName) {
+      doc.text(`Client: ${clientName}`, margin, headerY);
+      headerY += 17;
+    }
+
+    if (jobLocation) {
+      doc.text(`Location: ${jobLocation}`, margin, headerY);
+      headerY += 17;
+    }
+
+    doc.text(`Project: ${activeProjectName()}`, margin, headerY);
+    headerY += 17;
+    doc.text(`Created: ${new Date().toLocaleString()}`, margin, headerY);
+
+    doc.setDrawColor(180);
+    doc.line(margin, headerY + 18, pageWidth - margin, headerY + 18);
 
     doc.setFontSize(12);
 
@@ -207,7 +344,7 @@ export default function GraceToolsPage() {
       .replaceAll("#", "");
 
     const lines = doc.splitTextToSize(clean, usableWidth);
-    let y = 125;
+    let y = headerY + 48;
 
     for (const line of lines) {
       if (y > pageHeight - 55) {
@@ -218,7 +355,10 @@ export default function GraceToolsPage() {
       y += 16;
     }
 
-    doc.save(`grace-${toolType.toLowerCase().replaceAll(" ", "-")}.pdf`);
+    const filePrefix = otgMode ? "otg" : "grace";
+    const fileName = reportTitle || toolType;
+
+    doc.save(`${filePrefix}-${fileName.toLowerCase().replaceAll(" ", "-")}.pdf`);
   }
 
   if (checkingPremium) {
@@ -238,17 +378,11 @@ export default function GraceToolsPage() {
         <div className="mx-auto max-w-5xl">
           <div className="rounded-[2rem] border border-fuchsia-400/30 bg-gradient-to-br from-fuchsia-500/15 to-white/[0.04] p-8 shadow-2xl">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <a
-                href="/"
-                className="rounded-full border border-white/20 px-5 py-3 text-center text-sm hover:bg-white hover:text-black transition"
-              >
+              <a href="/" className="rounded-full border border-white/20 px-5 py-3 text-center text-sm hover:bg-white hover:text-black transition">
                 ← Back to Grace
               </a>
 
-              <a
-                href="/account"
-                className="rounded-full border border-white/20 px-5 py-3 text-center text-sm hover:bg-white hover:text-black transition"
-              >
+              <a href="/account" className="rounded-full border border-white/20 px-5 py-3 text-center text-sm hover:bg-white hover:text-black transition">
                 My Account
               </a>
             </div>
@@ -297,10 +431,7 @@ export default function GraceToolsPage() {
                     </p>
                   </div>
 
-                  <a
-                    href="/pay"
-                    className="rounded-2xl bg-fuchsia-500 px-7 py-4 text-center font-black shadow-[0_0_35px_rgba(217,33,255,0.35)] hover:bg-fuchsia-400"
-                  >
+                  <a href="/pay" className="rounded-2xl bg-fuchsia-500 px-7 py-4 text-center font-black shadow-[0_0_35px_rgba(217,33,255,0.35)] hover:bg-fuchsia-400">
                     Unlock Grace Tools
                   </a>
                 </div>
@@ -318,71 +449,121 @@ export default function GraceToolsPage() {
 
   return (
     <main className="min-h-screen bg-black text-white px-4 py-8">
-      <div className="max-w-5xl mx-auto">
+      <div className="max-w-7xl mx-auto">
         <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-3xl sm:text-5xl font-bold tracking-tight">Grace Tools</h1>
             <p className="text-white/70 mt-2">
-              Take photos, upload images, plan ideas, build scopes, and create PDF-ready reports.
+              Take photos, build plans, save reports, organize projects, and create PDFs.
             </p>
           </div>
 
-          <a
-            href="/chat"
-            className="rounded-full border border-white/20 px-5 py-3 text-sm hover:bg-white hover:text-black transition"
-          >
+          <a href="/chat" className="rounded-full border border-white/20 px-5 py-3 text-sm hover:bg-white hover:text-black transition">
             Back to Grace
           </a>
         </div>
 
-        <div className="grid lg:grid-cols-2 gap-6">
+        <div className="grid xl:grid-cols-[1.1fr_1fr_0.9fr] gap-6">
           <section className="rounded-3xl border border-white/10 bg-white/5 p-5 shadow-2xl">
-            <label className="block text-sm text-white/70 mb-2">Choose what Grace should create</label>
+            <h2 className="text-xl font-bold mb-4">Create</h2>
 
+            <label className="block text-sm text-white/70 mb-2">Report title</label>
+            <input
+              value={reportTitle}
+              onChange={(e) => setReportTitle(e.target.value)}
+              placeholder="Example: Garage Drainage Scope"
+              className="w-full rounded-xl bg-black border border-white/20 px-4 py-3 text-white outline-none"
+            />
+
+            <div className="grid sm:grid-cols-2 gap-3 mt-4">
+              <div>
+                <label className="block text-sm text-white/70 mb-2">Client name</label>
+                <input
+                  value={clientName}
+                  onChange={(e) => setClientName(e.target.value)}
+                  placeholder="Optional"
+                  className="w-full rounded-xl bg-black border border-white/20 px-4 py-3 text-white outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm text-white/70 mb-2">Job/location</label>
+                <input
+                  value={jobLocation}
+                  onChange={(e) => setJobLocation(e.target.value)}
+                  placeholder="Optional"
+                  className="w-full rounded-xl bg-black border border-white/20 px-4 py-3 text-white outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="grid sm:grid-cols-2 gap-3 mt-4">
+              <div>
+                <label className="block text-sm text-white/70 mb-2">Project folder</label>
+                <select
+                  value={project}
+                  onChange={(e) => setProject(e.target.value)}
+                  className="w-full rounded-xl bg-black border border-white/20 px-4 py-3 text-white"
+                >
+                  {projects.map((p) => (
+                    <option key={p} value={p}>{p}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm text-white/70 mb-2">New folder</label>
+                <input
+                  value={newProject}
+                  onChange={(e) => setNewProject(e.target.value)}
+                  placeholder="Optional"
+                  className="w-full rounded-xl bg-black border border-white/20 px-4 py-3 text-white outline-none"
+                />
+              </div>
+            </div>
+
+            <label className="mt-4 flex items-center gap-3 rounded-xl border border-white/10 bg-black/40 p-4">
+              <input
+                type="checkbox"
+                checked={otgMode}
+                onChange={(e) => setOtgMode(e.target.checked)}
+              />
+              <span>
+                <span className="font-bold">OTG-branded PDF mode</span>
+                <span className="block text-xs text-white/55">Adds OTG Site Consulting / Property & Landscaping Concepts to PDFs.</span>
+              </span>
+            </label>
+
+            <label className="block text-sm text-white/70 mt-5 mb-2">Choose what Grace should create</label>
             <select
               value={toolType}
               onChange={(e) => setToolType(e.target.value)}
               className="w-full rounded-xl bg-black border border-white/20 px-4 py-3 text-white"
             >
               {tools.map((tool) => (
-                <option key={tool} value={tool}>
-                  {tool}
-                </option>
+                <option key={tool} value={tool}>{tool}</option>
               ))}
             </select>
 
             <label className="block text-sm text-white/70 mt-5 mb-2">Tell Grace what you need</label>
-
             <textarea
               value={userPrompt}
               onChange={(e) => setUserPrompt(e.target.value)}
               placeholder="Example: Look at this photo and create a scope of work, material list, safety concerns, and client-ready summary."
-              className="w-full min-h-[180px] rounded-xl bg-black border border-white/20 px-4 py-3 text-white outline-none"
+              className="w-full min-h-[160px] rounded-xl bg-black border border-white/20 px-4 py-3 text-white outline-none"
             />
 
             <div className="mt-5 grid sm:grid-cols-2 gap-3">
               <label className="block rounded-2xl border border-fuchsia-400/40 bg-fuchsia-500/15 px-4 py-4 text-center cursor-pointer hover:bg-fuchsia-500/25 transition">
                 <span className="font-semibold">Take Photo</span>
                 <span className="block text-xs text-white/60 mt-1">Opens camera on phone</span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  onChange={(e) => handleImages(e.target.files)}
-                  className="hidden"
-                />
+                <input type="file" accept="image/*" capture="environment" onChange={(e) => handleImages(e.target.files)} className="hidden" />
               </label>
 
               <label className="block rounded-2xl border border-white/20 bg-white/5 px-4 py-4 text-center cursor-pointer hover:bg-white/10 transition">
                 <span className="font-semibold">Upload Photo</span>
                 <span className="block text-xs text-white/60 mt-1">Choose from gallery</span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  onChange={(e) => handleImages(e.target.files)}
-                  className="hidden"
-                />
+                <input type="file" accept="image/*" multiple onChange={(e) => handleImages(e.target.files)} className="hidden" />
               </label>
             </div>
 
@@ -392,26 +573,12 @@ export default function GraceToolsPage() {
               <div className="grid grid-cols-4 gap-2 mt-3">
                 {images.map((img, i) => (
                   <div key={i} className="relative">
-                    <img
-                      src={img}
-                      alt={`Upload ${i + 1}`}
-                      className="h-20 w-full object-cover rounded-lg border border-white/10"
-                    />
-                    <button
-                      onClick={() => removeImage(i)}
-                      className="absolute -top-2 -right-2 rounded-full bg-red-500 text-white text-xs w-6 h-6"
-                      type="button"
-                    >
-                      ×
-                    </button>
+                    <img src={img} alt={`Upload ${i + 1}`} className="h-20 w-full object-cover rounded-lg border border-white/10" />
+                    <button onClick={() => removeImage(i)} className="absolute -top-2 -right-2 rounded-full bg-red-500 text-white text-xs w-6 h-6" type="button">×</button>
                   </div>
                 ))}
               </div>
             )}
-
-            <p className="mt-3 text-xs text-white/45">
-              Grace automatically resizes photos before analyzing them. Use 1-4 photos per report.
-            </p>
 
             <button
               onClick={runGraceTool}
@@ -426,16 +593,63 @@ export default function GraceToolsPage() {
             <div className="flex items-center justify-between gap-3 mb-4">
               <h2 className="text-xl font-semibold">Grace Response</h2>
 
-              <button
-                onClick={downloadPDF}
-                className="rounded-full border border-white/20 px-4 py-2 text-sm hover:bg-white hover:text-black transition"
-              >
-                Download PDF
-              </button>
+              <div className="flex gap-2">
+                <button onClick={() => saveReport()} className="rounded-full border border-white/20 px-4 py-2 text-sm hover:bg-white hover:text-black transition">
+                  Save
+                </button>
+                <button onClick={downloadPDF} className="rounded-full border border-white/20 px-4 py-2 text-sm hover:bg-white hover:text-black transition">
+                  PDF
+                </button>
+              </div>
             </div>
 
-            <div className="min-h-[500px] whitespace-pre-wrap rounded-2xl bg-black/70 border border-white/10 p-5 text-white/90 leading-relaxed overflow-auto">
+            <div className="min-h-[650px] whitespace-pre-wrap rounded-2xl bg-black/70 border border-white/10 p-5 text-white/90 leading-relaxed overflow-auto">
               {answer || "Grace’s plan, analysis, or report will appear here in real time."}
+            </div>
+          </section>
+
+          <section className="rounded-3xl border border-white/10 bg-white/5 p-5 shadow-2xl">
+            <h2 className="text-xl font-bold">Saved Reports</h2>
+            <p className="mt-2 text-sm text-white/55">
+              Reports save on this device for now. Account cloud sync comes next.
+            </p>
+
+            <div className="mt-5 space-y-3 max-h-[760px] overflow-auto pr-1">
+              {savedReports.length === 0 ? (
+                <div className="rounded-2xl border border-white/10 bg-black/40 p-5 text-sm text-white/55">
+                  No saved reports yet.
+                </div>
+              ) : (
+                savedReports.map((report) => (
+                  <div key={report.id} className="rounded-2xl border border-white/10 bg-black/40 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h3 className="font-bold">{report.title}</h3>
+                        <p className="mt-1 text-xs text-white/50">
+                          {report.project} • {report.toolType}
+                        </p>
+                        <p className="mt-1 text-xs text-white/40">
+                          {new Date(report.createdAt).toLocaleString()}
+                        </p>
+                        {report.otgMode && (
+                          <p className="mt-2 inline-block rounded-full bg-fuchsia-500/20 px-3 py-1 text-xs text-fuchsia-200">
+                            OTG
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="mt-4 flex gap-2">
+                      <button onClick={() => loadReport(report)} className="rounded-full bg-white text-black px-4 py-2 text-xs font-bold">
+                        Open
+                      </button>
+                      <button onClick={() => deleteReport(report.id)} className="rounded-full border border-red-400/40 px-4 py-2 text-xs text-red-200">
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </section>
         </div>
