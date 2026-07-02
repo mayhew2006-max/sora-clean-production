@@ -1,5 +1,6 @@
 import "./globals.css";
 import Script from "next/script";
+import GraceChatButtons from "@/components/GraceChatButtons";
 
 export const metadata = {
   title: "Grace",
@@ -15,6 +16,7 @@ export default function RootLayout({
     <html lang="en">
       <body>
 
+ <GraceChatButtons />
  {children}
 
         <Script
