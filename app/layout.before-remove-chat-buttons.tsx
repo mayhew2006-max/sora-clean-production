@@ -1,9 +1,10 @@
 import "./globals.css";
 import Script from "next/script";
+import GraceChatButtons from "@/components/GraceChatButtons";
 
 export const metadata = {
   title: "Grace",
-  description: "Your personal command center for real life.",
+  description: "Technology that feels more human.",
 };
 
 export default function RootLayout({
@@ -14,7 +15,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        {children}
+
+ <GraceChatButtons />
+ {children}
 
         <Script
           src="https://www.googletagmanager.com/gtag/js?id=G-Q4J04MDK1F"
@@ -26,6 +29,7 @@ export default function RootLayout({
             window.dataLayer = window.dataLayer || [];
             function gtag(){dataLayer.push(arguments);}
             gtag('js', new Date());
+
             gtag('config', 'G-Q4J04MDK1F');
           `}
         </Script>
