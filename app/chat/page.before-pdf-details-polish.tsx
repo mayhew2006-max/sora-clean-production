@@ -154,18 +154,6 @@ export default function GraceChat() {
     }
 
     if (savedPaid === "true" || founderAccess === "true") setPaid(true);
-
-    try {
-      const savedDetails = localStorage.getItem("grace_report_details");
-      if (savedDetails) {
-        const details = JSON.parse(savedDetails);
-        setReportTitle(details.reportTitle || "");
-        setPreparedFor(details.preparedFor || "");
-        setBusinessName(details.businessName || "");
-        setProjectName(details.projectName || "");
-        setJobLocation(details.jobLocation || "");
-      }
-    } catch {}
   }, []);
 
   useEffect(() => {
@@ -602,51 +590,13 @@ Do not put any business name on the report except the user's provided business/n
     recognition.start();
   }
 
-  function saveReportDetails() {
-    localStorage.setItem(
-      "grace_report_details",
-      JSON.stringify({
-        reportTitle,
-        preparedFor,
-        businessName,
-        projectName,
-        jobLocation,
-      })
-    );
-
-    setDetailsOpen(false);
-
-    setMessages((prev) => [
-      ...prev,
-      {
-        role: "assistant",
-        content:
-          "Got it. I saved those report details and I’ll use them on your PDFs.",
-      },
-    ]);
-  }
-
- function downloadPDF() {
-    const answer =
-      lastToolAnswer ||
-      [...messages].reverse().find((m) => m.role === "assistant")?.content ||
-      "";
+  function downloadPDF() {
+    const answer = lastToolAnswer || [...messages].reverse().find((m) => m.role === "assistant")?.content || "";
 
     if (!answer.trim()) {
       alert("Ask Grace to create a report or plan first.");
       return;
     }
-
-    localStorage.setItem(
-      "grace_report_details",
-      JSON.stringify({
-        reportTitle,
-        preparedFor,
-        businessName,
-        projectName,
-        jobLocation,
-      })
-    );
 
     const doc = new jsPDF({
       unit: "pt",
@@ -658,58 +608,44 @@ Do not put any business name on the report except the user's provided business/n
     const pageHeight = doc.internal.pageSize.getHeight();
     const usableWidth = pageWidth - margin * 2;
 
-    const title =
-      reportTitle ||
-      projectName ||
-      businessName ||
-      preparedFor ||
-      "Grace Report";
-
-    doc.setFillColor(255, 247, 241);
-    doc.rect(0, 0, pageWidth, 120, "F");
-
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(21);
-    doc.setTextColor(47, 39, 35);
-    doc.text(title, margin, 52);
+    doc.setFontSize(20);
+    doc.text(reportTitle || "Grace Report", margin, 52);
 
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-    doc.setTextColor(120, 75, 55);
-    doc.text("Prepared with Grace", margin, 72);
-
-    let headerY = 95;
-
     doc.setFontSize(11);
-    doc.setTextColor(65, 55, 50);
+
+    let headerY = 78;
+
+    doc.text("Prepared with Grace", margin, headerY);
+    headerY += 17;
 
     if (preparedFor) {
       doc.text(`Prepared for: ${preparedFor}`, margin, headerY);
-      headerY += 16;
+      headerY += 17;
     }
 
     if (businessName) {
       doc.text(`Business: ${businessName}`, margin, headerY);
-      headerY += 16;
+      headerY += 17;
     }
 
     if (projectName) {
       doc.text(`Project: ${projectName}`, margin, headerY);
-      headerY += 16;
+      headerY += 17;
     }
 
     if (jobLocation) {
       doc.text(`Location: ${jobLocation}`, margin, headerY);
-      headerY += 16;
+      headerY += 17;
     }
 
     doc.text(`Created: ${new Date().toLocaleString()}`, margin, headerY);
 
-    doc.setDrawColor(239, 185, 159);
+    doc.setDrawColor(210);
     doc.line(margin, headerY + 18, pageWidth - margin, headerY + 18);
 
     doc.setFontSize(12);
-    doc.setTextColor(47, 39, 35);
 
     const clean = answer
       .replaceAll("**", "")
@@ -947,7 +883,7 @@ Do not put any business name on the report except the user's provided business/n
                 >
                   Details
                   <span className="block text-[10px] font-semibold opacity-80">
-                    Header
+                    Name/PDF
                   </span>
                 </button>
               </div>
@@ -1048,16 +984,10 @@ Do not put any business name on the report except the user's provided business/n
 
           {detailsOpen && (
             <div className="relative z-20 mt-3 rounded-[2rem] border border-[#efb99f] bg-white/95 p-4 shadow-xl">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-black text-[#6f3b2a]">
-                    PDF / Report Details
-                  </p>
-                  <p className="mt-1 text-xs text-[#9a6b5a]">
-                    These appear at the top of the PDF. Leave anything blank that you do not need.
-                  </p>
-                </div>
-
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-black text-[#6f3b2a]">
+                  PDF / Report Details
+                </p>
                 <button
                   onClick={() => setDetailsOpen(false)}
                   className="text-sm font-bold text-[#9a6b5a]"
@@ -1067,78 +997,36 @@ Do not put any business name on the report except the user's provided business/n
               </div>
 
               <div className="mt-3 grid grid-cols-1 gap-2">
-                <label className="text-xs font-bold text-[#8b6a5f]">
-                  Report Title
-                  <input
-                    value={reportTitle}
-                    onChange={(e) => setReportTitle(e.target.value)}
-                    placeholder="Example: Backyard Project Report"
-                    className="mt-1 w-full rounded-2xl border border-[#efb99f] bg-[#fff7f1] px-4 py-3 text-[#2f2723] outline-none"
-                  />
-                </label>
-
-                <label className="text-xs font-bold text-[#8b6a5f]">
-                  Prepared For
-                  <input
-                    value={preparedFor}
-                    onChange={(e) => setPreparedFor(e.target.value)}
-                    placeholder="Customer, client, or personal name"
-                    className="mt-1 w-full rounded-2xl border border-[#efb99f] bg-[#fff7f1] px-4 py-3 text-[#2f2723] outline-none"
-                  />
-                </label>
-
-                <label className="text-xs font-bold text-[#8b6a5f]">
-                  Business Name
-                  <input
-                    value={businessName}
-                    onChange={(e) => setBusinessName(e.target.value)}
-                    placeholder="Optional company name"
-                    className="mt-1 w-full rounded-2xl border border-[#efb99f] bg-[#fff7f1] px-4 py-3 text-[#2f2723] outline-none"
-                  />
-                </label>
-
-                <label className="text-xs font-bold text-[#8b6a5f]">
-                  Project Name
-                  <input
-                    value={projectName}
-                    onChange={(e) => setProjectName(e.target.value)}
-                    placeholder="Example: Patio Drainage Plan"
-                    className="mt-1 w-full rounded-2xl border border-[#efb99f] bg-[#fff7f1] px-4 py-3 text-[#2f2723] outline-none"
-                  />
-                </label>
-
-                <label className="text-xs font-bold text-[#8b6a5f]">
-                  Location
-                  <input
-                    value={jobLocation}
-                    onChange={(e) => setJobLocation(e.target.value)}
-                    placeholder="Optional job or project location"
-                    className="mt-1 w-full rounded-2xl border border-[#efb99f] bg-[#fff7f1] px-4 py-3 text-[#2f2723] outline-none"
-                  />
-                </label>
-              </div>
-
-              <div className="mt-4 grid grid-cols-2 gap-2">
-                <button
-                  onClick={saveReportDetails}
-                  className="rounded-2xl bg-[#f3a683] px-4 py-3 font-black text-white shadow-sm"
-                >
-                  Save Details
-                </button>
-
-                <button
-                  onClick={() => {
-                    setReportTitle("");
-                    setPreparedFor("");
-                    setBusinessName("");
-                    setProjectName("");
-                    setJobLocation("");
-                    localStorage.removeItem("grace_report_details");
-                  }}
-                  className="rounded-2xl border border-[#efb99f] bg-[#fff7f1] px-4 py-3 font-black text-[#6f3b2a]"
-                >
-                  Clear
-                </button>
+                <input
+                  value={reportTitle}
+                  onChange={(e) => setReportTitle(e.target.value)}
+                  placeholder="Report title"
+                  className="rounded-2xl border border-[#efb99f] bg-[#fff7f1] px-4 py-3 outline-none"
+                />
+                <input
+                  value={preparedFor}
+                  onChange={(e) => setPreparedFor(e.target.value)}
+                  placeholder="Prepared for"
+                  className="rounded-2xl border border-[#efb99f] bg-[#fff7f1] px-4 py-3 outline-none"
+                />
+                <input
+                  value={businessName}
+                  onChange={(e) => setBusinessName(e.target.value)}
+                  placeholder="Business name"
+                  className="rounded-2xl border border-[#efb99f] bg-[#fff7f1] px-4 py-3 outline-none"
+                />
+                <input
+                  value={projectName}
+                  onChange={(e) => setProjectName(e.target.value)}
+                  placeholder="Project name"
+                  className="rounded-2xl border border-[#efb99f] bg-[#fff7f1] px-4 py-3 outline-none"
+                />
+                <input
+                  value={jobLocation}
+                  onChange={(e) => setJobLocation(e.target.value)}
+                  placeholder="Location"
+                  className="rounded-2xl border border-[#efb99f] bg-[#fff7f1] px-4 py-3 outline-none"
+                />
               </div>
             </div>
           )}
