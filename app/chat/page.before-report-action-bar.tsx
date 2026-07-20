@@ -459,58 +459,6 @@ Do not put any business name on the report except the user's provided business/n
       return;
     }
 
-    const lower = clean.toLowerCase();
-
-    if (
-      lastToolAnswer &&
-      (lower.includes("pdf") ||
-        lower.includes("download") ||
-        lower.includes("save this") ||
-        lower.includes("make that a pdf") ||
-        lower.includes("turn that into a pdf"))
-    ) {
-      const nextMessages: Message[] = [
-        ...messagesRef.current,
-        { role: "user", content: clean },
-        {
-          role: "assistant",
-          content:
-            "Done — I’m turning the last report into a PDF for you now.",
-        },
-      ];
-
-      setMessages(nextMessages);
-      setInput("");
-      setTimeout(() => downloadPDF(), 250);
-      return;
-    }
-
-    if (
-      lastToolAnswer &&
-      (lower.includes("read it") ||
-        lower.includes("read that") ||
-        lower.includes("read this") ||
-        lower.includes("say it out loud") ||
-        lower.includes("explain it out loud"))
-    ) {
-      const nextMessages: Message[] = [
-        ...messagesRef.current,
-        { role: "user", content: clean },
-        {
-          role: "assistant",
-          content:
-            "Absolutely. I’ll read the latest report out loud and keep it simple.",
-        },
-      ];
-
-      setMessages(nextMessages);
-      setInput("");
-      speak(lastToolAnswer.slice(0, 1200)).catch(() =>
-        console.log("voice playback failed")
-      );
-      return;
-    }
-
     if (shouldUsePhotoTool(clean)) {
       await runGraceTool(clean, "Photo Analysis");
       return;
@@ -846,55 +794,7 @@ Do not put any business name on the report except the user's provided business/n
             </div>
           )}
 
-          {lastToolAnswer && !locked && (
-            <div className="relative z-20 mt-3 rounded-[1.5rem] border border-[#efb99f] bg-white/90 p-3 shadow-xl backdrop-blur">
-              <p className="mb-2 text-xs font-black uppercase tracking-wide text-[#8b4b34]">
-                Grace finished this result
-              </p>
-
-              <div className="grid grid-cols-3 gap-2">
-                <button
-                  onClick={downloadPDF}
-                  className="rounded-2xl bg-[#2f2723] px-3 py-3 text-sm font-black text-white shadow-sm"
-                >
-                  PDF
-                  <span className="block text-[10px] font-semibold opacity-80">
-                    Download
-                  </span>
-                </button>
-
-                <button
-                  onClick={() =>
-                    speak(lastToolAnswer.slice(0, 1200)).catch(() =>
-                      console.log("voice playback failed")
-                    )
-                  }
-                  className="rounded-2xl border border-[#efb99f] bg-[#fff7f1] px-3 py-3 text-sm font-black text-[#6f3b2a] shadow-sm"
-                >
-                  Read
-                  <span className="block text-[10px] font-semibold opacity-80">
-                    Out loud
-                  </span>
-                </button>
-
-                <button
-                  onClick={() => setDetailsOpen(true)}
-                  className="rounded-2xl border border-[#efb99f] bg-[#fff7f1] px-3 py-3 text-sm font-black text-[#6f3b2a] shadow-sm"
-                >
-                  Details
-                  <span className="block text-[10px] font-semibold opacity-80">
-                    Name/PDF
-                  </span>
-                </button>
-              </div>
-
-              <p className="mt-2 text-xs text-[#9a6b5a]">
-                You can also type “make that a PDF” or “read that out loud.”
-              </p>
-            </div>
-          )}
-
- {toolsOpen && (
+          {toolsOpen && (
             <div className="relative z-20 mt-4 rounded-[2rem] border border-[#efb99f] bg-white/95 p-4 shadow-2xl backdrop-blur">
               <div className="flex items-center justify-between mb-3">
                 <p className="text-sm font-black text-[#6f3b2a]">
