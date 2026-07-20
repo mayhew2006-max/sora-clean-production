@@ -426,41 +426,13 @@ Do not put any business name on the report except the user's provided business/n
     setLoading(false);
   }
 
-  function shouldUsePhotoTool(text: string) {
-    const lower = text.toLowerCase();
-    const hasAttachedPhoto = (imagesRef.current.length ? imagesRef.current : images).length > 0;
-
-    if (!hasAttachedPhoto) return false;
-
-    return (
-      lower.includes("photo") ||
-      lower.includes("picture") ||
-      lower.includes("image") ||
-      lower.includes("analyze") ||
-      lower.includes("what do you see") ||
-      lower.includes("look at") ||
-      lower.includes("make a plan") ||
-      lower.includes("turn this into") ||
-      lower.includes("report") ||
-      lower.includes("pdf") ||
-      lower.includes("checklist") ||
-      lower.includes("ideas") ||
-      lower.includes("next steps")
-    );
-  }
-
- async function sendMessage(text: string) {
+  async function sendMessage(text: string) {
     const clean = text.trim();
     if (!clean || loadingRef.current) return;
 
     if (locked) {
       trackEvent("paywall_hit");
       window.location.href = "/pay";
-      return;
-    }
-
-    if (shouldUsePhotoTool(clean)) {
-      await runGraceTool(clean, "Photo Analysis");
       return;
     }
 
