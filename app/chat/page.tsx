@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { jsPDF } from "jspdf";
 
 type Message = {
   role: "user" | "assistant" | "assistant-image";
@@ -9,6 +10,19 @@ type Message = {
 };
 
 const FREE_LIMIT = 50;
+
+const toolTypes = [
+  "Photo Analysis",
+  "Project Plan",
+  "Work Scope",
+  "Site Report",
+  "Maintenance Checklist",
+  "Landscaping Concept",
+  "Client Proposal",
+  "Business Plan",
+  "Personal Goal Plan",
+  "Custom PDF",
+];
 
 function trackEvent(name: string) {
   if (typeof window !== "undefined" && (window as any).gtag) {
@@ -21,11 +35,11 @@ function graceSystemPrompt() {
 You are Grace.
 
 You are warm, useful, direct, conversational, and practical.
-You help people talk things out, plan projects, organize ideas, make decisions, create reports, build checklists, and move forward.
+You help people talk things out, plan projects, organize ideas, make decisions, create reports, build checklists, analyze photos, and move forward.
 
 You are not robotic.
-You are not fake.
-You do not advertise yourself as a dating app.
+You are not a dating app.
+You are not a gimmick.
 You are a personal command center for real life.
 
 Match the user's tone naturally:
@@ -35,8 +49,53 @@ Match the user's tone naturally:
 - Mild casual language is okay when it fits the user's tone.
 - Never be hateful, unsafe, sexually explicit, or abusive.
 
-When the user asks for plans, reports, PDFs, photos, checklists, scopes, or business help, act like Grace can guide them inside the conversation.
+When the user asks for plans, reports, PDFs, photos, checklists, scopes, or business help, guide them like Grace can do it inside the conversation.
 `.trim();
+}
+
+async function compressImage(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      img.onload = () => {
+        const maxDimension = 1280;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height && width > maxDimension) {
+          height = Math.round((height * maxDimension) / width);
+          width = maxDimension;
+        } else if (height > width && height > maxDimension) {
+          width = Math.round((width * maxDimension) / height);
+          height = maxDimension;
+        } else if (width === height && width > maxDimension) {
+          width = maxDimension;
+          height = maxDimension;
+        }
+
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          reject(new Error("Could not process image."));
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", 0.72));
+      };
+
+      img.onerror = () => reject(new Error("Could not load image."));
+      img.src = String(reader.result);
+    };
+
+    reader.onerror = () => reject(new Error("Could not read image."));
+    reader.readAsDataURL(file);
+  });
 }
 
 export default function GraceChat() {
@@ -44,7 +103,7 @@ export default function GraceChat() {
     {
       role: "assistant",
       content:
-        "Hey, I’m Grace. Tell me what you’re working on, what’s on your mind, or what you need help turning into a plan.",
+        "Hey, I’m Grace. Tell me what you’re working on, upload a photo, or ask me to turn something into a plan, report, checklist, or PDF.",
     },
   ]);
 
@@ -52,9 +111,22 @@ export default function GraceChat() {
   const [memory, setMemory] = useState("");
   const [paid, setPaid] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [toolLoading, setToolLoading] = useState(false);
   const [listening, setListening] = useState(false);
   const [voiceOn, setVoiceOn] = useState(true);
   const [toolsOpen, setToolsOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+
+  const [toolType, setToolType] = useState("Photo Analysis");
+  const [images, setImages] = useState<string[]>([]);
+  const [imageStatus, setImageStatus] = useState("");
+  const [lastToolAnswer, setLastToolAnswer] = useState("");
+
+  const [preparedFor, setPreparedFor] = useState("");
+  const [businessName, setBusinessName] = useState("");
+  const [projectName, setProjectName] = useState("");
+  const [jobLocation, setJobLocation] = useState("");
+  const [reportTitle, setReportTitle] = useState("");
 
   const graceAvatar = "/grace-avatar.png";
 
@@ -64,6 +136,8 @@ export default function GraceChat() {
   const recognitionRef = useRef<any>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  const cameraInputRef = useRef<HTMLInputElement | null>(null);
+  const uploadInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     const savedMessages = localStorage.getItem("grace_messages");
@@ -83,12 +157,12 @@ export default function GraceChat() {
 
   useEffect(() => {
     messagesRef.current = messages;
-    localStorage.setItem("grace_messages", JSON.stringify(messages.slice(-30)));
+    localStorage.setItem("grace_messages", JSON.stringify(messages.slice(-40)));
 
     setTimeout(() => {
       bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
     }, 100);
-  }, [messages, loading, listening]);
+  }, [messages, loading, toolLoading, listening]);
 
   useEffect(() => {
     function updateKeyboardOffset() {
@@ -179,6 +253,159 @@ export default function GraceChat() {
     }
   }
 
+  async function handleImages(files: FileList | null) {
+    if (!files) return;
+
+    const selected = Array.from(files)
+      .filter((file) => file.type.startsWith("image/"))
+      .slice(0, 4);
+
+    if (selected.length === 0) {
+      setImageStatus("Please choose a valid image.");
+      return;
+    }
+
+    setImageStatus("Preparing photo for Grace...");
+
+    try {
+      const converted = await Promise.all(selected.map((file) => compressImage(file)));
+      setImages((prev) => [...prev, ...converted].slice(0, 4));
+      setImageStatus("Photo ready. Ask Grace what to do with it.");
+      setToolsOpen(true);
+    } catch {
+      setImageStatus("Grace could not prepare that image. Try a different photo.");
+    }
+  }
+
+  function removeImage(index: number) {
+    setImages((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function buildEnhancedPrompt(request: string) {
+    return `
+Prepared for: ${preparedFor || "Not provided"}
+Business name: ${businessName || "Not provided"}
+Project name: ${projectName || "Not provided"}
+Report title: ${reportTitle || "Untitled"}
+Job/location: ${jobLocation || "Not provided"}
+
+User request:
+${request || input || "Analyze this and create a useful response."}
+
+Instructions:
+Create the result as Grace inside the conversation.
+Be practical, clear, and useful.
+If a report is requested, make it PDF-ready.
+If a photo is included, describe visible details, useful observations, risks/concerns, ideas, and next steps.
+Do not mention OTG.
+Do not put any business name on the report except the user's provided business/name fields above.
+`.trim();
+  }
+
+  async function runGraceTool(actionPrompt?: string, selectedTool?: string) {
+    if (locked || toolLoading || loadingRef.current) {
+      if (locked) window.location.href = "/pay";
+      return;
+    }
+
+    const request = (actionPrompt || input || "").trim();
+
+    if (!request && images.length === 0) {
+      alert("Type what you need or add a photo first.");
+      return;
+    }
+
+    const activeTool = selectedTool || toolType;
+
+    trackEvent("grace_tool_used");
+    updateMemory(request);
+
+    loadingRef.current = true;
+    setToolLoading(true);
+    setLoading(true);
+    setToolsOpen(false);
+
+    const userLabel =
+      images.length > 0
+        ? `${activeTool}: ${request || "Use the uploaded photo and give me useful ideas, notes, and next steps."}`
+        : `${activeTool}: ${request}`;
+
+    const nextMessages: Message[] = [
+      ...messagesRef.current,
+      { role: "user", content: userLabel },
+    ];
+
+    setMessages(nextMessages);
+    setInput("");
+
+    try {
+      const res = await fetch("/api/tools", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-grace-paid": paid || !locked ? "true" : "false",
+        },
+        body: JSON.stringify({
+          toolType: activeTool,
+          userPrompt: buildEnhancedPrompt(request),
+          images,
+        }),
+      });
+
+      if (!res.ok || !res.body) {
+        const text = await res.text();
+        throw new Error(text || "Grace could not run this tool.");
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let fullText = "";
+
+      setMessages([
+        ...nextMessages,
+        { role: "assistant", content: "I’m working on it..." },
+      ]);
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        const lines = chunk.split("\n");
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+
+          const data = line.replace("data: ", "").trim();
+          if (data === "[DONE]") continue;
+
+          try {
+            const parsed = JSON.parse(data);
+            const token = parsed?.choices?.[0]?.delta?.content || "";
+            if (token) fullText += token;
+          } catch {}
+        }
+      }
+
+      const reply =
+        fullText.trim() ||
+        "I finished, but the response came back empty. Try asking again with a little more detail.";
+
+      setLastToolAnswer(reply);
+      setMessages([...nextMessages, { role: "assistant", content: reply }]);
+      speak(reply.slice(0, 900)).catch(() => console.log("voice playback failed"));
+    } catch (err: any) {
+      const reply =
+        "Grace ran into an issue with that tool: " +
+        (err?.message || "Unknown error");
+      setMessages([...nextMessages, { role: "assistant", content: reply }]);
+    }
+
+    loadingRef.current = false;
+    setToolLoading(false);
+    setLoading(false);
+  }
+
   async function sendMessage(text: string) {
     const clean = text.trim();
     if (!clean || loadingRef.current) return;
@@ -263,47 +490,154 @@ export default function GraceChat() {
     recognition.start();
   }
 
+  function downloadPDF() {
+    const answer = lastToolAnswer || [...messages].reverse().find((m) => m.role === "assistant")?.content || "";
+
+    if (!answer.trim()) {
+      alert("Ask Grace to create a report or plan first.");
+      return;
+    }
+
+    const doc = new jsPDF({
+      unit: "pt",
+      format: "letter",
+    });
+
+    const margin = 48;
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const usableWidth = pageWidth - margin * 2;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(20);
+    doc.text(reportTitle || "Grace Report", margin, 52);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(11);
+
+    let headerY = 78;
+
+    doc.text("Prepared with Grace", margin, headerY);
+    headerY += 17;
+
+    if (preparedFor) {
+      doc.text(`Prepared for: ${preparedFor}`, margin, headerY);
+      headerY += 17;
+    }
+
+    if (businessName) {
+      doc.text(`Business: ${businessName}`, margin, headerY);
+      headerY += 17;
+    }
+
+    if (projectName) {
+      doc.text(`Project: ${projectName}`, margin, headerY);
+      headerY += 17;
+    }
+
+    if (jobLocation) {
+      doc.text(`Location: ${jobLocation}`, margin, headerY);
+      headerY += 17;
+    }
+
+    doc.text(`Created: ${new Date().toLocaleString()}`, margin, headerY);
+
+    doc.setDrawColor(210);
+    doc.line(margin, headerY + 18, pageWidth - margin, headerY + 18);
+
+    doc.setFontSize(12);
+
+    const clean = answer
+      .replaceAll("**", "")
+      .replaceAll("###", "")
+      .replaceAll("##", "")
+      .replaceAll("#", "");
+
+    const lines = doc.splitTextToSize(clean, usableWidth);
+    let y = headerY + 48;
+
+    for (const line of lines) {
+      if (y > pageHeight - 55) {
+        doc.addPage();
+        y = 55;
+      }
+      doc.text(line, margin, y);
+      y += 16;
+    }
+
+    const fileName = (reportTitle || projectName || "grace-report")
+      .toLowerCase()
+      .replaceAll(" ", "-")
+      .replace(/[^a-z0-9-_]/g, "");
+
+    doc.save(`${fileName || "grace-report"}.pdf`);
+  }
+
   const quickActions = [
     {
       label: "Photo",
-      helper: "Analyze a photo",
-      prompt:
-        "Grace, I want to analyze a photo and turn it into useful ideas, notes, and next steps.",
+      helper: "Upload or take a photo",
+      action: () => cameraInputRef.current?.click(),
     },
     {
       label: "Plan",
       helper: "Turn an idea into steps",
-      prompt:
-        "Grace, help me turn this idea into a clear plan with steps I can actually follow.",
+      action: () =>
+        runGraceTool(
+          "Turn this into a clear project plan with phases, priorities, and next steps.",
+          "Project Plan"
+        ),
     },
     {
       label: "Report",
       helper: "Create a clean report",
-      prompt:
-        "Grace, help me create a clean report with a summary, priorities, notes, and next steps.",
+      action: () =>
+        runGraceTool(
+          "Create a clean PDF-ready report with summary, observations, priorities, concerns, and next steps.",
+          "Site Report"
+        ),
     },
     {
       label: "Checklist",
       helper: "Make a checklist",
-      prompt:
-        "Grace, make me a practical checklist for this project.",
+      action: () =>
+        runGraceTool(
+          "Create a practical checklist I can follow.",
+          "Maintenance Checklist"
+        ),
     },
     {
       label: "PDF",
-      helper: "Prepare PDF content",
-      prompt:
-        "Grace, help me format this into something I can save as a PDF.",
+      helper: "Download last result",
+      action: downloadPDF,
     },
     {
-      label: "Business",
-      helper: "Use my name/company",
-      prompt:
-        "Grace, help me create a report where I can add my name, business name, project name, and location.",
+      label: "Details",
+      helper: "Name/business fields",
+      action: () => setDetailsOpen(!detailsOpen),
     },
   ];
 
   return (
     <main className="min-h-[100dvh] bg-[#fff7f1] text-[#2f2723] flex flex-col overflow-hidden">
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        onChange={(e) => handleImages(e.target.files)}
+        className="hidden"
+      />
+
+      <input
+        ref={uploadInputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        onChange={(e) => handleImages(e.target.files)}
+        className="hidden"
+      />
+
       <section className="flex-1 overflow-hidden pb-32">
         <div className="relative h-full px-5 pt-4 overflow-hidden">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(251,146,60,0.22),transparent_42%),radial-gradient(circle_at_bottom_left,rgba(244,114,182,0.12),transparent_40%)] pointer-events-none" />
@@ -340,8 +674,8 @@ export default function GraceChat() {
 
           <div className="relative z-10 mt-5 flex flex-col items-center text-center">
             <div
-              className={`relative w-[25vh] max-w-[235px] aspect-square rounded-[2.2rem] overflow-hidden border border-white/80 bg-white shadow-2xl ${
-                listening || loading
+              className={`relative w-[31vh] max-w-[310px] aspect-square rounded-[2.4rem] overflow-hidden border border-white/80 bg-white shadow-2xl ${
+                listening || loading || toolLoading
                   ? "shadow-[0_0_70px_rgba(251,146,60,0.65)] animate-pulse"
                   : "shadow-[0_18px_60px_rgba(120,60,30,0.25)]"
               }`}
@@ -349,7 +683,7 @@ export default function GraceChat() {
               <img
                 src={graceAvatar}
                 alt="Grace"
-                className="w-full h-full object-cover scale-110"
+                className="w-full h-full object-cover object-top scale-105"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent" />
             </div>
@@ -359,12 +693,14 @@ export default function GraceChat() {
                 className={`w-3 h-3 rounded-full ${
                   listening
                     ? "bg-green-500"
-                    : loading
+                    : loading || toolLoading
                     ? "bg-[#f3a683]"
                     : "bg-[#d97757]"
                 }`}
               />
-              {loading
+              {toolLoading
+                ? "Grace is building it..."
+                : loading
                 ? "Grace is thinking..."
                 : listening
                 ? "Grace is listening..."
@@ -373,7 +709,7 @@ export default function GraceChat() {
           </div>
 
           {toolsOpen && (
-            <div className="relative z-20 mt-4 rounded-[2rem] border border-[#efb99f] bg-white/90 p-4 shadow-2xl backdrop-blur">
+            <div className="relative z-20 mt-4 rounded-[2rem] border border-[#efb99f] bg-white/95 p-4 shadow-2xl backdrop-blur">
               <div className="flex items-center justify-between mb-3">
                 <p className="text-sm font-black text-[#6f3b2a]">
                   What do you want Grace to do?
@@ -390,8 +726,8 @@ export default function GraceChat() {
                 {quickActions.map((item) => (
                   <button
                     key={item.label}
-                    disabled={locked}
-                    onClick={() => sendMessage(item.prompt)}
+                    disabled={locked || toolLoading || loading}
+                    onClick={item.action}
                     className="rounded-2xl border border-[#f1c7b4] bg-[#fff7f1] px-3 py-3 text-left shadow-sm disabled:opacity-40"
                   >
                     <div className="font-black text-[#2f2723]">{item.label}</div>
@@ -401,12 +737,117 @@ export default function GraceChat() {
                   </button>
                 ))}
               </div>
+
+              <div className="mt-3 flex gap-2">
+                <button
+                  onClick={() => uploadInputRef.current?.click()}
+                  className="flex-1 rounded-2xl border border-[#f1c7b4] bg-white px-3 py-3 text-sm font-bold text-[#6f3b2a]"
+                >
+                  Upload Photos
+                </button>
+                <button
+                  onClick={() => runGraceTool(input || "Use the uploaded photo and create useful ideas, observations, and next steps.", toolType)}
+                  className="flex-1 rounded-2xl bg-[#2f2723] px-3 py-3 text-sm font-black text-white"
+                >
+                  Run Selected
+                </button>
+              </div>
+
+              <label className="mt-3 block text-xs font-bold text-[#8b6a5f]">
+                Tool type
+              </label>
+              <select
+                value={toolType}
+                onChange={(e) => setToolType(e.target.value)}
+                className="mt-1 w-full rounded-2xl border border-[#efb99f] bg-white px-4 py-3 text-[#2f2723] outline-none"
+              >
+                {toolTypes.map((tool) => (
+                  <option key={tool} value={tool}>
+                    {tool}
+                  </option>
+                ))}
+              </select>
+
+              {imageStatus && (
+                <p className="mt-3 text-xs font-semibold text-[#8b6a5f]">
+                  {imageStatus}
+                </p>
+              )}
+
+              {images.length > 0 && (
+                <div className="mt-3 grid grid-cols-4 gap-2">
+                  {images.map((img, i) => (
+                    <div key={i} className="relative">
+                      <img
+                        src={img}
+                        alt={`Upload ${i + 1}`}
+                        className="h-16 w-full rounded-xl object-cover border border-[#efb99f]"
+                      />
+                      <button
+                        onClick={() => removeImage(i)}
+                        className="absolute -right-1 -top-1 rounded-full bg-[#2f2723] px-2 py-0.5 text-xs text-white"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {detailsOpen && (
+            <div className="relative z-20 mt-3 rounded-[2rem] border border-[#efb99f] bg-white/95 p-4 shadow-xl">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-black text-[#6f3b2a]">
+                  PDF / Report Details
+                </p>
+                <button
+                  onClick={() => setDetailsOpen(false)}
+                  className="text-sm font-bold text-[#9a6b5a]"
+                >
+                  Close
+                </button>
+              </div>
+
+              <div className="mt-3 grid grid-cols-1 gap-2">
+                <input
+                  value={reportTitle}
+                  onChange={(e) => setReportTitle(e.target.value)}
+                  placeholder="Report title"
+                  className="rounded-2xl border border-[#efb99f] bg-[#fff7f1] px-4 py-3 outline-none"
+                />
+                <input
+                  value={preparedFor}
+                  onChange={(e) => setPreparedFor(e.target.value)}
+                  placeholder="Prepared for"
+                  className="rounded-2xl border border-[#efb99f] bg-[#fff7f1] px-4 py-3 outline-none"
+                />
+                <input
+                  value={businessName}
+                  onChange={(e) => setBusinessName(e.target.value)}
+                  placeholder="Business name"
+                  className="rounded-2xl border border-[#efb99f] bg-[#fff7f1] px-4 py-3 outline-none"
+                />
+                <input
+                  value={projectName}
+                  onChange={(e) => setProjectName(e.target.value)}
+                  placeholder="Project name"
+                  className="rounded-2xl border border-[#efb99f] bg-[#fff7f1] px-4 py-3 outline-none"
+                />
+                <input
+                  value={jobLocation}
+                  onChange={(e) => setJobLocation(e.target.value)}
+                  placeholder="Location"
+                  className="rounded-2xl border border-[#efb99f] bg-[#fff7f1] px-4 py-3 outline-none"
+                />
+              </div>
             </div>
           )}
 
           <div className="relative z-10 mt-4 bg-white/80 border border-[#efb99f] rounded-[2rem] p-3 backdrop-blur shadow-2xl">
-            <div className="max-h-[47vh] overflow-y-auto space-y-3 pr-1">
-              {messages.slice(-8).map((message, index) => (
+            <div className="max-h-[43vh] overflow-y-auto space-y-3 pr-1">
+              {messages.slice(-10).map((message, index) => (
                 <div
                   key={index}
                   className={
@@ -426,7 +867,7 @@ export default function GraceChat() {
                       <img
                         src={graceAvatar}
                         alt="Grace"
-                        className="w-11 h-11 rounded-full object-cover border border-[#efb99f] shadow-sm"
+                        className="w-11 h-11 rounded-full object-cover object-top border border-[#efb99f] shadow-sm"
                       />
 
                       <div className="bg-[#fffaf6] border border-[#f1c7b4] text-[#2f2723] rounded-3xl px-5 py-4 shadow-sm whitespace-pre-wrap leading-relaxed">
@@ -439,9 +880,9 @@ export default function GraceChat() {
                 </div>
               ))}
 
-              {loading && (
+              {(loading || toolLoading) && (
                 <p className="text-[#9a6b5a] animate-pulse pl-14">
-                  Grace is thinking...
+                  Grace is working...
                 </p>
               )}
 
@@ -476,10 +917,18 @@ export default function GraceChat() {
       <footer className="grace-input-bar fixed bottom-0 left-0 right-0 z-30 p-3 pb-[calc(0.5rem+env(safe-area-inset-bottom))] border-t border-[#efb99f] bg-[#fff7f1]/95 backdrop-blur flex gap-2 items-end">
         <button
           onClick={tapToTalk}
-          disabled={locked}
+          disabled={locked || loading || toolLoading}
           className="bg-[#f3a683] text-white px-4 py-3 rounded-2xl font-black disabled:opacity-40 shadow-sm"
         >
           🎤
+        </button>
+
+        <button
+          onClick={() => setToolsOpen(!toolsOpen)}
+          disabled={locked || loading || toolLoading}
+          className="bg-white border border-[#efb99f] text-[#6f3b2a] px-4 py-3 rounded-2xl font-black disabled:opacity-40 shadow-sm"
+        >
+          +
         </button>
 
         <textarea
@@ -491,7 +940,7 @@ export default function GraceChat() {
               sendMessage(input);
             }
           }}
-          disabled={locked}
+          disabled={locked || loading || toolLoading}
           rows={1}
           placeholder="Say anything to Grace..."
           className="flex-1 min-w-0 max-h-40 resize-none bg-white border border-[#efb99f] rounded-2xl px-4 py-3 text-[#2f2723] placeholder:text-[#a98273] outline-none disabled:opacity-40 shadow-sm"
@@ -499,7 +948,7 @@ export default function GraceChat() {
 
         <button
           onClick={() => sendMessage(input)}
-          disabled={locked}
+          disabled={locked || loading || toolLoading}
           className="bg-[#2f2723] text-white rounded-2xl px-4 py-3 font-black disabled:opacity-40 shadow-sm"
         >
           Send
