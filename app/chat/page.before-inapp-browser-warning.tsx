@@ -116,9 +116,6 @@ export default function GraceChat() {
   const [voiceOn, setVoiceOn] = useState(true);
   const [toolsOpen, setToolsOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const [inAppBrowser, setInAppBrowser] = useState(false);
-  const [hideBrowserWarning, setHideBrowserWarning] = useState(false);
-  const [copiedLink, setCopiedLink] = useState(false);
 
   const [toolType, setToolType] = useState("Photo Analysis");
   const [images, setImages] = useState<string[]>([]);
@@ -181,45 +178,6 @@ export default function GraceChat() {
   }, [messages, loading, toolLoading, listening]);
 
   useEffect(() => {
-    const ua = navigator.userAgent || "";
-    const lower = ua.toLowerCase();
-
-    const isInApp =
-      lower.includes("tiktok") ||
-      lower.includes("musical_ly") ||
-      lower.includes("bytedance") ||
-      lower.includes("instagram") ||
-      lower.includes("fbav") ||
-      lower.includes("fban") ||
-      lower.includes("fb_iab") ||
-      lower.includes("messenger");
-
-    setInAppBrowser(isInApp);
-  }, []);
-
-  function openInBrowser() {
-    const url = window.location.href;
-
-    try {
-      window.open(url, "_blank", "noopener,noreferrer");
-    } catch {
-      window.location.href = url;
-    }
-  }
-
-  async function copyGraceLink() {
-    const url = window.location.href;
-
-    try {
-      await navigator.clipboard.writeText(url);
-      setCopiedLink(true);
-      setTimeout(() => setCopiedLink(false), 2500);
-    } catch {
-      alert("Copy this link: " + url);
-    }
-  }
-
- useEffect(() => {
     function updateKeyboardOffset() {
       if (!window.visualViewport) return;
 
@@ -782,8 +740,8 @@ Do not put any business name on the report except the user's provided business/n
   const quickActions = [
     {
       label: "Photo",
-      helper: "Upload a photo",
-      action: () => uploadInputRef.current?.click(),
+      helper: "Upload or take a photo",
+      action: () => cameraInputRef.current?.click(),
     },
     {
       label: "Plan",
@@ -878,47 +836,7 @@ Do not put any business name on the report except the user's provided business/n
             </div>
           </header>
 
-          {inAppBrowser && !hideBrowserWarning && (
-            <div className="relative z-20 mt-4 rounded-[1.5rem] border border-[#efb99f] bg-white/95 p-4 shadow-xl">
-              <div className="flex items-start gap-3">
-                <div className="text-2xl">⚠️</div>
-
-                <div className="flex-1">
-                  <p className="text-sm font-black text-[#6f3b2a]">
-                    Open Grace in your browser for full features
-                  </p>
-                  <p className="mt-1 text-xs leading-5 text-[#8b6a5f]">
-                    TikTok, Facebook, and Instagram sometimes block photo upload, voice, and PDF downloads inside their app browser.
-                  </p>
-
-                  <div className="mt-3 grid grid-cols-3 gap-2">
-                    <button
-                      onClick={openInBrowser}
-                      className="rounded-2xl bg-[#2f2723] px-3 py-3 text-xs font-black text-white"
-                    >
-                      Open Browser
-                    </button>
-
-                    <button
-                      onClick={copyGraceLink}
-                      className="rounded-2xl border border-[#efb99f] bg-[#fff7f1] px-3 py-3 text-xs font-black text-[#6f3b2a]"
-                    >
-                      {copiedLink ? "Copied" : "Copy Link"}
-                    </button>
-
-                    <button
-                      onClick={() => setHideBrowserWarning(true)}
-                      className="rounded-2xl border border-[#efb99f] bg-[#fff7f1] px-3 py-3 text-xs font-black text-[#6f3b2a]"
-                    >
-                      Continue
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
- <div className="relative z-10 mt-5 flex flex-col items-center text-center">
+          <div className="relative z-10 mt-5 flex flex-col items-center text-center">
             <div
               className={`relative w-[31vh] max-w-[310px] aspect-square rounded-[2.4rem] overflow-hidden border border-white/80 bg-white shadow-2xl ${
                 listening || loading || toolLoading
@@ -1075,14 +993,7 @@ Do not put any business name on the report except the user's provided business/n
                   onClick={() => uploadInputRef.current?.click()}
                   className="flex-1 rounded-2xl border border-[#f1c7b4] bg-white px-3 py-3 text-sm font-bold text-[#6f3b2a]"
                 >
-                  Upload
-                </button>
-
-                <button
-                  onClick={() => cameraInputRef.current?.click()}
-                  className="flex-1 rounded-2xl border border-[#f1c7b4] bg-white px-3 py-3 text-sm font-bold text-[#6f3b2a]"
-                >
-                  Camera
+                  Upload Photos
                 </button>
                 <button
                   onClick={() => runGraceTool(input || "Use the uploaded photo and create useful ideas, observations, and next steps.", toolType)}
