@@ -197,39 +197,13 @@ export default function GraceChat() {
     setInAppBrowser(isInApp);
   }, []);
 
-  async function openInBrowser() {
+  function openInBrowser() {
     const url = window.location.href;
 
     try {
-      await navigator.clipboard.writeText(url);
-      setCopiedLink(true);
-      setTimeout(() => setCopiedLink(false), 3500);
-    } catch {}
-
-    const ua = navigator.userAgent.toLowerCase();
-    const isAndroid = ua.includes("android");
-    const cleanUrl = url.replace(/^https?:\/\//, "");
-
-    try {
-      if (isAndroid) {
-        window.location.href =
-          "intent://" +
-          cleanUrl +
-          "#Intent;scheme=https;package=com.android.chrome;end";
-        return;
-      }
-
       window.open(url, "_blank", "noopener,noreferrer");
-
-      setTimeout(() => {
-        alert(
-          "TikTok may block this button. I copied the Grace link for you. Tap the three dots in TikTok and choose Open in browser, or paste the copied link into Safari/Chrome."
-        );
-      }, 700);
     } catch {
-      alert(
-        "TikTok blocked opening your browser. I copied the Grace link for you. Tap the three dots in TikTok and choose Open in browser, or paste the link into Safari/Chrome."
-      );
+      window.location.href = url;
     }
   }
 
@@ -914,7 +888,7 @@ Do not put any business name on the report except the user's provided business/n
                     Open Grace in your browser for full features
                   </p>
                   <p className="mt-1 text-xs leading-5 text-[#8b6a5f]">
-                   TikTok, Facebook, and Instagram sometimes block photo upload, voice, and PDF downloads inside their app browser. If the button does not open, use the three dots and choose Open in browser.
+                    TikTok, Facebook, and Instagram sometimes block photo upload, voice, and PDF downloads inside their app browser.
                   </p>
 
                   <div className="mt-3 grid grid-cols-3 gap-2">
@@ -922,7 +896,7 @@ Do not put any business name on the report except the user's provided business/n
                       onClick={openInBrowser}
                       className="rounded-2xl bg-[#2f2723] px-3 py-3 text-xs font-black text-white"
                     >
-                      Open / Copy
+                      Open Browser
                     </button>
 
                     <button
