@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 type Message = {
   role: "user" | "assistant" | "assistant-image";
   content?: string;
- image?: string;
+  image?: string;
 };
 
 const FREE_LIMIT = 50;
@@ -16,38 +16,47 @@ function trackEvent(name: string) {
   }
 }
 
-function personalityPrompt(mode: string) {
-  switch (mode) {
-    case "Chill":
-      return "Chill Grace: calm, relaxed, easygoing, warm, simple.";
-    case "Motivational":
-      return "Motivational Grace: uplifting, confident, encouraging, energetic, positive, never fake.";
-    case "Late Night":
-      return "Late Night Grace: soft, thoughtful, calm, gentle, good for quiet late-night conversations.";
-    case "Real Talk":
-      return "Real Talk Grace: direct, casual, honest, blunt but caring. Mild adult language allowed sometimes. Never hateful or unsafe.";
-    case "Unfiltered":
-      return "Unfiltered Grace: adult 18+ tone, casual, sarcastic, funny, blunt, relaxed. Mild cussing and edgy jokes allowed, but never hateful, sexual with minors, violent, abusive, or unsafe.";
-    default:
-      return "Friendly Grace: warm, helpful, safe, conversational, and easy to talk to.";
-  }
+function graceSystemPrompt() {
+  return `
+You are Grace.
+
+You are warm, useful, direct, conversational, and practical.
+You help people talk things out, plan projects, organize ideas, make decisions, create reports, build checklists, and move forward.
+
+You are not robotic.
+You are not fake.
+You do not advertise yourself as a dating app.
+You are a personal command center for real life.
+
+Match the user's tone naturally:
+- If they want calm support, be calm.
+- If they want business help, be sharp and practical.
+- If they ask for direct advice, be honest and blunt but still caring.
+- Mild casual language is okay when it fits the user's tone.
+- Never be hateful, unsafe, sexually explicit, or abusive.
+
+When the user asks for plans, reports, PDFs, photos, checklists, scopes, or business help, act like Grace can guide them inside the conversation.
+`.trim();
 }
 
 export default function GraceChat() {
   const [messages, setMessages] = useState<Message[]>([
-    { role: "assistant", content: "Hey... I’m Grace. I’m here with you. 💜" },
+    {
+      role: "assistant",
+      content:
+        "Hey, I’m Grace. Tell me what you’re working on, what’s on your mind, or what you need help turning into a plan.",
+    },
   ]);
+
   const [input, setInput] = useState("");
   const [memory, setMemory] = useState("");
   const [paid, setPaid] = useState(false);
   const [loading, setLoading] = useState(false);
   const [listening, setListening] = useState(false);
   const [voiceOn, setVoiceOn] = useState(true);
-  const [faceMode, setFaceMode] = useState(true);
-  const [personality, setPersonality] = useState("Friendly");
- const graceAvatar = personality === "Unfiltered" ? "/grace-unfiltered.png" : "/grace-avatar.png";
- const [generatedPhoto, setGeneratedPhoto] = useState<string | null>(null);
- const [generatedImages, setGeneratedImages] = useState<string[]>([]);
+  const [toolsOpen, setToolsOpen] = useState(false);
+
+  const graceAvatar = "/grace-avatar.png";
 
   const messagesRef = useRef<Message[]>(messages);
   const memoryRef = useRef("");
@@ -61,7 +70,6 @@ export default function GraceChat() {
     const savedMemory = localStorage.getItem("grace_memory");
     const savedPaid = localStorage.getItem("sora_paid");
     const founderAccess = localStorage.getItem("grace_founder");
-    const savedPersonality = localStorage.getItem("grace_personality");
 
     if (savedMessages) setMessages(JSON.parse(savedMessages));
 
@@ -71,7 +79,6 @@ export default function GraceChat() {
     }
 
     if (savedPaid === "true" || founderAccess === "true") setPaid(true);
-    if (savedPersonality) setPersonality(savedPersonality);
   }, []);
 
   useEffect(() => {
@@ -83,12 +90,6 @@ export default function GraceChat() {
     }, 100);
   }, [messages, loading, listening]);
 
-  useEffect(() => {
-    localStorage.setItem("grace_personality", personality);
-  }, [personality]);
-
-  
-  // grace-mobile-keyboard-fix
   useEffect(() => {
     function updateKeyboardOffset() {
       if (!window.visualViewport) return;
@@ -114,23 +115,9 @@ export default function GraceChat() {
     };
   }, []);
 
- const userCount = messages.filter((m) => m.role === "user").length;
+  const userCount = messages.filter((m) => m.role === "user").length;
   const freeLeft = Math.max(FREE_LIMIT - userCount, 0);
   const locked = !paid && freeLeft <= 0;
-
-  const freeModes = ["Friendly", "Chill", "Motivational", "Late Night"];
-  const proModes = ["Real Talk", "Unfiltered"];
-
-  function choosePersonality(mode: string) {
-    if (proModes.includes(mode) && !paid) {
-      trackEvent("pro_personality_clicked");
-      window.location.href = "/pay";
-      return;
-    }
-
-    setPersonality(mode);
-    trackEvent("personality_changed");
-  }
 
   function updateMemory(text: string) {
     const lower = text.toLowerCase();
@@ -147,7 +134,10 @@ export default function GraceChat() {
       lower.includes("i like") ||
       lower.includes("i struggle") ||
       lower.includes("i miss") ||
-      lower.includes("i love");
+      lower.includes("i love") ||
+      lower.includes("my business") ||
+      lower.includes("my company") ||
+      lower.includes("my project");
 
     if (!important) return;
 
@@ -189,105 +179,7 @@ export default function GraceChat() {
     }
   }
 
- 
-  function wantsGracePhoto(text: string) {
-    const lower = text.toLowerCase();
-    return (
-      lower.includes("photo") ||
-      lower.includes("picture") ||
-      lower.includes("image") ||
-      lower.includes("generate") ||
-      lower.includes("show me") ||
-      lower.includes("make a pic") ||
-      lower.includes("make me a pic")
-    );
-  }
-
- 
-  function showGracePhotoModal(src: string) {
-    if (typeof window === "undefined") return;
-
-    const old = document.getElementById("grace-photo-modal");
-    if (old) old.remove();
-
-    const wrap = document.createElement("div");
-    wrap.id = "grace-photo-modal";
-    wrap.style.position = "fixed";
-    wrap.style.inset = "0";
-    wrap.style.zIndex = "999999";
-    wrap.style.background = "rgba(0,0,0,.92)";
-    wrap.style.display = "flex";
-    wrap.style.alignItems = "center";
-    wrap.style.justifyContent = "center";
-    wrap.style.padding = "18px";
-
-    wrap.innerHTML = `
-      <div style="position:relative;max-width:520px;width:100%;">
-        <button id="grace-close-photo" style="position:absolute;right:10px;top:10px;z-index:2;border:0;border-radius:999px;background:rgba(0,0,0,.7);color:white;font-size:22px;width:42px;height:42px;">×</button>
-        <img src="${src}" style="width:100%;max-height:90vh;object-fit:contain;border-radius:24px;box-shadow:0 0 70px rgba(168,85,247,.75);" />
-      </div>
-    `;
-
-    document.body.appendChild(wrap);
-
-    document.getElementById("grace-close-photo")?.addEventListener("click", () => {
-      wrap.remove();
-    });
-  }
-
- async function generateGracePhotoFromChat(text: string) {
-    const photoWindow = window.open("", "_blank");
-
-    if (photoWindow) {
-      photoWindow.document.write(`
-        <html>
-          <body style="margin:0;background:#05050a;color:white;display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;">
-            <div style="text-align:center;">
-              <h1>Grace is creating your photo...</h1>
-              <p>This may take a few seconds.</p>
-            </div>
-          </body>
-        </html>
-      `);
-    }
-
-    const res = await fetch("/api/unfiltered-image", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        prompt: text,
-        personality,
-        paid,
-      }),
-    });
-
-    const data = await res.json();
-
-    if (!res.ok || !data.image) {
-      if (photoWindow) photoWindow.close();
-      throw new Error("Grace image failed");
-    }
-
-    const src = "data:image/png;base64," + data.image;
-
-    if (photoWindow) {
-      photoWindow.document.open();
-      photoWindow.document.write(`
-        <html>
-          <body style="margin:0;background:#05050a;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:16px;">
-            <img src="${src}" style="max-width:100%;max-height:96vh;border-radius:24px;box-shadow:0 0 70px rgba(168,85,247,.75);" />
-          </body>
-        </html>
-      `);
-      photoWindow.document.close();
-    }
-
-    return src;
-  }
-
- async function sendMessage(text: string) {
+  async function sendMessage(text: string) {
     const clean = text.trim();
     if (!clean || loadingRef.current) return;
 
@@ -302,6 +194,7 @@ export default function GraceChat() {
 
     loadingRef.current = true;
     setLoading(true);
+    setToolsOpen(false);
     recognitionRef.current?.stop();
 
     const nextMessages: Message[] = [
@@ -312,33 +205,6 @@ export default function GraceChat() {
     setMessages(nextMessages);
     setInput("");
 
-    if (personality === "Unfiltered" && paid && wantsGracePhoto(clean)) {
-      try {
-        await generateGracePhotoFromChat(clean);
-        setMessages([
-          ...nextMessages,
-          {
-            role: "assistant",
-            content: "I made that for you. It opened in a new photo window.",
-          },
-        ]);
-      } catch {
-        setMessages([
-          ...nextMessages,
-          {
-            role: "assistant",
-            content: "The photo generator glitched, but I’m still here.",
-          },
-        ]);
-      }
-
-      loadingRef.current = false;
-      setLoading(false);
-      return;
-    }
-
-
-
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
@@ -346,17 +212,17 @@ export default function GraceChat() {
         body: JSON.stringify({
           messages: nextMessages.slice(-8),
           memory: memoryRef.current.slice(-1500),
-          personality: personalityPrompt(personality),
+          personality: graceSystemPrompt(),
         }),
       });
 
       const data = await res.json();
-      const reply = data.reply || "I'm here with you. Tell me more.";
+      const reply = data.reply || "I’m here. Tell me what you want to do next.";
 
       setMessages([...nextMessages, { role: "assistant", content: reply }]);
       speak(reply).catch(() => console.log("voice playback failed"));
     } catch {
-      const reply = "Something glitched, but I'm still here with you.";
+      const reply = "Something glitched, but I’m still here. Try that again.";
       setMessages([...nextMessages, { role: "assistant", content: reply }]);
       speak(reply).catch(() => console.log("voice playback failed"));
     }
@@ -397,136 +263,175 @@ export default function GraceChat() {
     recognition.start();
   }
 
-  const latestGrace =
-    [...messages].reverse().find((m) => m.role === "assistant")?.content ||
-    "I’m here with you.";
+  const quickActions = [
+    {
+      label: "Photo",
+      helper: "Analyze a photo",
+      prompt:
+        "Grace, I want to analyze a photo and turn it into useful ideas, notes, and next steps.",
+    },
+    {
+      label: "Plan",
+      helper: "Turn an idea into steps",
+      prompt:
+        "Grace, help me turn this idea into a clear plan with steps I can actually follow.",
+    },
+    {
+      label: "Report",
+      helper: "Create a clean report",
+      prompt:
+        "Grace, help me create a clean report with a summary, priorities, notes, and next steps.",
+    },
+    {
+      label: "Checklist",
+      helper: "Make a checklist",
+      prompt:
+        "Grace, make me a practical checklist for this project.",
+    },
+    {
+      label: "PDF",
+      helper: "Prepare PDF content",
+      prompt:
+        "Grace, help me format this into something I can save as a PDF.",
+    },
+    {
+      label: "Business",
+      helper: "Use my name/company",
+      prompt:
+        "Grace, help me create a report where I can add my name, business name, project name, and location.",
+    },
+  ];
 
   return (
-    <main className="min-h-[100dvh] max-min-h-[100dvh] bg-[radial-gradient(circle_at_top,#2e1065_0%,#120821_38%,#05050a_100%)] text-white flex flex-col overflow-hidden">
-      <section className="flex-1 overflow-hidden pb-28">
-        <div className="relative h-full px-5 pt-2 overflow-hidden">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(168,85,247,0.22),transparent_55%)] pointer-events-none" />
+    <main className="min-h-[100dvh] bg-[#fff7f1] text-[#2f2723] flex flex-col overflow-hidden">
+      <section className="flex-1 overflow-hidden pb-32">
+        <div className="relative h-full px-5 pt-4 overflow-hidden">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(251,146,60,0.22),transparent_42%),radial-gradient(circle_at_bottom_left,rgba(244,114,182,0.12),transparent_40%)] pointer-events-none" />
 
           <header className="relative z-10 flex justify-between items-start">
             <div>
-              <h1 className="text-3xl font-bold tracking-tight text-white drop-shadow-lg">
+              <h1 className="text-4xl font-black tracking-tight text-[#2f2723]">
                 Grace
               </h1>
-              <p className="text-zinc-300 mt-2 text-sm">
-                {paid ? "Grace Pro unlocked" : `${freeLeft} free messages left`}
-              </p>
-              {memory && <p className="text-xs text-cyan-300 mt-1">Memory active</p>}
+
+              {!paid && (
+                <p className="mt-2 inline-flex items-center rounded-full border border-[#efb99f] bg-white/75 px-4 py-2 text-sm font-semibold text-[#8b4b34] shadow-sm">
+                  {freeLeft} free messages/actions left
+                </p>
+              )}
             </div>
 
             <div className="flex gap-2">
               <button
                 onClick={() => setVoiceOn(!voiceOn)}
-                className="border border-white/10 bg-white/10 backdrop-blur rounded-2xl px-4 py-3 text-sm"
+                className="border border-[#efb99f] bg-white/75 shadow-sm backdrop-blur rounded-2xl px-4 py-3 text-sm font-bold text-[#6f3b2a]"
               >
                 Voice<br />{voiceOn ? "On" : "Off"}
               </button>
 
               <button
-                onClick={() => setFaceMode(!faceMode)}
-                className="border border-white/10 bg-white/10 backdrop-blur rounded-2xl px-4 py-3 text-sm"
+                onClick={() => setToolsOpen(!toolsOpen)}
+                className="border border-[#efb99f] bg-[#f3a683] shadow-sm rounded-2xl px-4 py-3 text-sm font-black text-white"
               >
-                Face<br />{faceMode ? "On" : "Off"}
+                Tools<br />Menu
               </button>
             </div>
           </header>
 
-          {faceMode && (
-            <div className="relative z-10 mt-2 flex flex-col items-center text-center">
-              <div
-                className={`relative w-[18vh] max-w-[170px] aspect-square rounded-[2rem] overflow-hidden border border-white/10 ${
-                  listening || loading
-                    ? "shadow-[0_0_80px_rgba(168,85,247,0.95)] animate-pulse"
-                    : "shadow-[0_0_50px_rgba(168,85,247,0.55)]"
+          <div className="relative z-10 mt-5 flex flex-col items-center text-center">
+            <div
+              className={`relative w-[25vh] max-w-[235px] aspect-square rounded-[2.2rem] overflow-hidden border border-white/80 bg-white shadow-2xl ${
+                listening || loading
+                  ? "shadow-[0_0_70px_rgba(251,146,60,0.65)] animate-pulse"
+                  : "shadow-[0_18px_60px_rgba(120,60,30,0.25)]"
+              }`}
+            >
+              <img
+                src={graceAvatar}
+                alt="Grace"
+                className="w-full h-full object-cover scale-110"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent" />
+            </div>
+
+            <p className="mt-4 inline-flex items-center gap-2 rounded-full bg-white/80 border border-[#efb99f] px-5 py-3 text-sm font-semibold text-[#6f3b2a] shadow-sm backdrop-blur">
+              <span
+                className={`w-3 h-3 rounded-full ${
+                  listening
+                    ? "bg-green-500"
+                    : loading
+                    ? "bg-[#f3a683]"
+                    : "bg-[#d97757]"
                 }`}
-              >
-                <img
-                  src={graceAvatar}
-                  alt="Grace"
-                  className="w-full h-full object-cover scale-110"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-transparent" />
+              />
+              {loading
+                ? "Grace is thinking..."
+                : listening
+                ? "Grace is listening..."
+                : "Ready when you are"}
+            </p>
+          </div>
+
+          {toolsOpen && (
+            <div className="relative z-20 mt-4 rounded-[2rem] border border-[#efb99f] bg-white/90 p-4 shadow-2xl backdrop-blur">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-sm font-black text-[#6f3b2a]">
+                  What do you want Grace to do?
+                </p>
+                <button
+                  onClick={() => setToolsOpen(false)}
+                  className="text-sm font-bold text-[#9a6b5a]"
+                >
+                  Close
+                </button>
               </div>
 
-              <div className="mt-2">
-                <p className="text-2xl font-semibold">
-                  {personality} Grace <span className="text-purple-300">♥</span>
-                </p>
-                <p className="mt-2 inline-flex items-center gap-2 rounded-full bg-black/35 border border-white/10 px-5 py-3 text-sm text-zinc-200 backdrop-blur">
-                  <span className={`w-3 h-3 rounded-full ${listening ? "bg-green-400" : loading ? "bg-purple-400" : "bg-cyan-300"}`} />
-                  {loading ? "Grace is thinking..." : listening ? "Grace is listening..." : "Ready when you are"}
-                </p>
+              <div className="grid grid-cols-2 gap-2">
+                {quickActions.map((item) => (
+                  <button
+                    key={item.label}
+                    disabled={locked}
+                    onClick={() => sendMessage(item.prompt)}
+                    className="rounded-2xl border border-[#f1c7b4] bg-[#fff7f1] px-3 py-3 text-left shadow-sm disabled:opacity-40"
+                  >
+                    <div className="font-black text-[#2f2723]">{item.label}</div>
+                    <div className="text-xs text-[#8b6a5f] mt-1">
+                      {item.helper}
+                    </div>
+                  </button>
+                ))}
               </div>
             </div>
           )}
 
-          <div className="relative z-10 mt-2">
-            <p className="text-xs text-purple-200 mb-2 uppercase tracking-wider">
-              Choose Grace
-            </p>
-
-            <div className="flex gap-2 overflow-x-auto pb-2">
-              {[...freeModes, ...proModes].map((mode) => {
-                const lockedMode = proModes.includes(mode) && !paid;
-
-                return (
-                  <button
-                    key={mode}
-                    onClick={() => choosePersonality(mode)}
-                    className={`min-w-[105px] whitespace-nowrap px-4 py-3 rounded-2xl text-sm border transition-all ${
-                      personality === mode
-                        ? "bg-gradient-to-r from-cyan-300 via-violet-300 to-pink-300 text-black border-transparent"
-                        : "bg-white/5 border-white/10 text-white"
-                    }`}
-                  >
-                    <div className="font-semibold">{mode}</div>
-                    {lockedMode && <div className="text-xs text-pink-300">Pro 18+</div>}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="relative z-10 mt-2 bg-black/30 border border-white/10 rounded-[2rem] p-3 backdrop-blur shadow-2xl">
-            <div className="max-h-[65vh] overflow-y-auto space-y-3 pr-1">
-              {messages.slice(-6).map((message, index) => (
+          <div className="relative z-10 mt-4 bg-white/80 border border-[#efb99f] rounded-[2rem] p-3 backdrop-blur shadow-2xl">
+            <div className="max-h-[47vh] overflow-y-auto space-y-3 pr-1">
+              {messages.slice(-8).map((message, index) => (
                 <div
                   key={index}
                   className={
                     message.role === "user"
-                      ? "ml-auto max-w-[85%] bg-gradient-to-r from-purple-600 to-violet-500 text-white rounded-3xl px-5 py-4 shadow-xl"
-                      : "mr-auto max-w-[85%] flex gap-3 items-start"
+                      ? "ml-auto max-w-[85%] bg-[#f3a683] text-white rounded-3xl px-5 py-4 shadow-lg whitespace-pre-wrap"
+                      : "mr-auto max-w-[88%] flex gap-3 items-start"
                   }
                 >
                   {message.role === "assistant-image" ? (
                     <img
                       src={message.image}
                       alt="Generated Grace"
-                      className="w-full max-w-2xl rounded-3xl border border-white/10 shadow-2xl mx-auto"
+                      className="w-full max-w-2xl rounded-3xl border border-[#efb99f] shadow-2xl mx-auto"
                     />
                   ) : message.role === "assistant" ? (
                     <>
                       <img
                         src={graceAvatar}
                         alt="Grace"
-                        className="w-11 h-11 rounded-full object-cover border border-purple-300/40"
+                        className="w-11 h-11 rounded-full object-cover border border-[#efb99f] shadow-sm"
                       />
 
-                      {(message.content || "").startsWith("GRACE_IMAGE::") ? (
-                        <img
-                          src={"data:image/png;base64," + (message.content || "").replace("GRACE_IMAGE::", "")}
-                          alt="Generated Grace"
-                          className="w-full max-w-[520px] rounded-3xl border border-white/10 shadow-2xl mx-auto"
-                        />
-                      ) : (
-                        <div className="bg-white/10 backdrop-blur border border-white/10 text-white rounded-3xl px-5 py-4 shadow-xl">
-                          {message.content}
-                        </div>
-                      )}
+                      <div className="bg-[#fffaf6] border border-[#f1c7b4] text-[#2f2723] rounded-3xl px-5 py-4 shadow-sm whitespace-pre-wrap leading-relaxed">
+                        {message.content}
+                      </div>
                     </>
                   ) : (
                     message.content
@@ -534,15 +439,14 @@ export default function GraceChat() {
                 </div>
               ))}
 
-             
               {loading && (
-                <p className="text-zinc-400 animate-pulse pl-14">
+                <p className="text-[#9a6b5a] animate-pulse pl-14">
                   Grace is thinking...
                 </p>
               )}
 
               {listening && (
-                <p className="text-cyan-300 animate-pulse pl-14">
+                <p className="text-[#d97757] animate-pulse pl-14">
                   Listening...
                 </p>
               )}
@@ -554,25 +458,26 @@ export default function GraceChat() {
       </section>
 
       {locked && (
-        <div className="p-4 border-t border-white/10 text-center bg-black/50 backdrop-blur">
-          <p className="text-zinc-300 mb-3">
-            You used your free messages. Upgrade to keep talking with Grace.
+        <div className="p-4 border-t border-[#efb99f] text-center bg-white/95 backdrop-blur">
+          <p className="text-[#6f3b2a] mb-3 font-semibold">
+            You used your 50 free messages/actions. Upgrade to keep using Grace.
           </p>
           <a
             onClick={() => trackEvent("upgrade_clicked")}
             href="/pay"
-            className="inline-block bg-gradient-to-r from-cyan-200 via-violet-200 to-pink-200 text-black rounded-2xl px-8 py-4 font-bold"
+            className="inline-block bg-[#f3a683] text-white rounded-2xl px-8 py-4 font-black shadow-lg"
           >
-            Upgrade Grace Pro
+            Upgrade — $5/month
           </a>
+          <p className="text-xs text-[#9a6b5a] mt-2">Cancel anytime.</p>
         </div>
       )}
 
-      <footer className="grace-input-bar fixed bottom-0 left-0 right-0 z-20 p-3 pb-[calc(0.5rem+env(safe-area-inset-bottom))] border-t border-white/10 bg-[#09090f]/95 backdrop-blur flex gap-2 items-end">
+      <footer className="grace-input-bar fixed bottom-0 left-0 right-0 z-30 p-3 pb-[calc(0.5rem+env(safe-area-inset-bottom))] border-t border-[#efb99f] bg-[#fff7f1]/95 backdrop-blur flex gap-2 items-end">
         <button
           onClick={tapToTalk}
           disabled={locked}
-          className="bg-gradient-to-r from-cyan-300 via-violet-300 to-pink-300 text-black px-4 py-3 rounded-2xl font-bold disabled:opacity-40"
+          className="bg-[#f3a683] text-white px-4 py-3 rounded-2xl font-black disabled:opacity-40 shadow-sm"
         >
           🎤
         </button>
@@ -589,13 +494,13 @@ export default function GraceChat() {
           disabled={locked}
           rows={1}
           placeholder="Say anything to Grace..."
-          className="flex-1 min-w-0 max-h-40 resize-none bg-white/10 backdrop-blur border border-white/10 rounded-2xl px-4 py-3 text-white placeholder:text-zinc-400 outline-none disabled:opacity-40"
+          className="flex-1 min-w-0 max-h-40 resize-none bg-white border border-[#efb99f] rounded-2xl px-4 py-3 text-[#2f2723] placeholder:text-[#a98273] outline-none disabled:opacity-40 shadow-sm"
         />
 
         <button
           onClick={() => sendMessage(input)}
           disabled={locked}
-          className="bg-gradient-to-r from-cyan-200 via-violet-200 to-pink-200 text-black rounded-2xl px-4 py-3 font-semibold disabled:opacity-40"
+          className="bg-[#2f2723] text-white rounded-2xl px-4 py-3 font-black disabled:opacity-40 shadow-sm"
         >
           Send
         </button>
