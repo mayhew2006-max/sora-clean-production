@@ -41,28 +41,17 @@ Tone:
 Warm, smart, supportive, direct, and useful.
 Do not sound robotic.
 Give clear sections and action steps.
-If photos/images are provided, you CAN see them. Analyze the visible contents directly.
-Describe what is visible, give practical observations, ideas, risks/concerns, and next steps.
-Do not say you cannot see the photo when image content is provided.
-Do not pretend certainty about hidden conditions.
+If photos are provided, describe what is visible and give practical observations, but do not pretend certainty about hidden conditions.
 `;
-
-    const hasImages = Array.isArray(images) && images.some(
-      (img) => typeof img === "string" && img.startsWith("data:image")
-    );
 
     const templatePrompt = `
 Tool selected: ${toolType || "Custom Assistant"}
-
-Image status:
-${hasImages ? "Images are attached. You can analyze the visible contents directly." : "No images are attached."}
 
 User request:
 ${userPrompt || ""}
 
 Create a complete, useful response. If this is a report, make it PDF-ready with clean headings.
 Include practical next steps, risks/concerns, useful questions to ask, and a clear summary.
-${hasImages ? "Because images are attached, do not ask the user to describe the photo. Analyze what you can see." : ""}
 `;
 
     const content: any[] = [{ type: "text", text: templatePrompt }];
@@ -72,7 +61,7 @@ ${hasImages ? "Because images are attached, do not ask the user to describe the 
         if (typeof img === "string" && img.startsWith("data:image")) {
           content.push({
             type: "image_url",
-            image_url: { url: img, detail: "high" },
+            image_url: { url: img },
           });
         }
       }

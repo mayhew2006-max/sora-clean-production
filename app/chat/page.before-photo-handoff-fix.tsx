@@ -119,7 +119,6 @@ export default function GraceChat() {
 
   const [toolType, setToolType] = useState("Photo Analysis");
   const [images, setImages] = useState<string[]>([]);
-  const imagesRef = useRef<string[]>([]);
   const [imageStatus, setImageStatus] = useState("");
   const [lastToolAnswer, setLastToolAnswer] = useState("");
 
@@ -270,12 +269,8 @@ export default function GraceChat() {
 
     try {
       const converted = await Promise.all(selected.map((file) => compressImage(file)));
-      setImages((prev) => {
-        const next = [...prev, ...converted].slice(0, 4);
-        imagesRef.current = next;
-        return next;
-      });
-      setImageStatus("Photo attached. Grace can analyze it now.");
+      setImages((prev) => [...prev, ...converted].slice(0, 4));
+      setImageStatus("Photo ready. Ask Grace what to do with it.");
       setToolsOpen(true);
     } catch {
       setImageStatus("Grace could not prepare that image. Try a different photo.");
@@ -283,11 +278,7 @@ export default function GraceChat() {
   }
 
   function removeImage(index: number) {
-    setImages((prev) => {
-      const next = prev.filter((_, i) => i !== index);
-      imagesRef.current = next;
-      return next;
-    });
+    setImages((prev) => prev.filter((_, i) => i !== index));
   }
 
   function buildEnhancedPrompt(request: string) {
@@ -319,23 +310,12 @@ Do not put any business name on the report except the user's provided business/n
 
     const request = (actionPrompt || input || "").trim();
 
-    const attachedImages = imagesRef.current.length ? imagesRef.current : images;
-
-    if (!request && attachedImages.length === 0) {
+    if (!request && images.length === 0) {
       alert("Type what you need or add a photo first.");
       return;
     }
 
     const activeTool = selectedTool || toolType;
-
-    if (
-      activeTool.toLowerCase().includes("photo") &&
-      attachedImages.length === 0
-    ) {
-      alert("Add or take a photo first so Grace can actually analyze it.");
-      setToolsOpen(true);
-      return;
-    }
 
     trackEvent("grace_tool_used");
     updateMemory(request);
@@ -346,8 +326,8 @@ Do not put any business name on the report except the user's provided business/n
     setToolsOpen(false);
 
     const userLabel =
-      attachedImages.length > 0
-        ? `${activeTool}: ${request || "Use the attached photo and give me useful ideas, notes, and next steps."}`
+      images.length > 0
+        ? `${activeTool}: ${request || "Use the uploaded photo and give me useful ideas, notes, and next steps."}`
         : `${activeTool}: ${request}`;
 
     const nextMessages: Message[] = [
@@ -368,7 +348,7 @@ Do not put any business name on the report except the user's provided business/n
         body: JSON.stringify({
           toolType: activeTool,
           userPrompt: buildEnhancedPrompt(request),
-          images: attachedImages,
+          images,
         }),
       });
 
@@ -727,44 +707,6 @@ Do not put any business name on the report except the user's provided business/n
                 : "Ready when you are"}
             </p>
           </div>
-
-          {images.length > 0 && (
-            <div className="relative z-10 mt-3 rounded-[1.5rem] border border-[#efb99f] bg-white/85 p-3 shadow-lg">
-              <div className="mb-2 flex items-center justify-between">
-                <p className="text-xs font-black text-[#6f3b2a]">
-                  Attached photos ready for Grace
-                </p>
-                <button
-                  onClick={() => {
-                    imagesRef.current = [];
-                    setImages([]);
-                    setImageStatus("");
-                  }}
-                  className="text-xs font-bold text-[#9a6b5a]"
-                >
-                  Clear
-                </button>
-              </div>
-
-              <div className="grid grid-cols-4 gap-2">
-                {images.map((img, i) => (
-                  <div key={i} className="relative">
-                    <img
-                      src={img}
-                      alt={`Attached photo ${i + 1}`}
-                      className="h-20 w-full rounded-xl object-cover border border-[#efb99f]"
-                    />
-                    <button
-                      onClick={() => removeImage(i)}
-                      className="absolute -right-1 -top-1 rounded-full bg-[#2f2723] px-2 py-0.5 text-xs text-white"
-                    >
-                      ×
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
 
           {toolsOpen && (
             <div className="relative z-20 mt-4 rounded-[2rem] border border-[#efb99f] bg-white/95 p-4 shadow-2xl backdrop-blur">
