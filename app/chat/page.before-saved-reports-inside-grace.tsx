@@ -9,18 +9,6 @@ type Message = {
   image?: string;
 };
 
-type SavedGraceReport = {
-  id: string;
-  title: string;
-  answer: string;
-  createdAt: string;
-  preparedFor?: string;
-  businessName?: string;
-  projectName?: string;
-  jobLocation?: string;
-  reportTitle?: string;
-};
-
 const FREE_LIMIT = 50;
 
 const toolTypes = [
@@ -128,8 +116,6 @@ export default function GraceChat() {
   const [voiceOn, setVoiceOn] = useState(true);
   const [toolsOpen, setToolsOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const [savedReportsOpen, setSavedReportsOpen] = useState(false);
-  const [savedReports, setSavedReports] = useState<SavedGraceReport[]>([]);
   const [webMode, setWebMode] = useState(false);
   const [inAppBrowser, setInAppBrowser] = useState(false);
   const [hideBrowserWarning, setHideBrowserWarning] = useState(false);
@@ -184,11 +170,6 @@ export default function GraceChat() {
         setJobLocation(details.jobLocation || "");
       }
     } catch {}
-
-    try {
-      const saved = localStorage.getItem("grace_saved_reports_inside");
-      if (saved) setSavedReports(JSON.parse(saved));
-    } catch {}
   }, []);
 
   useEffect(() => {
@@ -199,13 +180,6 @@ export default function GraceChat() {
       bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
     }, 100);
   }, [messages, loading, toolLoading, listening]);
-
-  useEffect(() => {
-    localStorage.setItem(
-      "grace_saved_reports_inside",
-      JSON.stringify(savedReports.slice(0, 100))
-    );
-  }, [savedReports]);
 
   useEffect(() => {
     const ua = navigator.userAgent || "";
@@ -825,72 +799,7 @@ Do not put any business name on the report except the user's provided business/n
     recognition.start();
   }
 
-  function saveCurrentResult() {
-    const answer = lastToolAnswer.trim();
-
-    if (!answer) {
-      alert("Ask Grace to create something first.");
-      return;
-    }
-
-    const title =
-      reportTitle.trim() ||
-      projectName.trim() ||
-      businessName.trim() ||
-      `Grace Report - ${new Date().toLocaleDateString()}`;
-
-    const report: SavedGraceReport = {
-      id:
-        typeof crypto !== "undefined" && "randomUUID" in crypto
-          ? crypto.randomUUID()
-          : String(Date.now()),
-      title,
-      answer,
-      createdAt: new Date().toISOString(),
-      preparedFor,
-      businessName,
-      projectName,
-      jobLocation,
-      reportTitle,
-    };
-
-    setSavedReports((prev) => [report, ...prev].slice(0, 100));
-
-    setMessages((prev) => [
-      ...prev,
-      {
-        role: "assistant",
-        content: `Saved "${title}" to your Grace reports.`,
-      },
-    ]);
-  }
-
-  function openSavedReport(report: SavedGraceReport) {
-    setLastToolAnswer(report.answer);
-    setReportTitle(report.reportTitle || report.title || "");
-    setPreparedFor(report.preparedFor || "");
-    setBusinessName(report.businessName || "");
-    setProjectName(report.projectName || "");
-    setJobLocation(report.jobLocation || "");
-    setSavedReportsOpen(false);
-    setToolsOpen(false);
-
-    setMessages((prev) => [
-      ...prev,
-      {
-        role: "assistant",
-        content: report.answer,
-      },
-    ]);
-  }
-
-  function deleteSavedReport(id: string) {
-    const ok = window.confirm("Delete this saved Grace report?");
-    if (!ok) return;
-    setSavedReports((prev) => prev.filter((r) => r.id !== id));
-  }
-
- function saveReportDetails() {
+  function saveReportDetails() {
     localStorage.setItem(
       "grace_report_details",
       JSON.stringify({
@@ -914,9 +823,8 @@ Do not put any business name on the report except the user's provided business/n
     ]);
   }
 
- function downloadPDF(overrideAnswer?: string, overrideTitle?: string) {
+ function downloadPDF() {
     const answer =
-      overrideAnswer ||
       lastToolAnswer ||
       [...messages].reverse().find((m) => m.role === "assistant")?.content ||
       "";
@@ -948,7 +856,6 @@ Do not put any business name on the report except the user's provided business/n
     const usableWidth = pageWidth - margin * 2;
 
     const title =
-      overrideTitle ||
       reportTitle ||
       projectName ||
       businessName ||
@@ -1070,12 +977,7 @@ Do not put any business name on the report except the user's provided business/n
     {
       label: "PDF",
       helper: "Download last result",
-      action: () => downloadPDF(),
-    },
-    {
-      label: "Saved",
-      helper: `${savedReports.length} saved`,
-      action: () => setSavedReportsOpen(!savedReportsOpen),
+      action: downloadPDF,
     },
     {
       label: "Details",
@@ -1314,18 +1216,7 @@ Do not put any business name on the report except the user's provided business/n
                 </button>
 
                 <button
-                  onClick={saveCurrentResult}
-                  disabled={loading || toolLoading}
-                  className="rounded-2xl border border-[#efb99f] bg-[#fff7f1] px-3 py-3 text-sm font-black text-[#6f3b2a] shadow-sm disabled:opacity-40"
-                >
-                  Save
-                  <span className="block text-[10px] font-semibold opacity-80">
-                    Result
-                  </span>
-                </button>
-
-                <button
-                  onClick={() => downloadPDF()}
+                  onClick={downloadPDF}
                   disabled={loading || toolLoading}
                   className="rounded-2xl bg-[#2f2723] px-3 py-3 text-sm font-black text-white shadow-sm disabled:opacity-40"
                 >
@@ -1463,98 +1354,7 @@ Do not put any business name on the report except the user's provided business/n
             </div>
           )}
 
-          {savedReportsOpen && (
-            <div className="relative z-20 mt-3 rounded-[2rem] border border-[#efb99f] bg-white/95 p-4 shadow-xl">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-black text-[#6f3b2a]">
-                    Saved Reports
-                  </p>
-                  <p className="mt-1 text-xs text-[#9a6b5a]">
-                    Reopen, read, download, or delete reports Grace has saved on this device.
-                  </p>
-                </div>
-
-                <button
-                  onClick={() => setSavedReportsOpen(false)}
-                  className="text-sm font-bold text-[#9a6b5a]"
-                >
-                  Close
-                </button>
-              </div>
-
-              {savedReports.length === 0 ? (
-                <div className="mt-4 rounded-2xl border border-[#efb99f] bg-[#fff7f1] p-4 text-sm font-semibold text-[#8b6a5f]">
-                  No saved reports yet. Create a result with Grace, then tap Save.
-                </div>
-              ) : (
-                <div className="mt-4 max-h-[42vh] space-y-3 overflow-y-auto pr-1">
-                  {savedReports.map((report) => (
-                    <div
-                      key={report.id}
-                      className="rounded-2xl border border-[#efb99f] bg-[#fff7f1] p-4 shadow-sm"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="font-black text-[#2f2723]">
-                            {report.title}
-                          </p>
-                          <p className="mt-1 text-xs text-[#9a6b5a]">
-                            {new Date(report.createdAt).toLocaleString()}
-                          </p>
-                          {report.projectName ? (
-                            <p className="mt-1 text-xs font-semibold text-[#8b6a5f]">
-                              Project: {report.projectName}
-                            </p>
-                          ) : null}
-                        </div>
-
-                        <button
-                          onClick={() => deleteSavedReport(report.id)}
-                          className="rounded-full bg-white px-3 py-1 text-xs font-black text-[#8b4b34]"
-                        >
-                          Delete
-                        </button>
-                      </div>
-
-                      <p className="mt-3 line-clamp-3 text-sm leading-6 text-[#6f3b2a]">
-                        {report.answer}
-                      </p>
-
-                      <div className="mt-3 grid grid-cols-3 gap-2">
-                        <button
-                          onClick={() => openSavedReport(report)}
-                          className="rounded-2xl bg-[#f3a683] px-3 py-3 text-xs font-black text-white"
-                        >
-                          Open
-                        </button>
-
-                        <button
-                          onClick={() =>
-                            speak(report.answer.slice(0, 1200)).catch(() =>
-                              console.log("voice playback failed")
-                            )
-                          }
-                          className="rounded-2xl border border-[#efb99f] bg-white px-3 py-3 text-xs font-black text-[#6f3b2a]"
-                        >
-                          Read
-                        </button>
-
-                        <button
-                          onClick={() => downloadPDF(report.answer, report.title)}
-                          className="rounded-2xl bg-[#2f2723] px-3 py-3 text-xs font-black text-white"
-                        >
-                          PDF
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
- {detailsOpen && (
+          {detailsOpen && (
             <div className="relative z-20 mt-3 rounded-[2rem] border border-[#efb99f] bg-white/95 p-4 shadow-xl">
               <div className="flex items-center justify-between gap-3">
                 <div>
