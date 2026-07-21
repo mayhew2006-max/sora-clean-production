@@ -116,7 +116,6 @@ export default function GraceChat() {
   const [voiceOn, setVoiceOn] = useState(true);
   const [toolsOpen, setToolsOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const [webMode, setWebMode] = useState(false);
   const [inAppBrowser, setInAppBrowser] = useState(false);
   const [hideBrowserWarning, setHideBrowserWarning] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
@@ -530,86 +529,6 @@ Do not put any business name on the report except the user's provided business/n
     );
   }
 
- function shouldUseWebQuery(text: string) {
-    const lower = text.toLowerCase();
-
-    if (webMode) return true;
-
-    return (
-      lower.includes("latest") ||
-      lower.includes("current") ||
-      lower.includes("today") ||
-      lower.includes("news") ||
-      lower.includes("update") ||
-      lower.includes("compare") ||
-      lower.includes("comparison") ||
-      lower.includes(" vs ") ||
-      lower.startswith("vs ") ||
-      lower.includes("price") ||
-      lower.includes("pricing") ||
-      lower.includes("cost") ||
-      lower.includes("best") ||
-      lower.includes("top ") ||
-      lower.includes("find ") ||
-      lower.includes("look up") ||
-      lower.includes("search ") ||
-      lower.includes("search for") ||
-      lower.includes("what does the website say") ||
-      lower.includes("online") ||
-      lower.includes("hours") ||
-      lower.includes("location")
-    );
-  }
-
-  async function runGraceWebSearch(text: string) {
-    const clean = text.trim();
-    if (!clean || loadingRef.current || locked) return;
-
-    trackEvent("grace_web_search");
-    updateMemory(clean);
-
-    loadingRef.current = true;
-    setToolLoading(true);
-    setLoading(true);
-    setToolsOpen(false);
-
-    const nextMessages: Message[] = [
-      ...messagesRef.current,
-      { role: "user", content: clean },
-    ];
-
-    setMessages(nextMessages);
-    setInput("");
-
-    try {
-      const res = await fetch("/api/web", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          query: clean,
-          memory: memoryRef.current.slice(-1500),
-        }),
-      });
-
-      const data = await res.json();
-      const reply =
-        data?.reply || "I looked, but I couldn’t pull together a good answer yet.";
-
-      setLastToolAnswer(reply);
-      setMessages([...nextMessages, { role: "assistant", content: reply }]);
-      speak(reply.slice(0, 900)).catch(() => console.log("voice playback failed"));
-    } catch (err: any) {
-      const reply =
-        "Grace hit a glitch while checking the web: " +
-        (err?.message || "Unknown error");
-      setMessages([...nextMessages, { role: "assistant", content: reply }]);
-    }
-
-    loadingRef.current = false;
-    setToolLoading(false);
-    setLoading(false);
-  }
-
  async function sendMessage(text: string) {
     const clean = text.trim();
     if (!clean || loadingRef.current) return;
@@ -674,11 +593,6 @@ Do not put any business name on the report except the user's provided business/n
 
     if (shouldUsePhotoTool(clean)) {
       await runGraceTool(clean, "Photo Analysis");
-      return;
-    }
-
-    if (shouldUseWebQuery(clean)) {
-      await runGraceWebSearch(clean);
       return;
     }
 
@@ -925,13 +839,6 @@ Do not put any business name on the report except the user's provided business/n
         ),
     },
     {
-      label: "Web",
-      helper: webMode ? "Web mode is on" : "Use current web lookup",
-      action: () => {
-        setWebMode((v) => !v);
-      },
-    },
-    {
       label: "PDF",
       helper: "Download last result",
       action: downloadPDF,
@@ -976,12 +883,6 @@ Do not put any business name on the report except the user's provided business/n
               {!paid && (
                 <p className="mt-2 inline-flex items-center rounded-full border border-[#efb99f] bg-white/75 px-4 py-2 text-sm font-semibold text-[#8b4b34] shadow-sm">
                   {freeLeft} free messages/actions left
-                </p>
-              )}
-
-              {webMode && (
-                <p className="mt-2 inline-flex items-center rounded-full border border-[#efb99f] bg-[#fff1e8] px-4 py-2 text-xs font-black uppercase tracking-wide text-[#8b4b34] shadow-sm">
-                  Web mode on
                 </p>
               )}
             </div>
