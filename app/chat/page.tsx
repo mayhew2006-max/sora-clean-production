@@ -544,7 +544,7 @@ Do not put any business name on the report except the user's provided business/n
       lower.includes("compare") ||
       lower.includes("comparison") ||
       lower.includes(" vs ") ||
-      lower.startswith("vs ") ||
+      lower.startsWith("vs ") ||
       lower.includes("price") ||
       lower.includes("pricing") ||
       lower.includes("cost") ||
