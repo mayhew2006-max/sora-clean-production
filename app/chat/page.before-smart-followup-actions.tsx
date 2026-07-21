@@ -624,49 +624,6 @@ Do not put any business name on the report except the user's provided business/n
 
     if (
       lastToolAnswer &&
-      (lower.includes("make a plan") ||
-        lower.includes("turn this into a plan") ||
-        lower.includes("turn that into a plan") ||
-        lower.includes("action plan") ||
-        lower.includes("next steps"))
-    ) {
-      await runGraceTool(
-        `Turn this into a clear action plan with steps, priorities, and next moves:\n\n${lastToolAnswer}`,
-        "Project Plan"
-      );
-      return;
-    }
-
-    if (
-      lastToolAnswer &&
-      (lower.includes("compare") ||
-        lower.includes("pros and cons") ||
-        lower.includes("pros/cons") ||
-        lower.includes("which is better"))
-    ) {
-      await runGraceTool(
-        `Compare the main options, pros, cons, best use cases, and give a recommendation based on this:\n\n${lastToolAnswer}`,
-        "Custom PDF"
-      );
-      return;
-    }
-
-    if (
-      lastToolAnswer &&
-      (lower.includes("checklist") ||
-        lower.includes("to do list") ||
-        lower.includes("todo list") ||
-        lower.includes("task list"))
-    ) {
-      await runGraceTool(
-        `Turn this into a practical checklist I can follow:\n\n${lastToolAnswer}`,
-        "Maintenance Checklist"
-      );
-      return;
-    }
-
-    if (
-      lastToolAnswer &&
       (lower.includes("pdf") ||
         lower.includes("download") ||
         lower.includes("save this") ||
@@ -1163,62 +1120,13 @@ Do not put any business name on the report except the user's provided business/n
           {lastToolAnswer && !locked && (
             <div className="relative z-20 mt-3 rounded-[1.5rem] border border-[#efb99f] bg-white/90 p-3 shadow-xl backdrop-blur">
               <p className="mb-2 text-xs font-black uppercase tracking-wide text-[#8b4b34]">
-                Turn Grace’s answer into action
+                Grace finished this result
               </p>
 
               <div className="grid grid-cols-3 gap-2">
                 <button
-                  onClick={() =>
-                    runGraceTool(
-                      `Turn this into a clear action plan with steps, priorities, and next moves:\n\n${lastToolAnswer}`,
-                      "Project Plan"
-                    )
-                  }
-                  disabled={loading || toolLoading}
-                  className="rounded-2xl bg-[#f3a683] px-3 py-3 text-sm font-black text-white shadow-sm disabled:opacity-40"
-                >
-                  Plan
-                  <span className="block text-[10px] font-semibold opacity-85">
-                    Next steps
-                  </span>
-                </button>
-
-                <button
-                  onClick={() =>
-                    runGraceTool(
-                      `Compare the main options, pros, cons, best use cases, and give a recommendation based on this:\n\n${lastToolAnswer}`,
-                      "Custom PDF"
-                    )
-                  }
-                  disabled={loading || toolLoading}
-                  className="rounded-2xl border border-[#efb99f] bg-[#fff7f1] px-3 py-3 text-sm font-black text-[#6f3b2a] shadow-sm disabled:opacity-40"
-                >
-                  Compare
-                  <span className="block text-[10px] font-semibold opacity-80">
-                    Pros/cons
-                  </span>
-                </button>
-
-                <button
-                  onClick={() =>
-                    runGraceTool(
-                      `Turn this into a practical checklist I can follow:\n\n${lastToolAnswer}`,
-                      "Maintenance Checklist"
-                    )
-                  }
-                  disabled={loading || toolLoading}
-                  className="rounded-2xl border border-[#efb99f] bg-[#fff7f1] px-3 py-3 text-sm font-black text-[#6f3b2a] shadow-sm disabled:opacity-40"
-                >
-                  Checklist
-                  <span className="block text-[10px] font-semibold opacity-80">
-                    To-do list
-                  </span>
-                </button>
-
-                <button
                   onClick={downloadPDF}
-                  disabled={loading || toolLoading}
-                  className="rounded-2xl bg-[#2f2723] px-3 py-3 text-sm font-black text-white shadow-sm disabled:opacity-40"
+                  className="rounded-2xl bg-[#2f2723] px-3 py-3 text-sm font-black text-white shadow-sm"
                 >
                   PDF
                   <span className="block text-[10px] font-semibold opacity-80">
@@ -1232,8 +1140,7 @@ Do not put any business name on the report except the user's provided business/n
                       console.log("voice playback failed")
                     )
                   }
-                  disabled={loading || toolLoading}
-                  className="rounded-2xl border border-[#efb99f] bg-[#fff7f1] px-3 py-3 text-sm font-black text-[#6f3b2a] shadow-sm disabled:opacity-40"
+                  className="rounded-2xl border border-[#efb99f] bg-[#fff7f1] px-3 py-3 text-sm font-black text-[#6f3b2a] shadow-sm"
                 >
                   Read
                   <span className="block text-[10px] font-semibold opacity-80">
@@ -1243,8 +1150,7 @@ Do not put any business name on the report except the user's provided business/n
 
                 <button
                   onClick={() => setDetailsOpen(true)}
-                  disabled={loading || toolLoading}
-                  className="rounded-2xl border border-[#efb99f] bg-[#fff7f1] px-3 py-3 text-sm font-black text-[#6f3b2a] shadow-sm disabled:opacity-40"
+                  className="rounded-2xl border border-[#efb99f] bg-[#fff7f1] px-3 py-3 text-sm font-black text-[#6f3b2a] shadow-sm"
                 >
                   Details
                   <span className="block text-[10px] font-semibold opacity-80">
@@ -1254,7 +1160,7 @@ Do not put any business name on the report except the user's provided business/n
               </div>
 
               <p className="mt-2 text-xs text-[#9a6b5a]">
-                You can also type “make a plan,” “compare this,” “make a checklist,” “make that a PDF,” or “read that out loud.”
+                You can also type “make that a PDF” or “read that out loud.”
               </p>
             </div>
           )}
