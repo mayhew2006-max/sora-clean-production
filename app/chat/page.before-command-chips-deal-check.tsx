@@ -24,7 +24,6 @@ type SavedGraceReport = {
 const FREE_LIMIT = 50;
 
 const toolTypes = [
-  "Deal Check",
   "Photo Analysis",
   "Project Plan",
   "Work Scope",
@@ -553,17 +552,7 @@ Do not put any business name on the report except the user's provided business/n
       lower.includes("pdf") ||
       lower.includes("checklist") ||
       lower.includes("ideas") ||
-      lower.includes("next steps") ||
-      lower.includes("good deal") ||
-      lower.includes("bad deal") ||
-      lower.includes("fair deal") ||
-      lower.includes("marketplace") ||
-      lower.includes("facebook marketplace") ||
-      lower.includes("fb marketplace") ||
-      lower.includes("seller") ||
-      lower.includes("asking price") ||
-      lower.includes("worth it") ||
-      lower.includes("red flags")
+      lower.includes("next steps")
     );
   }
 
@@ -749,19 +738,6 @@ Do not put any business name on the report except the user's provided business/n
       speak(lastToolAnswer.slice(0, 1200)).catch(() =>
         console.log("voice playback failed")
       );
-      return;
-    }
-
-    if (
-      (imagesRef.current.length ? imagesRef.current : images).length > 0 &&
-      (lower.includes("deal") ||
-        lower.includes("marketplace") ||
-        lower.includes("seller") ||
-        lower.includes("asking price") ||
-        lower.includes("worth it") ||
-        lower.includes("red flags"))
-    ) {
-      await runDealCheck(clean);
       return;
     }
 
@@ -1051,61 +1027,11 @@ Do not put any business name on the report except the user's provided business/n
     doc.save(`${fileName || "grace-report"}.pdf`);
   }
 
-  function runDealCheck(customPrompt?: string) {
-    const attachedImages = imagesRef.current.length ? imagesRef.current : images;
-
-    const prompt = `
-Deal Check Mode.
-
-The user wants to know if something looks like a good deal.
-
-Use any attached marketplace screenshot/photo and the user's text.
-
-User request:
-${customPrompt || input || "Analyze this listing/photo and tell me if it looks like a good deal."}
-
-Give the answer in this structure:
-
-1. Quick Verdict:
-Good deal / Fair deal / Risky deal / Bad deal / Not enough information.
-
-2. What I can see:
-Describe the visible item, condition, listing details, price if visible, and anything important in the photo.
-
-3. Estimated fair value:
-Give a practical estimated fair price range if possible.
-If you cannot verify current market pricing from the photo alone, say so clearly and recommend using Grace Web Search for current comps.
-
-4. Red flags:
-List visible concerns, missing information, suspicious details, condition issues, or things that need verification.
-
-5. Questions to ask the seller:
-Give specific questions the buyer should ask.
-
-6. Negotiation advice:
-Suggest a reasonable offer, a max price, and a walk-away point if enough information exists.
-
-7. Next move:
-Tell the user what to do before buying.
-
-Be practical, direct, and useful.
-Do not pretend certainty.
-Do not say you cannot see the photo if images are attached.
-`.trim();
-
-    runGraceTool(prompt, "Deal Check");
-  }
-
- const quickActions = [
+  const quickActions = [
     {
       label: "Photo",
       helper: "Upload a photo",
       action: () => uploadInputRef.current?.click(),
-    },
-    {
-      label: "Deal",
-      helper: "Good deal or red flags",
-      action: () => runDealCheck(),
     },
     {
       label: "Plan",
@@ -1218,83 +1144,7 @@ Do not say you cannot see the photo if images are attached.
             </div>
           </header>
 
-          <div className="relative z-10 mt-4 overflow-x-auto pb-1">
-            <div className="flex min-w-max gap-2">
-              <button
-                onClick={() =>
-                  images.length > 0
-                    ? runGraceTool(
-                        "Analyze the attached photo and give useful observations, ideas, concerns, and next steps.",
-                        "Photo Analysis"
-                      )
-                    : uploadInputRef.current?.click()
-                }
-                disabled={locked || loading || toolLoading}
-                className="rounded-full border border-[#efb99f] bg-white/80 px-4 py-2 text-sm font-black text-[#6f3b2a] shadow-sm disabled:opacity-40"
-              >
-                📷 Analyze Photo
-              </button>
-
-              <button
-                onClick={() =>
-                  images.length > 0
-                    ? runDealCheck("Is this a good deal? Analyze the attached listing/photo, spot red flags, estimate fair value, and give questions to ask the seller.")
-                    : uploadInputRef.current?.click()
-                }
-                disabled={locked || loading || toolLoading}
-                className="rounded-full border border-[#efb99f] bg-white/80 px-4 py-2 text-sm font-black text-[#6f3b2a] shadow-sm disabled:opacity-40"
-              >
-                🏷️ Good Deal?
-              </button>
-
-              <button
-                onClick={() =>
-                  input.trim()
-                    ? runGraceTool(input, "Project Plan")
-                    : setInput("Grace, turn this idea into a clear plan with steps, priorities, and next moves.")
-                }
-                disabled={locked || loading || toolLoading}
-                className="rounded-full border border-[#efb99f] bg-white/80 px-4 py-2 text-sm font-black text-[#6f3b2a] shadow-sm disabled:opacity-40"
-              >
-                📋 Make Plan
-              </button>
-
-              <button
-                onClick={() => {
-                  setWebMode(true);
-                  if (!input.trim()) {
-                    setInput("Grace, search the web for ");
-                  }
-                }}
-                disabled={locked || loading || toolLoading}
-                className="rounded-full border border-[#efb99f] bg-white/80 px-4 py-2 text-sm font-black text-[#6f3b2a] shadow-sm disabled:opacity-40"
-              >
-                🌐 Web Search
-              </button>
-
-              <button
-                onClick={() =>
-                  input.trim()
-                    ? runGraceTool(input, "Site Report")
-                    : setInput("Grace, create a clean report from this.")
-                }
-                disabled={locked || loading || toolLoading}
-                className="rounded-full border border-[#efb99f] bg-white/80 px-4 py-2 text-sm font-black text-[#6f3b2a] shadow-sm disabled:opacity-40"
-              >
-                📄 Report
-              </button>
-
-              <button
-                onClick={() => downloadPDF()}
-                disabled={locked || loading || toolLoading}
-                className="rounded-full bg-[#2f2723] px-4 py-2 text-sm font-black text-white shadow-sm disabled:opacity-40"
-              >
-                PDF
-              </button>
-            </div>
-          </div>
-
- {inAppBrowser && !hideBrowserWarning && (
+          {inAppBrowser && !hideBrowserWarning && (
             <div className="relative z-20 mt-4 rounded-[1.5rem] border border-[#efb99f] bg-white/95 p-4 shadow-xl">
               <div className="flex items-start gap-3">
                 <div className="text-2xl">⚠️</div>
