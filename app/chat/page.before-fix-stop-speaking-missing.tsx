@@ -155,7 +155,6 @@ export default function GraceChat() {
   const loadingRef = useRef(false);
   const recognitionRef = useRef<any>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
- const speakingRunRef = useRef(0);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
@@ -363,18 +362,7 @@ export default function GraceChat() {
     }
   }
 
-  function stopSpeaking() {
-    speakingRunRef.current += 1;
-
-    audioRef.current?.pause();
-    audioRef.current = null;
-
-    if (typeof window !== "undefined" && "speechSynthesis" in window) {
-      speechSynthesis.cancel();
-    }
-  }
-
- async function handleImages(files: FileList | null) {
+  async function handleImages(files: FileList | null) {
     if (!files) return;
 
     const selected = Array.from(files)
