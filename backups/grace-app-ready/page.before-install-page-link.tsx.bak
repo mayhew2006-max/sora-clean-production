@@ -119,13 +119,6 @@ export default function HomePage() {
                 >
                   See What She Does
                 </a>
-
-                <Link
-                  href="/install"
-                  className="rounded-full border border-[#efb99f] bg-white/80 px-7 py-4 text-base font-black text-[#6f3b2a] shadow-sm"
-                >
-                  Install Grace
-                </Link>
               </div>
 
               <p className="mt-4 text-sm font-semibold text-[#9a6b5a]">
