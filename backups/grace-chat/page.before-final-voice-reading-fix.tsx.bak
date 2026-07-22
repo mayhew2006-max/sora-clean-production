@@ -127,7 +127,6 @@ export default function GraceChat() {
   const [toolLoading, setToolLoading] = useState(false);
   const [listening, setListening] = useState(false);
   const [voiceOn, setVoiceOn] = useState(true);
-  const [isSpeaking, setIsSpeaking] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [savedReportsOpen, setSavedReportsOpen] = useState(false);
@@ -332,50 +331,12 @@ export default function GraceChat() {
     localStorage.setItem("grace_memory", updated);
   }
 
-  function splitForSpeech(text: string) {
-    const clean = text
-      .replaceAll("###", "")
-      .replaceAll("##", "")
-      .replaceAll("**", "")
-      .replace(/\n{3,}/g, "\n\n")
-      .trim();
+  async function speak(text: string) {
+    if (!voiceOn) return;
 
-    if (!clean) return [];
-
-    const chunks: string[] = [];
-    const paragraphs = clean.split(/\n\n+/);
-
-    for (const paragraph of paragraphs) {
-      const part = paragraph.trim();
-      if (!part) continue;
-
-      if (part.length <= 800) {
-        chunks.push(part);
-        continue;
-      }
-
-      const sentences = part.match(/[^.!?]+[.!?]+|\S.+$/g) || [part];
-      let current = "";
-
-      for (const sentence of sentences) {
-        const next = `${current} ${sentence}`.trim();
-
-        if (next.length > 800 && current) {
-          chunks.push(current);
-          current = sentence.trim();
-        } else {
-          current = next;
-        }
-      }
-
-      if (current) chunks.push(current);
-    }
-
-    return chunks;
-  }
-
-  async function playSpeechChunk(text: string, runId: number) {
     try {
+      audioRef.current?.pause();
+
       const res = await fetch("/api/speak", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -389,75 +350,21 @@ export default function GraceChat() {
       const audio = new Audio(url);
 
       audioRef.current = audio;
+      audio.onended = () => URL.revokeObjectURL(url);
 
-      await new Promise<void>((resolve, reject) => {
-        audio.onended = () => {
-          URL.revokeObjectURL(url);
-          resolve();
-        };
-
-        audio.onerror = () => {
-          URL.revokeObjectURL(url);
-          reject(new Error("Audio playback failed"));
-        };
-
-        audio.play().catch(reject);
-      });
+      await audio.play();
     } catch {
       if (typeof window !== "undefined" && "speechSynthesis" in window) {
-        await new Promise<void>((resolve) => {
-          const fallback = new SpeechSynthesisUtterance(text);
-          fallback.rate = 0.9;
-          fallback.onend = () => resolve();
-          fallback.onerror = () => resolve();
-
-          if (speakingRunRef.current === runId) {
-            speechSynthesis.speak(fallback);
-          } else {
-            resolve();
-          }
-        });
-      }
-    }
-  }
-
-  async function speak(text: string) {
-    if (!voiceOn) return;
-
-    const chunks = splitForSpeech(text);
-    if (chunks.length === 0) return;
-
-    const runId = speakingRunRef.current + 1;
-    speakingRunRef.current = runId;
-
-    audioRef.current?.pause();
-
-    if (typeof window !== "undefined" && "speechSynthesis" in window) {
-      speechSynthesis.cancel();
-    }
-
-    setIsSpeaking(true);
-
-    try {
-      for (const chunk of chunks) {
-        if (speakingRunRef.current !== runId) break;
-
-        await playSpeechChunk(chunk, runId);
-
-        if (speakingRunRef.current !== runId) break;
-
-        await new Promise((resolve) => setTimeout(resolve, 120));
-      }
-    } finally {
-      if (speakingRunRef.current === runId) {
-        setIsSpeaking(false);
+        const fallback = new SpeechSynthesisUtterance(text);
+        fallback.rate = 0.9;
+        speechSynthesis.cancel();
+        speechSynthesis.speak(fallback);
       }
     }
   }
 
   function stopSpeaking() {
     speakingRunRef.current += 1;
-    setIsSpeaking(false);
 
     audioRef.current?.pause();
     audioRef.current = null;
@@ -466,7 +373,6 @@ export default function GraceChat() {
       speechSynthesis.cancel();
     }
   }
-
 
  async function handleImages(files: FileList | null) {
     if (!files) return;
@@ -627,7 +533,7 @@ Do not put any business name on the report except the user's provided business/n
 
       setLastToolAnswer(reply);
       setMessages([...nextMessages, { role: "assistant", content: reply }]);
-      speak(reply).catch(() => console.log("voice playback failed"));
+      speak(reply.slice(0, 900)).catch(() => console.log("voice playback failed"));
     } catch (err: any) {
       const reply =
         "Grace ran into an issue with that tool: " +
@@ -740,7 +646,7 @@ Do not put any business name on the report except the user's provided business/n
 
       setLastToolAnswer(reply);
       setMessages([...nextMessages, { role: "assistant", content: reply }]);
-      speak(reply).catch(() => console.log("voice playback failed"));
+      speak(reply.slice(0, 900)).catch(() => console.log("voice playback failed"));
     } catch (err: any) {
       const reply =
         "Grace hit a glitch while checking the web: " +
@@ -764,19 +670,6 @@ Do not put any business name on the report except the user's provided business/n
     }
 
     const lower = clean.toLowerCase();
-
- if (
-      lower === "stop" ||
-      lower === "stop talking" ||
-      lower === "stop reading" ||
-      lower === "pause reading" ||
-      lower === "pause voice" ||
-      lower === "be quiet"
-    ) {
-      stopSpeaking();
-      setInput("");
-      return;
-    }
 
     if (
       lastToolAnswer &&
@@ -865,7 +758,7 @@ Do not put any business name on the report except the user's provided business/n
 
       setMessages(nextMessages);
       setInput("");
-      speak(lastToolAnswer).catch(() =>
+      speak(lastToolAnswer.slice(0, 1200)).catch(() =>
         console.log("voice playback failed")
       );
       return;
@@ -1606,7 +1499,7 @@ Do not say you cannot see the photo if images are attached.
 
                 <button
                   onClick={() =>
-                    speak(lastToolAnswer).catch(() =>
+                    speak(lastToolAnswer.slice(0, 1200)).catch(() =>
                       console.log("voice playback failed")
                     )
                   }
@@ -1800,7 +1693,7 @@ Do not say you cannot see the photo if images are attached.
 
                         <button
                           onClick={() =>
-                            speak(report.answer).catch(() =>
+                            speak(report.answer.slice(0, 1200)).catch(() =>
                               console.log("voice playback failed")
                             )
                           }
