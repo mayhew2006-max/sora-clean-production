@@ -1222,8 +1222,8 @@ Do not say you cannot see the photo if images are attached.
       action: () => uploadInputRef.current?.click(),
     },
     {
-      label: "Marketplace",
-      helper: "Buy or sell smarter",
+      label: "Deal",
+      helper: "Good deal or red flags",
       action: () => runDealCheck(),
     },
     {
@@ -1330,15 +1330,90 @@ Do not say you cannot see the photo if images are attached.
 
               <button
                 onClick={() => setToolsOpen(!toolsOpen)}
-                aria-label="Open Grace menu"
-                className="border border-[#efb99f] bg-white/80 shadow-sm backdrop-blur rounded-2xl px-4 py-3 text-2xl font-black leading-none text-[#6f3b2a]"
+                className="border border-[#efb99f] bg-[#f3a683] shadow-sm rounded-2xl px-4 py-3 text-sm font-black text-white"
               >
-                ⋯
+                Tools<br />Menu
               </button>
             </div>
           </header>
 
-          {inAppBrowser && !hideBrowserWarning && (
+          <div className="relative z-10 mt-4 overflow-x-auto pb-1">
+            <div className="flex min-w-max gap-2">
+              <button
+                onClick={() =>
+                  images.length > 0
+                    ? runGraceTool(
+                        "Analyze the attached photo and give useful observations, ideas, concerns, and next steps.",
+                        "Photo Analysis"
+                      )
+                    : uploadInputRef.current?.click()
+                }
+                disabled={locked || loading || toolLoading}
+                className="rounded-full border border-[#efb99f] bg-white/80 px-4 py-2 text-sm font-black text-[#6f3b2a] shadow-sm disabled:opacity-40"
+              >
+                📷 Analyze Photo
+              </button>
+
+              <button
+                onClick={() =>
+                  images.length > 0
+                    ? runDealCheck("Is this a good deal? Analyze the attached listing/photo, spot red flags, estimate fair value, and give questions to ask the seller.")
+                    : uploadInputRef.current?.click()
+                }
+                disabled={locked || loading || toolLoading}
+                className="rounded-full border border-[#efb99f] bg-white/80 px-4 py-2 text-sm font-black text-[#6f3b2a] shadow-sm disabled:opacity-40"
+              >
+                🏷️ Good Deal?
+              </button>
+
+              <button
+                onClick={() =>
+                  input.trim()
+                    ? runGraceTool(input, "Project Plan")
+                    : setInput("Grace, turn this idea into a clear plan with steps, priorities, and next moves.")
+                }
+                disabled={locked || loading || toolLoading}
+                className="rounded-full border border-[#efb99f] bg-white/80 px-4 py-2 text-sm font-black text-[#6f3b2a] shadow-sm disabled:opacity-40"
+              >
+                📋 Make Plan
+              </button>
+
+              <button
+                onClick={() => {
+                  setWebMode(true);
+                  if (!input.trim()) {
+                    setInput("Grace, search the web for ");
+                  }
+                }}
+                disabled={locked || loading || toolLoading}
+                className="rounded-full border border-[#efb99f] bg-white/80 px-4 py-2 text-sm font-black text-[#6f3b2a] shadow-sm disabled:opacity-40"
+              >
+                🌐 Web Search
+              </button>
+
+              <button
+                onClick={() =>
+                  input.trim()
+                    ? runGraceTool(input, "Site Report")
+                    : setInput("Grace, create a clean report from this.")
+                }
+                disabled={locked || loading || toolLoading}
+                className="rounded-full border border-[#efb99f] bg-white/80 px-4 py-2 text-sm font-black text-[#6f3b2a] shadow-sm disabled:opacity-40"
+              >
+                📄 Report
+              </button>
+
+              <button
+                onClick={() => downloadPDF()}
+                disabled={locked || loading || toolLoading}
+                className="rounded-full bg-[#2f2723] px-4 py-2 text-sm font-black text-white shadow-sm disabled:opacity-40"
+              >
+                PDF
+              </button>
+            </div>
+          </div>
+
+ {inAppBrowser && !hideBrowserWarning && (
             <div className="relative z-20 mt-4 rounded-[1.5rem] border border-[#efb99f] bg-white/95 p-4 shadow-xl">
               <div className="flex items-start gap-3">
                 <div className="text-2xl">⚠️</div>
@@ -1566,7 +1641,7 @@ Do not say you cannot see the photo if images are attached.
             <div className="relative z-20 mt-4 rounded-[2rem] border border-[#efb99f] bg-white/95 p-4 shadow-2xl backdrop-blur">
               <div className="flex items-center justify-between mb-3">
                 <p className="text-sm font-black text-[#6f3b2a]">
-                  What can Grace do?
+                  What do you want Grace to do?
                 </p>
                 <button
                   onClick={() => setToolsOpen(false)}
@@ -1845,8 +1920,8 @@ Do not say you cannot see the photo if images are attached.
             </div>
           )}
 
-          <div className="relative z-10 mt-4 bg-white/70 border border-[#efb99f] rounded-[2rem] p-3 backdrop-blur shadow-xl">
-            <div className="max-h-[58vh] overflow-y-auto space-y-3 pr-1">
+          <div className="relative z-10 mt-4 bg-white/80 border border-[#efb99f] rounded-[2rem] p-3 backdrop-blur shadow-2xl">
+            <div className="max-h-[43vh] overflow-y-auto space-y-3 pr-1">
               {messages.slice(-10).map((message, index) => (
                 <div
                   key={index}
@@ -1937,10 +2012,9 @@ Do not say you cannot see the photo if images are attached.
         <button
           onClick={() => setToolsOpen(!toolsOpen)}
           disabled={locked || loading || toolLoading}
-          aria-label="Open Grace menu"
-          className="bg-white border border-[#efb99f] text-[#6f3b2a] px-4 py-3 rounded-2xl text-xl leading-none font-black disabled:opacity-40 shadow-sm"
+          className="bg-white border border-[#efb99f] text-[#6f3b2a] px-4 py-3 rounded-2xl font-black disabled:opacity-40 shadow-sm"
         >
-          ⋯
+          +
         </button>
 
         <textarea
