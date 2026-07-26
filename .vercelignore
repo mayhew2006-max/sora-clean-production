@@ -1,0 +1,15 @@
+node_modules
+.next
+build
+gradle
+.gradle
+backups
+docs
+android.keystore
+app-release-signed.apk
+app-release-signed.apk.idsig
+app-release-unsigned-aligned.apk
+app-release-bundle.aab
+*.apk
+*.aab
+*.keystore
