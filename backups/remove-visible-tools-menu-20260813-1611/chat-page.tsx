@@ -1436,7 +1436,7 @@ Do not say you cannot see the photo if images are attached.
             <div className="relative z-10 mt-3 rounded-[1.5rem] border border-[#efb99f] bg-white/85 p-3 shadow-lg">
               <div className="mb-2 flex items-center justify-between">
                 <p className="text-xs font-black text-[#6f3b2a]">
-                  Photos attached
+                  Attached photos ready for Grace
                 </p>
                 <button
                   onClick={() => {
@@ -1520,7 +1520,125 @@ Do not say you cannot see the photo if images are attached.
             </div>
           )}
 
- {/* Tools are now command-based and hidden behind Grace. */}
+ {toolsOpen && (
+            <div className="relative z-20 mt-4 rounded-[2rem] border border-[#efb99f] bg-white/95 p-4 shadow-2xl backdrop-blur">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <p className="text-sm font-black text-[#6f3b2a]">
+                    Grace Menu
+                  </p>
+                  <p className="mt-1 text-xs text-[#9a6b5a]">
+                    Attach a photo, manage saved work, or turn on web lookup. You can ask Grace for plans, PDFs, reports, checklists, comparisons, and Marketplace help directly in chat.
+                  </p>
+                </div>
+
+                <button
+                  onClick={() => setToolsOpen(false)}
+                  className="text-sm font-bold text-[#9a6b5a]"
+                >
+                  Close
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  disabled={locked || toolLoading || loading}
+                  onClick={() => {
+                    setToolsOpen(false);
+                    uploadInputRef.current?.click();
+                  }}
+                  className="rounded-2xl border border-[#f1c7b4] bg-[#fff7f1] px-3 py-4 text-left shadow-sm disabled:opacity-40"
+                >
+                  <div className="font-black text-[#2f2723]">Upload Photo</div>
+                  <div className="text-xs text-[#8b6a5f] mt-1">
+                    Add a photo for Grace
+                  </div>
+                </button>
+
+                <button
+                  disabled={locked || toolLoading || loading}
+                  onClick={() => {
+                    setToolsOpen(false);
+                    cameraInputRef.current?.click();
+                  }}
+                  className="rounded-2xl border border-[#f1c7b4] bg-[#fff7f1] px-3 py-4 text-left shadow-sm disabled:opacity-40"
+                >
+                  <div className="font-black text-[#2f2723]">Camera</div>
+                  <div className="text-xs text-[#8b6a5f] mt-1">
+                    Take a new photo
+                  </div>
+                </button>
+
+                <button
+                  disabled={locked || toolLoading || loading}
+                  onClick={() => {
+                    setToolsOpen(false);
+                    setWebMode((v) => !v);
+                  }}
+                  className="rounded-2xl border border-[#f1c7b4] bg-[#fff7f1] px-3 py-4 text-left shadow-sm disabled:opacity-40"
+                >
+                  <div className="font-black text-[#2f2723]">
+                    Web Lookup
+                  </div>
+                  <div className="text-xs text-[#8b6a5f] mt-1">
+                    {webMode ? "Currently on" : "Use current info"}
+                  </div>
+                </button>
+
+                <button
+                  disabled={locked || toolLoading || loading}
+                  onClick={() => {
+                    setToolsOpen(false);
+                    setSavedReportsOpen(!savedReportsOpen);
+                  }}
+                  className="rounded-2xl border border-[#f1c7b4] bg-[#fff7f1] px-3 py-4 text-left shadow-sm disabled:opacity-40"
+                >
+                  <div className="font-black text-[#2f2723]">Saved</div>
+                  <div className="text-xs text-[#8b6a5f] mt-1">
+                    {savedReports.length} saved reports
+                  </div>
+                </button>
+
+                <button
+                  disabled={locked || toolLoading || loading}
+                  onClick={() => {
+                    setToolsOpen(false);
+                    setDetailsOpen(!detailsOpen);
+                  }}
+                  className="rounded-2xl border border-[#f1c7b4] bg-[#fff7f1] px-3 py-4 text-left shadow-sm disabled:opacity-40"
+                >
+                  <div className="font-black text-[#2f2723]">PDF Details</div>
+                  <div className="text-xs text-[#8b6a5f] mt-1">
+                    Report header fields
+                  </div>
+                </button>
+
+                <button
+                  disabled={locked || toolLoading || loading}
+                  onClick={() => {
+                    setToolsOpen(false);
+                    downloadPDF();
+                  }}
+                  className="rounded-2xl border border-[#f1c7b4] bg-[#fff7f1] px-3 py-4 text-left shadow-sm disabled:opacity-40"
+                >
+                  <div className="font-black text-[#2f2723]">PDF</div>
+                  <div className="text-xs text-[#8b6a5f] mt-1">
+                    Download last result
+                  </div>
+                </button>
+              </div>
+
+              {imageStatus && (
+                <p className="mt-3 rounded-2xl border border-[#efb99f] bg-[#fff7f1] px-4 py-3 text-xs font-semibold text-[#8b6a5f]">
+                  {imageStatus}
+                </p>
+              )}
+
+              <div className="mt-3 rounded-2xl bg-[#fff7f1] border border-[#f1c7b4] p-3 text-xs leading-5 text-[#8b6a5f]">
+                Try: “analyze this photo,” “is this a good deal,” “make that a PDF,” “read that out loud,” “turn this into a checklist,” or “compare this.”
+              </div>
+            </div>
+          )}
 
  {savedReportsOpen && (
             <div className="relative z-20 mt-3 rounded-[2rem] border border-[#efb99f] bg-white/95 p-4 shadow-xl">
@@ -1792,20 +1910,20 @@ Do not say you cannot see the photo if images are attached.
 
  <footer className="grace-input-bar fixed bottom-0 left-0 right-0 z-30 p-3 pb-[calc(0.5rem+env(safe-area-inset-bottom))] border-t border-[#efb99f] bg-[#fff7f1]/95 backdrop-blur flex gap-2 items-end">
         <button
-          onClick={() => uploadInputRef.current?.click()}
-          disabled={locked || loading || toolLoading}
-          aria-label="Upload photo"
-          className="bg-white border border-[#efb99f] text-[#6f3b2a] px-4 py-3 rounded-2xl text-xl leading-none font-black disabled:opacity-40 shadow-sm"
-        >
-          +
-        </button>
-
-        <button
           onClick={tapToTalk}
           disabled={locked || loading || toolLoading}
           className="bg-[#f3a683] text-white px-4 py-3 rounded-2xl font-black disabled:opacity-40 shadow-sm"
         >
           🎤
+        </button>
+
+        <button
+          onClick={() => setToolsOpen(!toolsOpen)}
+          disabled={locked || loading || toolLoading}
+          aria-label="Open Grace menu"
+          className="bg-white border border-[#efb99f] text-[#6f3b2a] px-4 py-3 rounded-2xl text-xl leading-none font-black disabled:opacity-40 shadow-sm"
+        >
+          ⋯
         </button>
 
         <textarea
