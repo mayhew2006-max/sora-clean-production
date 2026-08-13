@@ -30,7 +30,7 @@ export async function POST(req: Request) {
       body: JSON.stringify({
         api_key: process.env.TAVILY_API_KEY,
         query,
-        search_depth: "advanced",
+        search_depth: "basic",
         max_results: 5,
         include_answer: false,
         include_raw_content: false,
@@ -64,9 +64,9 @@ Snippet: ${r?.content || "No summary available"}
         Authorization: "Bearer " + process.env.OPENAI_API_KEY,
       },
       body: JSON.stringify({
-        model: process.env.OPENAI_MODEL || "gpt-4o-mini",
-        temperature: 0.20,
-        max_tokens: 1400,
+        model: "gpt-4o-mini",
+        temperature: 0.45,
+        max_tokens: 900,
         messages: [
           {
             role: "system",
@@ -80,14 +80,6 @@ You are helping with a WEB SEARCH result.
 
 Instructions:
 - Answer the user's question using the search results provided.
-- Do not simply summarize links.
-- Compare the strongest possibilities.
-- Give the closest-to-correct answer first.
-- Use confidence percentages/ranges when useful.
-- Separate facts from assumptions.
-- Mention uncertainty when the search results are incomplete or conflicting.
-- Give practical next steps.
-- Do not use generic filler.
 - Be clear and useful.
 - If the user asked for a comparison, compare clearly.
 - If the user asked for a recommendation, give one and explain why.
