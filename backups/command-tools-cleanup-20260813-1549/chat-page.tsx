@@ -490,7 +490,7 @@ export default function GraceChat() {
         return next;
       });
       setImageStatus("Photo attached. Grace can analyze it now.");
-      // Keep Grace clean: photo attaches without opening the tools menu.
+      setToolsOpen(true);
     } catch {
       setImageStatus("Grace could not prepare that image. Try a different photo.");
     }
@@ -1565,15 +1565,9 @@ Do not say you cannot see the photo if images are attached.
  {toolsOpen && (
             <div className="relative z-20 mt-4 rounded-[2rem] border border-[#efb99f] bg-white/95 p-4 shadow-2xl backdrop-blur">
               <div className="flex items-center justify-between mb-3">
-                <div>
-                  <p className="text-sm font-black text-[#6f3b2a]">
-                    Grace Menu
-                  </p>
-                  <p className="mt-1 text-xs text-[#9a6b5a]">
-                    Attach a photo, manage saved work, or turn on web lookup. You can ask Grace for plans, PDFs, reports, checklists, comparisons, and Marketplace help directly in chat.
-                  </p>
-                </div>
-
+                <p className="text-sm font-black text-[#6f3b2a]">
+                  What can Grace do?
+                </p>
                 <button
                   onClick={() => setToolsOpen(false)}
                   className="text-sm font-bold text-[#9a6b5a]"
@@ -1583,106 +1577,87 @@ Do not say you cannot see the photo if images are attached.
               </div>
 
               <div className="grid grid-cols-2 gap-2">
+                {quickActions.map((item) => (
+                  <button
+                    key={item.label}
+                    disabled={locked || toolLoading || loading}
+                    onClick={item.action}
+                    className="rounded-2xl border border-[#f1c7b4] bg-[#fff7f1] px-3 py-3 text-left shadow-sm disabled:opacity-40"
+                  >
+                    <div className="font-black text-[#2f2723]">{item.label}</div>
+                    <div className="text-xs text-[#8b6a5f] mt-1">
+                      {item.helper}
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              <div className="mt-3 flex gap-2">
                 <button
-                  disabled={locked || toolLoading || loading}
-                  onClick={() => {
-                    setToolsOpen(false);
-                    uploadInputRef.current?.click();
-                  }}
-                  className="rounded-2xl border border-[#f1c7b4] bg-[#fff7f1] px-3 py-4 text-left shadow-sm disabled:opacity-40"
+                  onClick={() => uploadInputRef.current?.click()}
+                  className="flex-1 rounded-2xl border border-[#f1c7b4] bg-white px-3 py-3 text-sm font-bold text-[#6f3b2a]"
                 >
-                  <div className="font-black text-[#2f2723]">Upload Photo</div>
-                  <div className="text-xs text-[#8b6a5f] mt-1">
-                    Add a photo for Grace
-                  </div>
+                  Upload
                 </button>
 
                 <button
-                  disabled={locked || toolLoading || loading}
-                  onClick={() => {
-                    setToolsOpen(false);
-                    cameraInputRef.current?.click();
-                  }}
-                  className="rounded-2xl border border-[#f1c7b4] bg-[#fff7f1] px-3 py-4 text-left shadow-sm disabled:opacity-40"
+                  onClick={() => cameraInputRef.current?.click()}
+                  className="flex-1 rounded-2xl border border-[#f1c7b4] bg-white px-3 py-3 text-sm font-bold text-[#6f3b2a]"
                 >
-                  <div className="font-black text-[#2f2723]">Camera</div>
-                  <div className="text-xs text-[#8b6a5f] mt-1">
-                    Take a new photo
-                  </div>
+                  Camera
                 </button>
-
                 <button
-                  disabled={locked || toolLoading || loading}
-                  onClick={() => {
-                    setToolsOpen(false);
-                    setWebMode((v) => !v);
-                  }}
-                  className="rounded-2xl border border-[#f1c7b4] bg-[#fff7f1] px-3 py-4 text-left shadow-sm disabled:opacity-40"
+                  onClick={() => runGraceTool(input || "Use the uploaded photo and create useful ideas, observations, and next steps.", toolType)}
+                  className="flex-1 rounded-2xl bg-[#2f2723] px-3 py-3 text-sm font-black text-white"
                 >
-                  <div className="font-black text-[#2f2723]">
-                    Web Lookup
-                  </div>
-                  <div className="text-xs text-[#8b6a5f] mt-1">
-                    {webMode ? "Currently on" : "Use current info"}
-                  </div>
-                </button>
-
-                <button
-                  disabled={locked || toolLoading || loading}
-                  onClick={() => {
-                    setToolsOpen(false);
-                    setSavedReportsOpen(!savedReportsOpen);
-                  }}
-                  className="rounded-2xl border border-[#f1c7b4] bg-[#fff7f1] px-3 py-4 text-left shadow-sm disabled:opacity-40"
-                >
-                  <div className="font-black text-[#2f2723]">Saved</div>
-                  <div className="text-xs text-[#8b6a5f] mt-1">
-                    {savedReports.length} saved reports
-                  </div>
-                </button>
-
-                <button
-                  disabled={locked || toolLoading || loading}
-                  onClick={() => {
-                    setToolsOpen(false);
-                    setDetailsOpen(!detailsOpen);
-                  }}
-                  className="rounded-2xl border border-[#f1c7b4] bg-[#fff7f1] px-3 py-4 text-left shadow-sm disabled:opacity-40"
-                >
-                  <div className="font-black text-[#2f2723]">PDF Details</div>
-                  <div className="text-xs text-[#8b6a5f] mt-1">
-                    Report header fields
-                  </div>
-                </button>
-
-                <button
-                  disabled={locked || toolLoading || loading}
-                  onClick={() => {
-                    setToolsOpen(false);
-                    downloadPDF();
-                  }}
-                  className="rounded-2xl border border-[#f1c7b4] bg-[#fff7f1] px-3 py-4 text-left shadow-sm disabled:opacity-40"
-                >
-                  <div className="font-black text-[#2f2723]">PDF</div>
-                  <div className="text-xs text-[#8b6a5f] mt-1">
-                    Download last result
-                  </div>
+                  Run Selected
                 </button>
               </div>
 
+              <label className="mt-3 block text-xs font-bold text-[#8b6a5f]">
+                Tool type
+              </label>
+              <select
+                value={toolType}
+                onChange={(e) => setToolType(e.target.value)}
+                className="mt-1 w-full rounded-2xl border border-[#efb99f] bg-white px-4 py-3 text-[#2f2723] outline-none"
+              >
+                {toolTypes.map((tool) => (
+                  <option key={tool} value={tool}>
+                    {tool}
+                  </option>
+                ))}
+              </select>
+
               {imageStatus && (
-                <p className="mt-3 rounded-2xl border border-[#efb99f] bg-[#fff7f1] px-4 py-3 text-xs font-semibold text-[#8b6a5f]">
+                <p className="mt-3 text-xs font-semibold text-[#8b6a5f]">
                   {imageStatus}
                 </p>
               )}
 
-              <div className="mt-3 rounded-2xl bg-[#fff7f1] border border-[#f1c7b4] p-3 text-xs leading-5 text-[#8b6a5f]">
-                Try: “analyze this photo,” “is this a good deal,” “make that a PDF,” “read that out loud,” “turn this into a checklist,” or “compare this.”
-              </div>
+              {images.length > 0 && (
+                <div className="mt-3 grid grid-cols-4 gap-2">
+                  {images.map((img, i) => (
+                    <div key={i} className="relative">
+                      <img
+                        src={img}
+                        alt={`Upload ${i + 1}`}
+                        className="h-16 w-full rounded-xl object-cover border border-[#efb99f]"
+                      />
+                      <button
+                        onClick={() => removeImage(i)}
+                        className="absolute -right-1 -top-1 rounded-full bg-[#2f2723] px-2 py-0.5 text-xs text-white"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
- {savedReportsOpen && (
+          {savedReportsOpen && (
             <div className="relative z-20 mt-3 rounded-[2rem] border border-[#efb99f] bg-white/95 p-4 shadow-xl">
               <div className="flex items-center justify-between gap-3">
                 <div>
