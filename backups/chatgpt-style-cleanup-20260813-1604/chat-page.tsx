@@ -1057,32 +1057,6 @@ Do not put any business name on the report except the user's provided business/n
     ]);
   }
 
-
-  async function copyLastAnswer() {
-    const answer =
-      lastToolAnswer ||
-      [...messages].reverse().find((m) => m.role === "assistant")?.content ||
-      "";
-
-    if (!answer.trim()) {
-      alert("Ask Grace something first.");
-      return;
-    }
-
-    try {
-      await navigator.clipboard.writeText(answer);
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          content: "Copied Grace’s last answer to your clipboard.",
-        },
-      ]);
-    } catch {
-      alert("Copy failed. You can press and hold the answer to copy it.");
-    }
-  }
-
  function downloadPDF(overrideAnswer?: string, overrideTitle?: string) {
     const answer =
       overrideAnswer ||
@@ -1353,6 +1327,14 @@ Do not say you cannot see the photo if images are attached.
               >
                 Voice<br />{voiceOn ? "On" : "Off"}
               </button>
+
+              <button
+                onClick={() => setToolsOpen(!toolsOpen)}
+                aria-label="Open Grace menu"
+                className="border border-[#efb99f] bg-white/80 shadow-sm backdrop-blur rounded-2xl px-4 py-3 text-2xl font-black leading-none text-[#6f3b2a]"
+              >
+                ⋯
+              </button>
             </div>
           </header>
 
@@ -1473,16 +1455,67 @@ Do not say you cannot see the photo if images are attached.
           {lastToolAnswer && !locked && (
             <div className="relative z-20 mt-3 rounded-[1.5rem] border border-[#efb99f] bg-white/90 p-3 shadow-xl backdrop-blur">
               <p className="mb-2 text-xs font-black uppercase tracking-wide text-[#8b4b34]">
-                Grace actions
+                Turn Grace’s answer into action
               </p>
 
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-3 gap-2">
                 <button
-                  onClick={copyLastAnswer}
+                  onClick={() =>
+                    runGraceTool(
+                      `Turn this into a clear action plan with steps, priorities, and next moves:\n\n${lastToolAnswer}`,
+                      "Project Plan"
+                    )
+                  }
+                  disabled={loading || toolLoading}
+                  className="rounded-2xl bg-[#f3a683] px-3 py-3 text-sm font-black text-white shadow-sm disabled:opacity-40"
+                >
+                  Plan
+                  <span className="block text-[10px] font-semibold opacity-85">
+                    Next steps
+                  </span>
+                </button>
+
+                <button
+                  onClick={() =>
+                    runGraceTool(
+                      `Compare the main options, pros, cons, best use cases, and give a recommendation based on this:\n\n${lastToolAnswer}`,
+                      "Custom PDF"
+                    )
+                  }
                   disabled={loading || toolLoading}
                   className="rounded-2xl border border-[#efb99f] bg-[#fff7f1] px-3 py-3 text-sm font-black text-[#6f3b2a] shadow-sm disabled:opacity-40"
                 >
-                  Copy
+                  Compare
+                  <span className="block text-[10px] font-semibold opacity-80">
+                    Pros/cons
+                  </span>
+                </button>
+
+                <button
+                  onClick={() =>
+                    runGraceTool(
+                      `Turn this into a practical checklist I can follow:\n\n${lastToolAnswer}`,
+                      "Maintenance Checklist"
+                    )
+                  }
+                  disabled={loading || toolLoading}
+                  className="rounded-2xl border border-[#efb99f] bg-[#fff7f1] px-3 py-3 text-sm font-black text-[#6f3b2a] shadow-sm disabled:opacity-40"
+                >
+                  Checklist
+                  <span className="block text-[10px] font-semibold opacity-80">
+                    To-do list
+                  </span>
+                </button>
+
+                <button
+                  onClick={saveCurrentResult}
+                  disabled={loading || toolLoading}
+                  className="rounded-2xl border border-[#efb99f] bg-[#fff7f1] px-3 py-3 text-sm font-black text-[#6f3b2a] shadow-sm disabled:opacity-40"
+                >
+                  Save
+                  <span className="block text-[10px] font-semibold opacity-80">
+                    Result
+                  </span>
                 </button>
 
                 <button
@@ -1491,6 +1524,9 @@ Do not say you cannot see the photo if images are attached.
                   className="rounded-2xl bg-[#2f2723] px-3 py-3 text-sm font-black text-white shadow-sm disabled:opacity-40"
                 >
                   PDF
+                  <span className="block text-[10px] font-semibold opacity-80">
+                    Download
+                  </span>
                 </button>
 
                 <button
@@ -1503,19 +1539,25 @@ Do not say you cannot see the photo if images are attached.
                   className="rounded-2xl border border-[#efb99f] bg-[#fff7f1] px-3 py-3 text-sm font-black text-[#6f3b2a] shadow-sm disabled:opacity-40"
                 >
                   Read
+                  <span className="block text-[10px] font-semibold opacity-80">
+                    Out loud
+                  </span>
                 </button>
 
                 <button
-                  onClick={saveCurrentResult}
+                  onClick={() => setDetailsOpen(true)}
                   disabled={loading || toolLoading}
                   className="rounded-2xl border border-[#efb99f] bg-[#fff7f1] px-3 py-3 text-sm font-black text-[#6f3b2a] shadow-sm disabled:opacity-40"
                 >
-                  Save
+                  Details
+                  <span className="block text-[10px] font-semibold opacity-80">
+                    Header
+                  </span>
                 </button>
               </div>
 
               <p className="mt-2 text-xs text-[#9a6b5a]">
-                You can also ask Grace: “make that a PDF,” “copy that,” “read that out loud,” or “save that.”
+                You can also type “make a plan,” “compare this,” “make a checklist,” “make that a PDF,” or “read that out loud.”
               </p>
             </div>
           )}
@@ -1937,7 +1979,7 @@ Do not say you cannot see the photo if images are attached.
           }}
           disabled={locked || loading || toolLoading}
           rows={1}
-          placeholder="Ask Grace anything..."
+          placeholder="Say anything to Grace..."
           className="flex-1 min-w-0 max-h-40 resize-none bg-white border border-[#efb99f] rounded-2xl px-4 py-3 text-[#2f2723] placeholder:text-[#a98273] outline-none disabled:opacity-40 shadow-sm"
         />
 
