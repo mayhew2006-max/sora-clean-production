@@ -640,120 +640,121 @@ Do not put any business name on the report except the user's provided business/n
     setLoading(false);
   }
 
-  function shouldUsePhotoTool(text: string) {
-    const lower = text.toLowerCase();
-    const hasAttachedPhoto = (imagesRef.current.length ? imagesRef.current : images).length > 0;
+ 
+ 
+  async function runGraceWebSearch(query: string) {
+    if (locked || loadingRef.current || toolLoading) return;
 
-    if (!hasAttachedPhoto) return false;
+    const cleanQuery = query.trim();
+    if (!cleanQuery) return;
 
-    return (
-      lower.includes("photo") ||
-      lower.includes("picture") ||
-      lower.includes("image") ||
-      lower.includes("analyze") ||
-      lower.includes("what do you see") ||
-      lower.includes("look at") ||
-      lower.includes("make a plan") ||
-      lower.includes("turn this into") ||
-      lower.includes("report") ||
-      lower.includes("pdf") ||
-      lower.includes("checklist") ||
-      lower.includes("ideas") ||
-      lower.includes("next steps") ||
-      lower.includes("good deal") ||
-      lower.includes("bad deal") ||
-      lower.includes("fair deal") ||
-      lower.includes("marketplace") ||
-      lower.includes("facebook marketplace") ||
-      lower.includes("fb marketplace") ||
-      lower.includes("seller") ||
-      lower.includes("asking price") ||
-      lower.includes("worth it") ||
-      lower.includes("red flags")
-    );
-  }
+    trackEvent("grace_web_search_used");
 
- function shouldUseWebQuery(text: string) {
-    const lower = text.toLowerCase();
-
-    if (webMode) return true;
-
-    return (
-      lower.includes("latest") ||
-      lower.includes("current") ||
-      lower.includes("today") ||
-      lower.includes("news") ||
-      lower.includes("update") ||
-      lower.includes("compare") ||
-      lower.includes("comparison") ||
-      lower.includes(" vs ") ||
-      lower.startsWith("vs ") ||
-      lower.includes("price") ||
-      lower.includes("pricing") ||
-      lower.includes("cost") ||
-      lower.includes("best") ||
-      lower.includes("top ") ||
-      lower.includes("find ") ||
-      lower.includes("look up") ||
-      lower.includes("search ") ||
-      lower.includes("search for") ||
-      lower.includes("what does the website say") ||
-      lower.includes("online") ||
-      lower.includes("hours") ||
-      lower.includes("location")
-    );
-  }
-
-  async function runGraceWebSearch(text: string) {
-    const clean = text.trim();
-    if (!clean || loadingRef.current || locked) return;
-
-    trackEvent("grace_web_search");
-    updateMemory(clean);
-
-    loadingRef.current = true;
-    setToolLoading(true);
     setLoading(true);
-    setToolsOpen(false);
+    loadingRef.current = true;
 
-    const nextMessages: Message[] = [
-      ...messagesRef.current,
-      { role: "user", content: clean },
-    ];
-
-    setMessages(nextMessages);
-    setInput("");
+    setMessages((prev) => [
+      ...prev,
+      { role: "user", content: cleanQuery },
+    ]);
 
     try {
       const res = await fetch("/api/web", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-grace-paid": paid || !locked ? "true" : "false",
+        },
         body: JSON.stringify({
-          query: clean,
-          memory: memoryRef.current.slice(-1500),
+          query: cleanQuery,
+          memory,
         }),
       });
 
       const data = await res.json();
-      const reply =
-        data?.reply || "I looked, but I couldn’t pull together a good answer yet.";
+
+      if (!res.ok) {
+        throw new Error(data?.reply || "Grace web search failed.");
+      }
+
+      const reply = data?.reply || "Grace searched, but did not get a useful answer.";
+
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: reply },
+      ]);
 
       setLastToolAnswer(reply);
-      setMessages([...nextMessages, { role: "assistant", content: reply }]);
-      speak(reply).catch(() => console.log("voice playback failed"));
-    } catch (err: any) {
-      const reply =
-        "Grace hit a glitch while checking the web: " +
-        (err?.message || "Unknown error");
-      setMessages([...nextMessages, { role: "assistant", content: reply }]);
-    }
 
-    loadingRef.current = false;
-    setToolLoading(false);
-    setLoading(false);
+      if (voiceOn) {
+        speak(reply).catch(() => console.log("voice playback failed"));
+      }
+    } catch (error: any) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content:
+            "Grace web search hit a glitch: " +
+            (error?.message || "Unknown error"),
+        },
+      ]);
+    } finally {
+      setLoading(false);
+      loadingRef.current = false;
+    }
   }
 
- async function sendMessage(text: string) {
+ function shouldUseWebQuery(text: string) {
+    const clean = text.trim().toLowerCase();
+
+    if (webMode) return true;
+
+    const webWords = [
+      "search",
+      "look up",
+      "current",
+      "latest",
+      "today",
+      "price",
+      "worth",
+      "value",
+      "compare prices",
+      "market price",
+      "near me",
+      "reviews",
+      "specs",
+      "law",
+      "rules",
+      "news",
+      "weather",
+      "stock",
+      "available",
+      "sale",
+      "deal",
+      "facebook marketplace",
+      "marketplace",
+    ];
+
+    return webWords.some((word) => clean.includes(word));
+  }
+
+ function shouldUsePhotoTool(text: string) {
+    const hasAttachedPhoto =
+      (imagesRef.current.length ? imagesRef.current : images).length > 0;
+
+    if (!hasAttachedPhoto) return false;
+
+    const clean = text.trim().toLowerCase();
+
+    // If a photo is attached, Grace should use it for almost any real question.
+    // The user should not have to say "analyze photo" exactly.
+    if (clean.length > 0) return true;
+
+    return true;
+  }
+
+  async function sendMessage(text: string) {
     const clean = text.trim();
     if (!clean || loadingRef.current) return;
 
