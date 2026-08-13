@@ -29,7 +29,7 @@ export default function PrivacyPolicy() {
             fontWeight: 700,
           }}
         >
-          ← Back to Grace
+          ← Back to Grace AI
         </a>
 
         <h1
@@ -47,9 +47,9 @@ export default function PrivacyPolicy() {
         </p>
 
         <p>
-          Grace (“Grace,” “we,” “our,” or “us”) respects your privacy. This
+          Grace AI (“Grace,” “we,” “our,” or “us”) respects your privacy. This
           Privacy Policy explains what information may be collected when you
-          use the Grace website or Android application, how that information
+          use the Grace AI website or Android application, how that information
           is used, and the choices available to you.
         </p>
 
@@ -81,7 +81,7 @@ export default function PrivacyPolicy() {
             <li>
               <strong>Subscription information:</strong> information needed to
               confirm and manage your subscription. Payment processing is
-              handled by Stripe. Grace does not store your complete payment
+              handled by Stripe. Grace AI does not store your complete payment
               card number.
             </li>
           </ul>
@@ -90,21 +90,21 @@ export default function PrivacyPolicy() {
         <Section title="2. How We Use Information">
           <p>We may use information to:</p>
           <ul>
-            <li>Provide and operate Grace.</li>
+            <li>Provide and operate Grace AI.</li>
             <li>Generate responses to your requests.</li>
             <li>Process images, photographs, documents, and PDFs you submit.</li>
             <li>Provide voice and speech-related features.</li>
             <li>Authenticate users and protect accounts.</li>
             <li>Manage subscriptions and customer support.</li>
             <li>Maintain security, prevent abuse, and troubleshoot problems.</li>
-            <li>Improve the reliability and performance of Grace.</li>
+            <li>Improve the reliability and performance of Grace AI.</li>
             <li>Comply with applicable legal obligations.</li>
           </ul>
         </Section>
 
         <Section title="3. Service Providers">
           <p>
-            Grace relies on third-party service providers to operate. These
+            Grace AI relies on third-party service providers to operate. These
             may include providers for artificial intelligence processing,
             authentication, database storage, website hosting, cloud
             infrastructure, analytics, and payment processing.
@@ -121,10 +121,10 @@ export default function PrivacyPolicy() {
             We do not sell your personal information. We may share information:
           </p>
           <ul>
-            <li>With service providers necessary to operate Grace.</li>
+            <li>With service providers necessary to operate Grace AI.</li>
             <li>When required by law, legal process, or governmental request.</li>
             <li>
-              When reasonably necessary to protect users, Grace, or the
+              When reasonably necessary to protect users, Grace AI, or the
               public from fraud, abuse, security threats, or unlawful activity.
             </li>
             <li>
@@ -137,7 +137,7 @@ export default function PrivacyPolicy() {
         <Section title="5. Data Retention">
           <p>
             We retain information only for as long as reasonably necessary to
-            provide Grace, maintain security, comply with legal obligations,
+            provide Grace AI, maintain security, comply with legal obligations,
             resolve disputes, and enforce agreements.
           </p>
           <p>
@@ -173,7 +173,7 @@ export default function PrivacyPolicy() {
 
         <Section title="8. Children's Privacy">
           <p>
-            Grace is not directed to children under 13, and we do not
+            Grace AI is not directed to children under 13, and we do not
             knowingly collect personal information from children under 13. If
             we learn that such information was collected, we will take
             reasonable steps to delete it.
@@ -190,7 +190,7 @@ export default function PrivacyPolicy() {
 
         <Section title="10. Changes to This Policy">
           <p>
-            We may update this Privacy Policy as Grace develops. The updated
+            We may update this Privacy Policy as Grace AI develops. The updated
             version will be posted on this page with a revised effective date.
           </p>
         </Section>
@@ -200,7 +200,7 @@ export default function PrivacyPolicy() {
             For privacy questions, account deletion, or data requests, contact:
           </p>
           <p>
-            <strong>Grace Support</strong>
+            <strong>Grace AI Support</strong>
             <br />
             Email:{" "}
             <a
