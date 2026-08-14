@@ -739,6 +739,41 @@ Do not put any business name on the report except the user's provided business/n
     return webWords.some((word) => clean.includes(word));
   }
 
+
+  function isMarketplaceQuery(text: string) {
+    const clean = text.trim().toLowerCase();
+
+    const words = [
+      "marketplace",
+      "facebook marketplace",
+      "good deal",
+      "bad deal",
+      "fair deal",
+      "worth buying",
+      "should i buy",
+      "what should i offer",
+      "offer for this",
+      "red flags",
+      "seller",
+      "buyer",
+      "listing",
+      "list this",
+      "sell this",
+      "what should i list",
+      "asking price",
+      "fair price",
+      "price this",
+      "write a listing",
+      "write my listing",
+      "compare listings",
+      "negotiate",
+      "walk away",
+      "scam",
+    ];
+
+    return words.some((word) => clean.includes(word));
+  }
+
  function shouldUsePhotoTool(text: string) {
     const hasAttachedPhoto =
       (imagesRef.current.length ? imagesRef.current : images).length > 0;
@@ -886,7 +921,12 @@ Do not put any business name on the report except the user's provided business/n
     }
 
     if (shouldUsePhotoTool(clean)) {
-      await runGraceTool(clean, "Photo Analysis");
+      await runGraceTool(clean, isMarketplaceQuery(clean) ? "Deal Check" : "Photo Analysis");
+      return;
+    }
+
+    if (isMarketplaceQuery(clean)) {
+      await runGraceTool(clean, "Deal Check");
       return;
     }
 
