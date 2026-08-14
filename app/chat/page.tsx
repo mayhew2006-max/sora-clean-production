@@ -1833,9 +1833,9 @@ Do not say you cannot see the photo if images are attached.
 
  <footer className="grace-input-bar fixed bottom-0 left-0 right-0 z-30 p-3 pb-[calc(0.5rem+env(safe-area-inset-bottom))] border-t border-[#efb99f] bg-[#fff7f1]/95 backdrop-blur flex gap-2 items-end">
         <button
-          onClick={() => uploadInputRef.current?.click()}
+          onClick={() => setToolsOpen((v) => !v)}
           disabled={locked || loading || toolLoading}
-          aria-label="Upload photo"
+          aria-label="Add photo"
           className="bg-white border border-[#efb99f] text-[#6f3b2a] px-4 py-3 rounded-2xl text-xl leading-none font-black disabled:opacity-40 shadow-sm"
         >
           +
