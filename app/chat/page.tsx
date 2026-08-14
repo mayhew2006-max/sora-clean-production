@@ -1791,6 +1791,46 @@ Do not say you cannot see the photo if images are attached.
         </div>
       )}
 
+
+      {toolsOpen && !locked && (
+        <div className="fixed bottom-[5.7rem] left-3 z-40 w-56 rounded-[1.5rem] border border-[#efb99f] bg-white/95 p-3 shadow-2xl backdrop-blur">
+          {/* Photo source menu */}
+          <p className="mb-2 text-xs font-black uppercase tracking-wide text-[#8b4b34]">
+            Add photo
+          </p>
+
+          <div className="grid grid-cols-1 gap-2">
+            <button
+              onClick={() => {
+                setToolsOpen(false);
+                cameraInputRef.current?.click();
+              }}
+              disabled={loading || toolLoading}
+              className="rounded-2xl bg-[#f3a683] px-4 py-3 text-left text-sm font-black text-white shadow-sm disabled:opacity-40"
+            >
+              Camera
+              <span className="block text-xs font-semibold opacity-85">
+                Take a new photo
+              </span>
+            </button>
+
+            <button
+              onClick={() => {
+                setToolsOpen(false);
+                uploadInputRef.current?.click();
+              }}
+              disabled={loading || toolLoading}
+              className="rounded-2xl border border-[#efb99f] bg-[#fff7f1] px-4 py-3 text-left text-sm font-black text-[#6f3b2a] shadow-sm disabled:opacity-40"
+            >
+              Gallery
+              <span className="block text-xs font-semibold opacity-80">
+                Choose existing photo
+              </span>
+            </button>
+          </div>
+        </div>
+      )}
+
  <footer className="grace-input-bar fixed bottom-0 left-0 right-0 z-30 p-3 pb-[calc(0.5rem+env(safe-area-inset-bottom))] border-t border-[#efb99f] bg-[#fff7f1]/95 backdrop-blur flex gap-2 items-end">
         <button
           onClick={() => uploadInputRef.current?.click()}
