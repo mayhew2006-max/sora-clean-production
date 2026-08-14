@@ -126,8 +126,7 @@ export default function GraceChat() {
   const [loading, setLoading] = useState(false);
   const [toolLoading, setToolLoading] = useState(false);
   const [listening, setListening] = useState(false);
-  const [voiceOn, setVoiceOn] = useState(true);
-  const [isSpeaking, setIsSpeaking] = useState(false);
+   const [isSpeaking, setIsSpeaking] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [savedReportsOpen, setSavedReportsOpen] = useState(false);
@@ -422,9 +421,7 @@ export default function GraceChat() {
   }
 
   async function speak(text: string) {
-    if (!voiceOn) return;
-
-    const chunks = splitForSpeech(text);
+       const chunks = splitForSpeech(text);
     if (chunks.length === 0) return;
 
     const runId = speakingRunRef.current + 1;
@@ -685,10 +682,6 @@ Do not put any business name on the report except the user's provided business/n
       ]);
 
       setLastToolAnswer(reply);
-
-      if (voiceOn) {
-        speak(reply).catch(() => console.log("voice playback failed"));
-      }
     } catch (error: any) {
       setMessages((prev) => [
         ...prev,
@@ -1388,12 +1381,6 @@ Do not say you cannot see the photo if images are attached.
             </div>
 
             <div className="flex gap-2">
-              <button
-                onClick={() => setVoiceOn(!voiceOn)}
-                className="border border-[#efb99f] bg-white/75 shadow-sm backdrop-blur rounded-2xl px-4 py-3 text-sm font-bold text-[#6f3b2a]"
-              >
-                Voice<br />{voiceOn ? "On" : "Off"}
-              </button>
             </div>
           </header>
 
@@ -1826,7 +1813,7 @@ Do not say you cannot see the photo if images are attached.
             onClick={stopSpeaking}
             className="rounded-full border border-[#efb99f] bg-[#2f2723] px-5 py-3 text-sm font-black text-white shadow-xl"
           >
-            Stop Reading
+            Stop reading
           </button>
         </div>
       )}
