@@ -802,39 +802,64 @@ Do not put any business name on the report except the user's provided business/n
 
 
  
+  
+
+
+
+  
+
+ 
   function isImageGenerationQuery(text: string) {
     const clean = text.trim().toLowerCase();
 
-    const starters = [
-      "create an image",
-      "create image",
-      "make an image",
-      "make image",
-      "generate an image",
-      "generate image",
+    const actionWords = [
+      "generate",
+      "create",
+      "make",
       "draw",
       "design",
-      "make a picture",
-      "create a picture",
-      "make a photo",
-      "create a photo",
-      "make a flyer",
-      "create a flyer",
-      "make a logo",
-      "create a logo",
-      "make a post",
-      "create a post",
-      "make an ad",
-      "create an ad",
-      "marketplace ad image",
-      "show me what",
+      "render",
       "visualize",
+      "show me",
+      "mock up",
+      "mockup",
     ];
 
-    return starters.some((word) => clean.includes(word));
+    const imageWords = [
+      "image",
+      "photo",
+      "picture",
+      "pic",
+      "flyer",
+      "poster",
+      "logo",
+      "ad",
+      "graphic",
+      "banner",
+      "thumbnail",
+      "mockup",
+      "wallpaper",
+      "cover",
+    ];
+
+    const hasAction = actionWords.some((word) => clean.includes(word));
+    const hasImageWord = imageWords.some((word) => clean.includes(word));
+
+    if (hasAction && hasImageWord) return true;
+
+    if (
+      clean.startsWith("show me ") ||
+      clean.startsWith("generate me ") ||
+      clean.startsWith("make me ") ||
+      clean.startsWith("create me ")
+    ) {
+      return true;
+    }
+
+    return false;
   }
 
- function isMarketplaceQuery(text: string) {
+function isMarketplaceQuery(text: string) {
     const clean = text.trim().toLowerCase();
 
     const words = [
