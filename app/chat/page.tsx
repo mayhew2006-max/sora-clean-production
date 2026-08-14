@@ -639,7 +639,75 @@ Do not put any business name on the report except the user's provided business/n
 
  
  
-  async function runGraceWebSearch(query: string) {
+ 
+  async function runGraceImageGeneration(prompt: string) {
+    if (locked || loadingRef.current || toolLoading) return;
+
+    const cleanPrompt = prompt.trim();
+    if (!cleanPrompt) return;
+
+    trackEvent("grace_image_generated");
+
+    setLoading(true);
+    loadingRef.current = true;
+
+    const nextMessages: Message[] = [
+      ...messagesRef.current,
+      { role: "user", content: cleanPrompt },
+      {
+        role: "assistant",
+        content: "I’m creating that image for you now.",
+      },
+    ];
+
+    setMessages(nextMessages);
+    setInput("");
+
+    try {
+      const res = await fetch("/api/image", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-grace-paid": paid || !locked ? "true" : "false",
+        },
+        body: JSON.stringify({
+          prompt: cleanPrompt,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data?.error || "Grace could not create that image.");
+      }
+
+      const image = data?.image;
+
+      if (!image) {
+        throw new Error("Grace did not receive an image back.");
+      }
+
+      setMessages([
+        ...nextMessages,
+        { role: "assistant-image", image },
+      ]);
+    } catch (error: any) {
+      setMessages([
+        ...nextMessages,
+        {
+          role: "assistant",
+          content:
+            "Grace could not create that image: " +
+            (error?.message || "Unknown error"),
+        },
+      ]);
+    } finally {
+      setLoading(false);
+      loadingRef.current = false;
+    }
+  }
+
+ async function runGraceWebSearch(query: string) {
     if (locked || loadingRef.current || toolLoading) return;
 
     const cleanQuery = query.trim();
@@ -733,7 +801,40 @@ Do not put any business name on the report except the user's provided business/n
   }
 
 
-  function isMarketplaceQuery(text: string) {
+ 
+  function isImageGenerationQuery(text: string) {
+    const clean = text.trim().toLowerCase();
+
+    const starters = [
+      "create an image",
+      "create image",
+      "make an image",
+      "make image",
+      "generate an image",
+      "generate image",
+      "draw",
+      "design",
+      "make a picture",
+      "create a picture",
+      "make a photo",
+      "create a photo",
+      "make a flyer",
+      "create a flyer",
+      "make a logo",
+      "create a logo",
+      "make a post",
+      "create a post",
+      "make an ad",
+      "create an ad",
+      "marketplace ad image",
+      "show me what",
+      "visualize",
+    ];
+
+    return starters.some((word) => clean.includes(word));
+  }
+
+ function isMarketplaceQuery(text: string) {
     const clean = text.trim().toLowerCase();
 
     const words = [
@@ -910,6 +1011,11 @@ Do not put any business name on the report except the user's provided business/n
         lower.includes("red flags"))
     ) {
       await runDealCheck(clean);
+      return;
+    }
+
+    if (isImageGenerationQuery(clean)) {
+      await runGraceImageGeneration(clean);
       return;
     }
 
