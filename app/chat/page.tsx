@@ -920,6 +920,38 @@ function isMarketplaceQuery(text: string) {
 
     const lower = clean.toLowerCase();
 
+    const wantsPdfFromLastThing =
+      lower.includes("pdf") ||
+      lower.includes("put that into a pdf") ||
+      lower.includes("put this into a pdf") ||
+      lower.includes("make that a pdf") ||
+      lower.includes("make this a pdf") ||
+      lower.includes("turn that into a pdf") ||
+      lower.includes("turn this into a pdf") ||
+      lower.includes("download that") ||
+      lower.includes("save that as pdf");
+
+    const lastGeneratedImage = [...messagesRef.current]
+      .reverse()
+      .find((msg) => msg.role === "assistant-image" && msg.image)?.image;
+
+    if (lastGeneratedImage && wantsPdfFromLastThing) {
+      const nextMessages: Message[] = [
+        ...messagesRef.current,
+        { role: "user", content: clean },
+        {
+          role: "assistant",
+          content: "Done — I’m turning that image into a PDF for you now.",
+        },
+      ];
+
+      setMessages(nextMessages);
+      setInput("");
+      setTimeout(() => downloadGeneratedImagePDF(lastGeneratedImage), 250);
+      return;
+    }
+
+
  if (
       lower === "stop" ||
       lower === "stop talking" ||
@@ -1245,6 +1277,48 @@ function isMarketplaceQuery(text: string) {
       ]);
     } catch {
       alert("Copy failed. You can press and hold the answer to copy it.");
+    }
+  }
+
+
+  function downloadGeneratedImagePDF(image: string) {
+    try {
+      const pdf = new jsPDF("p", "pt", "letter");
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const margin = 36;
+
+      const img = new Image();
+
+      img.onload = () => {
+        const maxWidth = pageWidth - margin * 2;
+        const maxHeight = pageHeight - 120;
+        const ratio = Math.min(maxWidth / img.width, maxHeight / img.height);
+
+        const imgWidth = img.width * ratio;
+        const imgHeight = img.height * ratio;
+        const x = (pageWidth - imgWidth) / 2;
+        const y = 78;
+
+        pdf.setFontSize(20);
+        pdf.text("Grace Image", margin, 42);
+
+        pdf.setFontSize(10);
+        pdf.text("Created by Grace", margin, 60);
+
+        const format = image.startsWith("data:image/jpeg") ? "JPEG" : "PNG";
+        pdf.addImage(image, format, x, y, imgWidth, imgHeight);
+
+        pdf.save(`grace-image-${Date.now()}.pdf`);
+      };
+
+      img.onerror = () => {
+        alert("Grace could not turn that image into a PDF.");
+      };
+
+      img.src = image;
+    } catch {
+      alert("Grace could not turn that image into a PDF.");
     }
   }
 
