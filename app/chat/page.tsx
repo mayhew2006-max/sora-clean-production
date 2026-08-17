@@ -166,6 +166,14 @@ export default function GraceChat() {
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
+    const graceBrandVersion = "grace-auth-v1";
+    const savedBrandVersion = localStorage.getItem("grace_brand_version");
+
+    if (savedBrandVersion !== graceBrandVersion) {
+      localStorage.setItem("grace_brand_version", graceBrandVersion);
+      localStorage.removeItem("grace_messages");
+    }
+
     const savedMessages = localStorage.getItem("grace_messages");
     const savedMemory = localStorage.getItem("grace_memory");
     const savedPaid = localStorage.getItem("sora_paid");
