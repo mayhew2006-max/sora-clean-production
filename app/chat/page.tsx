@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { supabase } from "@/lib/supabaseClient";
 import { jsPDF } from "jspdf";
 
 type Message = {
@@ -123,6 +124,10 @@ export default function GraceChat() {
   const [input, setInput] = useState("");
   const [memory, setMemory] = useState("");
   const [paid, setPaid] = useState(false);
+  const [authReady, setAuthReady] = useState(false);
+  const [userId, setUserId] = useState("");
+  const [userEmail, setUserEmail] = useState("");
+  const [accountFreeUsed, setAccountFreeUsed] = useState(0);
   const [loading, setLoading] = useState(false);
   const [toolLoading, setToolLoading] = useState(false);
   const [listening, setListening] = useState(false);
@@ -302,6 +307,23 @@ export default function GraceChat() {
   const userCount = messages.filter((m) => m.role === "user").length;
   const freeLeft = Math.max(FREE_LIMIT - userCount, 0);
   const locked = !paid && freeLeft <= 0;
+
+  async function recordGraceUserMessage() {
+    if (!userId || paid) return;
+
+    const nextUsed = accountFreeUsed + 1;
+    setAccountFreeUsed(nextUsed);
+
+    await supabase
+      .from("grace_user_usage")
+      .upsert({
+        user_id: userId,
+        email: userEmail,
+        free_messages_used: nextUsed,
+        paid: false,
+        updated_at: new Date().toISOString(),
+      });
+  }
 
   function updateMemory(text: string) {
     const lower = text.toLowerCase();
@@ -917,6 +939,8 @@ function isMarketplaceQuery(text: string) {
       window.location.href = "/pay";
       return;
     }
+
+    await recordGraceUserMessage();
 
     const lower = clean.toLowerCase();
 
