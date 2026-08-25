@@ -166,6 +166,79 @@ export default function GraceChat() {
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
+    let alive = true;
+
+    async function loadGraceAccount() {
+      const { data, error } = await supabase.auth.getUser();
+
+      if (!alive) return;
+
+      if (error || !data.user) {
+        window.location.href = "/login";
+        return;
+      }
+
+      const user = data.user;
+
+      setUserId(user.id);
+      setUserEmail(user.email || "");
+
+      const { data: usage, error: usageError } = await supabase
+        .from("grace_user_usage")
+        .select("free_messages_used, paid, founder")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (!alive) return;
+
+      if (usageError) {
+        console.error("Grace account usage load failed:", usageError);
+      }
+
+      if (!usage) {
+        const { error: createError } = await supabase
+          .from("grace_user_usage")
+          .insert({
+            user_id: user.id,
+            email: user.email || "",
+            free_messages_used: 0,
+          });
+
+        if (createError) {
+          console.error("Grace account creation failed:", createError);
+        }
+
+        setAccountFreeUsed(0);
+        setPaid(false);
+      } else {
+        setAccountFreeUsed(Number(usage.free_messages_used || 0));
+
+        const accountPaid =
+          Boolean(usage.paid) || Boolean(usage.founder);
+
+        setPaid(accountPaid);
+      }
+
+      setAuthReady(true);
+    }
+
+    loadGraceAccount();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!session) {
+        window.location.href = "/login";
+      }
+    });
+
+    return () => {
+      alive = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
     const graceBrandVersion = "grace-auth-v1";
     const savedBrandVersion = localStorage.getItem("grace_brand_version");
 
@@ -176,8 +249,7 @@ export default function GraceChat() {
 
     const savedMessages = localStorage.getItem("grace_messages");
     const savedMemory = localStorage.getItem("grace_memory");
-    const savedPaid = localStorage.getItem("sora_paid");
-    const founderAccess = localStorage.getItem("grace_founder");
+    // Paid/founder status now comes from the signed-in Grace account.
 
     if (savedMessages) setMessages(JSON.parse(savedMessages));
 
@@ -186,9 +258,7 @@ export default function GraceChat() {
       memoryRef.current = savedMemory;
     }
 
-    if (savedPaid === "true" || founderAccess === "true") setPaid(true);
-
-    try {
+       try {
       const savedDetails = localStorage.getItem("grace_report_details");
       if (savedDetails) {
         const details = JSON.parse(savedDetails);
@@ -312,9 +382,8 @@ export default function GraceChat() {
     };
   }, []);
 
-  const userCount = messages.filter((m) => m.role === "user").length;
-  const freeLeft = Math.max(FREE_LIMIT - userCount, 0);
-  const locked = !paid && freeLeft <= 0;
+  const freeLeft = Math.max(FREE_LIMIT - accountFreeUsed, 0);
+  const locked = authReady && !paid && freeLeft <= 0;
 
   async function recordGraceUserMessage() {
     if (!userId || paid) return;
@@ -322,15 +391,19 @@ export default function GraceChat() {
     const nextUsed = accountFreeUsed + 1;
     setAccountFreeUsed(nextUsed);
 
-    await supabase
+    const { error } = await supabase
       .from("grace_user_usage")
       .upsert({
         user_id: userId,
         email: userEmail,
         free_messages_used: nextUsed,
-        paid: false,
         updated_at: new Date().toISOString(),
       });
+
+    if (error) {
+      console.error("Grace usage update failed:", error);
+      setAccountFreeUsed(accountFreeUsed);
+    }
   }
 
   function updateMemory(text: string) {
@@ -1574,6 +1647,21 @@ Do not say you cannot see the photo if images are attached.
     },
   ];
 
+  if (!authReady) {
+    return (
+      <main className="min-h-[100dvh] bg-[#fff7f1] text-[#2f2723] flex items-center justify-center">
+        <div className="text-center">
+          <img
+            src="/grace-avatar.png"
+            alt="Grace"
+            className="w-20 h-20 rounded-full object-cover mx-auto mb-4 shadow-lg"
+          />
+          <p className="font-black">Opening Grace...</p>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-[100dvh] bg-[#fff7f1] text-[#2f2723] flex flex-col overflow-hidden">
       <input
@@ -1618,6 +1706,12 @@ Do not say you cannot see the photo if images are attached.
             </div>
 
             <div className="flex gap-2">
+              <a
+                href="/account"
+                className="rounded-2xl border border-[#efb99f] bg-white/80 px-4 py-3 text-sm font-black text-[#6f3b2a] shadow-sm"
+              >
+                Account
+              </a>
             </div>
           </header>
 
