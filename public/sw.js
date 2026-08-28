@@ -1,4 +1,4 @@
-const CACHE_NAME = "grace-app-v1";
+const CACHE_NAME = "grace-app-heart-v2";
 const APP_SHELL = ["/", "/chat", "/manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {
