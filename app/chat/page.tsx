@@ -1028,12 +1028,80 @@ function isMarketplaceQuery(text: string) {
     if (!hasAttachedPhoto) return false;
 
     const clean = text.trim().toLowerCase();
+    if (!clean) return true;
 
-    // If a photo is attached, Grace should use it for almost any real question.
-    // The user should not have to say "analyze photo" exactly.
-    if (clean.length > 0) return true;
+    // Use an attached photo when the user's message actually appears
+    // to refer to the image or something visible in it.
+    const photoReferences = [
+      "photo",
+      "picture",
+      "image",
+      "pic",
+      "screenshot",
+      "what do you see",
+      "what do you notice",
+      "tell me what you notice",
+      "look at this",
+      "look at that",
+      "what is this",
+      "what's this",
+      "what is that",
+      "what's that",
+      "this machine",
+      "this vehicle",
+      "this truck",
+      "this car",
+      "this equipment",
+      "this item",
+      "this listing",
+      "the machine",
+      "the vehicle",
+      "the truck",
+      "the car",
+      "the equipment",
+      "the item",
+      "the listing",
+      "tires",
+      "tire",
+      "leak",
+      "leaks",
+      "damage",
+      "rust",
+      "wear",
+      "condition",
+      "red flags",
+    ];
 
-    return true;
+    return photoReferences.some((phrase) => clean.includes(phrase));
+  }
+
+  function isAmbiguousMarketplaceQuery(text: string) {
+    const hasAttachedPhoto =
+      (imagesRef.current.length ? imagesRef.current : images).length > 0;
+
+    if (hasAttachedPhoto) return false;
+
+    const clean = text.trim().toLowerCase();
+
+    // Grace should ask what the user means before launching Deal Check
+    // when words like "this" or "it" have no item or photo attached.
+    const ambiguousEndings = [
+      "fair price for this",
+      "fair price for that",
+      "worth this",
+      "worth that",
+      "worth it",
+      "good deal for this",
+      "good deal for that",
+      "should i buy this",
+      "should i buy that",
+      "what should i offer for this",
+      "what should i offer for that",
+    ];
+
+    const normalized = clean.replace(/[?.!]+$/g, "").trim();
+
+    return ambiguousEndings.some((phrase) => normalized.endsWith(phrase));
   }
 
   async function sendMessage(text: string) {
@@ -1211,7 +1279,7 @@ function isMarketplaceQuery(text: string) {
       return;
     }
 
-    if (isMarketplaceQuery(clean)) {
+    if (isMarketplaceQuery(clean) && !isAmbiguousMarketplaceQuery(clean)) {
       await runGraceTool(clean, "Deal Check");
       return;
     }
