@@ -2,7 +2,20 @@ export async function POST(req: Request) {
   try {
     const { messages, memory, personality } = await req.json();
 
-    const safeMessages = Array.isArray(messages) ? messages : [];
+    const safeMessages = Array.isArray(messages)
+      ? messages
+          .filter(
+            (message: any) =>
+              message &&
+              (message.role === "user" || message.role === "assistant") &&
+              typeof message.content === "string" &&
+              message.content.trim().length > 0
+          )
+          .map((message: any) => ({
+            role: message.role,
+            content: message.content,
+          }))
+      : [];
     const hasMemory =
       typeof memory === "string" && memory.trim().length > 0;
     const hasPersonality =
