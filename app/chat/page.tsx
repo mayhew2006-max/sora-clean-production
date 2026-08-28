@@ -289,7 +289,21 @@ export default function GraceChat() {
 
   useEffect(() => {
     messagesRef.current = messages;
-    localStorage.setItem("grace_messages", JSON.stringify(messages.slice(-40)));
+
+    // Do not persist generated base64 images in localStorage.
+    // They can exceed browser storage limits and crash the page.
+    const messagesForStorage = messages
+      .filter((message) => message.role !== "assistant-image")
+      .slice(-40);
+
+    try {
+      localStorage.setItem(
+        "grace_messages",
+        JSON.stringify(messagesForStorage)
+      );
+    } catch (error) {
+      console.warn("Grace message storage skipped:", error);
+    }
 
     setTimeout(() => {
       bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
