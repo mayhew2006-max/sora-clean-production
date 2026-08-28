@@ -1244,23 +1244,68 @@ function isMarketplaceQuery(text: string) {
     setInput("");
 
     try {
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: nextMessages.slice(-8),
-          memory: memoryRef.current.slice(-1500),
-          personality: graceSystemPrompt(),
-        }),
+      const requestBody = JSON.stringify({
+        messages: nextMessages.slice(-8),
+        memory: memoryRef.current.slice(-1500),
+        personality: graceSystemPrompt(),
       });
 
-      const data = await res.json();
-      const reply = data.reply || "I’m here. Tell me what you want to do next.";
+      async function askGraceFromBrowser() {
+        const res = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: requestBody,
+          cache: "no-store",
+        });
+
+        const raw = await res.text();
+
+        if (!res.ok) {
+          throw new Error(`Grace chat request failed: ${res.status}`);
+        }
+
+        if (!raw.trim()) {
+          throw new Error("Grace chat returned an empty response.");
+        }
+
+        let data;
+
+        try {
+          data = JSON.parse(raw);
+        } catch {
+          throw new Error("Grace chat returned an invalid response.");
+        }
+
+        const reply =
+          typeof data?.reply === "string" ? data.reply.trim() : "";
+
+        if (!reply) {
+          throw new Error("Grace chat returned no reply.");
+        }
+
+        return reply;
+      }
+
+      let reply = "";
+
+      try {
+        reply = await askGraceFromBrowser();
+      } catch (firstError) {
+        console.warn("Grace chat first attempt failed:", firstError);
+
+        await new Promise((resolve) => setTimeout(resolve, 350));
+
+        reply = await askGraceFromBrowser();
+      }
 
       setMessages([...nextMessages, { role: "assistant", content: reply }]);
       speak(reply).catch(() => console.log("voice playback failed"));
-    } catch {
-      const reply = "Something glitched, but I’m still here. Try that again.";
+    } catch (error) {
+      console.error("Grace chat failed after retry:", error);
+
+      const reply =
+        "Something glitched on my end for a second. Try that one again.";
+
       setMessages([...nextMessages, { role: "assistant", content: reply }]);
       speak(reply).catch(() => console.log("voice playback failed"));
     }
