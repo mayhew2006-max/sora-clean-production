@@ -431,7 +431,71 @@ export default function GraceChat() {
     }
   }
 
-  function updateMemory(text: string) {
+  useEffect(() => {
+    if (!userId) return;
+
+    let cancelled = false;
+
+    async function loadAccountMemory() {
+      const { data, error } = await supabase
+        .from("grace_user_memory")
+        .select("memory")
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (cancelled) return;
+
+      if (error) {
+        console.error("Grace account memory load failed:", error);
+        return;
+      }
+
+      const accountMemory =
+        typeof data?.memory === "string" ? data.memory.trim() : "";
+
+      const localMemory =
+        (localStorage.getItem("grace_memory") || "").trim();
+
+      // First migration: preserve an existing local Grace memory
+      // by copying it into the user's account.
+      if (!accountMemory && localMemory) {
+        memoryRef.current = localMemory;
+        setMemory(localMemory);
+
+        const { error: saveError } = await supabase
+          .from("grace_user_memory")
+          .upsert(
+            {
+              user_id: userId,
+              memory: localMemory,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "user_id" }
+          );
+
+        if (saveError) {
+          console.error("Grace memory migration failed:", saveError);
+        }
+
+        return;
+      }
+
+      // Once account memory exists, it becomes the source of truth.
+      if (accountMemory) {
+        memoryRef.current = accountMemory;
+        setMemory(accountMemory);
+        localStorage.setItem("grace_memory", accountMemory);
+      }
+    }
+
+    loadAccountMemory();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
+ async function updateMemory(text: string) {
     const lower = text.toLowerCase();
 
     const important =
@@ -454,9 +518,30 @@ export default function GraceChat() {
     if (!important) return;
 
     const updated = `${memoryRef.current}\nUser said: ${text}`.trim().slice(-3500);
+
     memoryRef.current = updated;
     setMemory(updated);
+
+    // Keep the local copy as a fallback.
     localStorage.setItem("grace_memory", updated);
+
+    // Also save memory to the signed-in Grace account.
+    if (userId) {
+      const { error } = await supabase
+        .from("grace_user_memory")
+        .upsert(
+          {
+            user_id: userId,
+            memory: updated,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "user_id" }
+        );
+
+      if (error) {
+        console.error("Grace account memory save failed:", error);
+      }
+    }
   }
 
   function splitForSpeech(text: string) {
