@@ -926,7 +926,49 @@ Do not put any business name on the report except the user's provided business/n
   function isImageGenerationQuery(text: string) {
     const clean = text.trim().toLowerCase();
 
-    const actionWords = [
+    const explicitVisualPhrases = [
+      "generate an image",
+      "generate a photo",
+      "generate a picture",
+      "generate a pic",
+      "create an image",
+      "create a photo",
+      "create a picture",
+      "create a pic",
+      "make an image",
+      "make a photo",
+      "make a picture",
+      "make a pic",
+      "draw me",
+      "draw a",
+      "render an image",
+      "render a picture",
+      "show me an image",
+      "show me a photo",
+      "show me a picture",
+      "show me a pic",
+      "mock up",
+      "mockup",
+    ];
+
+    if (explicitVisualPhrases.some((phrase) => clean.includes(phrase))) {
+      return true;
+    }
+
+    const visualDeliverables = [
+      "flyer",
+      "poster",
+      "logo",
+      "graphic",
+      "banner",
+      "thumbnail",
+      "wallpaper",
+      "cover image",
+      "advertisement",
+      "ad graphic",
+    ];
+
+    const creationVerbs = [
       "generate",
       "create",
       "make",
@@ -934,43 +976,17 @@ Do not put any business name on the report except the user's provided business/n
       "design",
       "render",
       "visualize",
-      "show me",
-      "mock up",
-      "mockup",
     ];
 
-    const imageWords = [
-      "image",
-      "photo",
-      "picture",
-      "pic",
-      "flyer",
-      "poster",
-      "logo",
-      "ad",
-      "graphic",
-      "banner",
-      "thumbnail",
-      "mockup",
-      "wallpaper",
-      "cover",
-    ];
+    const hasCreationVerb = creationVerbs.some((verb) =>
+      new RegExp(`\\b${verb}\\b`, "i").test(clean)
+    );
 
-    const hasAction = actionWords.some((word) => clean.includes(word));
-    const hasImageWord = imageWords.some((word) => clean.includes(word));
+    const hasVisualDeliverable = visualDeliverables.some((item) =>
+      clean.includes(item)
+    );
 
-    if (hasAction && hasImageWord) return true;
-
-    if (
-      clean.startsWith("show me ") ||
-      clean.startsWith("generate me ") ||
-      clean.startsWith("make me ") ||
-      clean.startsWith("create me ")
-    ) {
-      return true;
-    }
-
-    return false;
+    return hasCreationVerb && hasVisualDeliverable;
   }
 
 function isMarketplaceQuery(text: string) {
