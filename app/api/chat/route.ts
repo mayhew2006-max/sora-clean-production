@@ -173,35 +173,50 @@ For pain, be present before trying to fix it.
 For humor, have some damn fun.
 `.trim();
 
-    const response = await fetch(
-      "https://api.openai.com/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: "Bearer " + process.env.OPENAI_API_KEY,
+    const requestBody = {
+      model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+      temperature: 0.55,
+      max_tokens: 850,
+      messages: [
+        {
+          role: "system",
+          content: systemPrompt,
         },
-        body: JSON.stringify({
-          model: process.env.OPENAI_MODEL || "gpt-4o-mini",
-          temperature: 0.55,
-          max_tokens: 850,
-          messages: [
-            {
-              role: "system",
-              content: systemPrompt,
-            },
-            ...safeMessages.slice(-16),
-          ],
-        }),
-      }
-    );
+        ...safeMessages.slice(-16),
+      ],
+    };
 
-    const data = await response.json();
+    async function askGrace() {
+      const response = await fetch(
+        "https://api.openai.com/v1/chat/completions",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer " + process.env.OPENAI_API_KEY,
+          },
+          body: JSON.stringify(requestBody),
+        }
+      );
+
+      if (!response.ok) return "";
+
+      const data = await response.json();
+      return data?.choices?.[0]?.message?.content?.trim() || "";
+    }
+
+    let reply = await askGrace();
+
+    // One retry prevents a temporary upstream hiccup from making
+    // Grace appear confused or empty.
+    if (!reply) {
+      reply = await askGrace();
+    }
 
     return Response.json({
       reply:
-        data?.choices?.[0]?.message?.content ||
-        "I'm right here. Talk to me.",
+        reply ||
+        "Something glitched on my end for a second. Try that one again.",
     });
   } catch {
     return Response.json({
