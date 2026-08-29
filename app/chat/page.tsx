@@ -769,7 +769,7 @@ Do not put any business name on the report except the user's provided business/n
     }
 
     trackEvent("grace_tool_used");
-    updateMemory(request);
+    await updateMemory(request);
 
     loadingRef.current = true;
     setToolLoading(true);
@@ -1382,7 +1382,7 @@ function isMarketplaceQuery(text: string) {
     }
 
     trackEvent("message_sent");
-    updateMemory(clean);
+    await updateMemory(clean);
 
     loadingRef.current = true;
     setLoading(true);
