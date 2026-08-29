@@ -157,6 +157,8 @@ export default function GraceChat() {
   const imagesRef = useRef<string[]>([]);
   const [imageStatus, setImageStatus] = useState("");
   const [lastToolAnswer, setLastToolAnswer] = useState("");
+  const [conversationId, setConversationId] = useState("");
+  const [historyReady, setHistoryReady] = useState(false);
 
   const [preparedFor, setPreparedFor] = useState("");
   const [businessName, setBusinessName] = useState("");
@@ -175,6 +177,7 @@ export default function GraceChat() {
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
+  const historySyncedCountRef = useRef(0);
 
   useEffect(() => {
     let alive = true;
@@ -286,6 +289,250 @@ export default function GraceChat() {
       if (saved) setSavedReports(JSON.parse(saved));
     } catch {}
   }, []);
+
+  useEffect(() => {
+    if (!userId) return;
+
+    let cancelled = false;
+
+    async function loadConversationHistory() {
+      setHistoryReady(false);
+
+      const { data: existingConversation, error: conversationError } =
+        await supabase
+          .from("grace_conversations")
+          .select("id, title")
+          .eq("user_id", userId)
+          .order("updated_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+      if (cancelled) return;
+
+      if (conversationError) {
+        console.error(
+          "Grace conversation load failed:",
+          conversationError
+        );
+        setHistoryReady(true);
+        return;
+      }
+
+      let currentConversation = existingConversation;
+
+      if (!currentConversation) {
+        const { data: createdConversation, error: createError } =
+          await supabase
+            .from("grace_conversations")
+            .insert({
+              user_id: userId,
+              title: "New conversation",
+            })
+            .select("id, title")
+            .single();
+
+        if (cancelled) return;
+
+        if (createError || !createdConversation) {
+          console.error(
+            "Grace conversation creation failed:",
+            createError
+          );
+          setHistoryReady(true);
+          return;
+        }
+
+        currentConversation = createdConversation;
+      }
+
+      const id = currentConversation.id;
+      setConversationId(id);
+
+      const { data: savedRows, error: messageError } =
+        await supabase
+          .from("grace_conversation_messages")
+          .select("role, content, created_at")
+          .eq("conversation_id", id)
+          .eq("user_id", userId)
+          .order("created_at", { ascending: false })
+          .limit(200);
+
+      if (cancelled) return;
+
+      if (messageError) {
+        console.error(
+          "Grace conversation messages failed:",
+          messageError
+        );
+        setHistoryReady(true);
+        return;
+      }
+
+      if (savedRows && savedRows.length > 0) {
+        const loadedMessages: Message[] = [...savedRows]
+          .reverse()
+          .filter(
+            (row) =>
+              (row.role === "user" || row.role === "assistant") &&
+              typeof row.content === "string" &&
+              row.content.trim()
+          )
+          .map((row) => ({
+            role: row.role as "user" | "assistant",
+            content: row.content,
+          }));
+
+        historySyncedCountRef.current = loadedMessages.length;
+        messagesRef.current = loadedMessages;
+        setMessages(loadedMessages);
+
+        try {
+          localStorage.setItem(
+            "grace_messages",
+            JSON.stringify(loadedMessages.slice(-40))
+          );
+        } catch {}
+
+        setHistoryReady(true);
+        return;
+      }
+
+      // First account-history migration:
+      // preserve the conversation already stored in this browser.
+      let localMessages: Message[] = [];
+
+      try {
+        const saved = localStorage.getItem("grace_messages");
+
+        if (saved) {
+          const parsed = JSON.parse(saved);
+
+          if (Array.isArray(parsed)) {
+            localMessages = parsed
+              .filter(
+                (message: Message) =>
+                  message &&
+                  (message.role === "user" ||
+                    message.role === "assistant") &&
+                  typeof message.content === "string" &&
+                  message.content.trim()
+              )
+              .slice(-40);
+          }
+        }
+      } catch {}
+
+      if (localMessages.length > 0) {
+        const { error: migrationError } = await supabase
+          .from("grace_conversation_messages")
+          .insert(
+            localMessages.map((message) => ({
+              conversation_id: id,
+              user_id: userId,
+              role: message.role,
+              content: message.content,
+            }))
+          );
+
+        if (migrationError) {
+          console.error(
+            "Grace conversation migration failed:",
+            migrationError
+          );
+        } else {
+          historySyncedCountRef.current = localMessages.length;
+          messagesRef.current = localMessages;
+          setMessages(localMessages);
+        }
+      }
+
+      setHistoryReady(true);
+    }
+
+    loadConversationHistory();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
+  useEffect(() => {
+    if (!historyReady || !conversationId || !userId) return;
+
+    const persistentMessages = messages
+      .filter(
+        (message) =>
+          (message.role === "user" ||
+            message.role === "assistant") &&
+          typeof message.content === "string" &&
+          message.content.trim() &&
+          message.content !== "I’m working on it..."
+      )
+      .map((message) => ({
+        role: message.role as "user" | "assistant",
+        content: message.content!.trim(),
+      }));
+
+    const alreadySaved = historySyncedCountRef.current;
+
+    if (persistentMessages.length <= alreadySaved) return;
+
+    const messagesToSave = persistentMessages.slice(alreadySaved);
+    const targetCount = persistentMessages.length;
+
+    const timer = window.setTimeout(async () => {
+      // Claim these messages before the network request so fast
+      // follow-up responses do not duplicate the user message.
+      historySyncedCountRef.current = targetCount;
+
+      const { error } = await supabase
+        .from("grace_conversation_messages")
+        .insert(
+          messagesToSave.map((message) => ({
+            conversation_id: conversationId,
+            user_id: userId,
+            role: message.role,
+            content: message.content,
+          }))
+        );
+
+      if (error) {
+        console.error(
+          "Grace conversation save failed:",
+          error
+        );
+
+        historySyncedCountRef.current = alreadySaved;
+        return;
+      }
+
+      const firstUserMessage = persistentMessages.find(
+        (message) => message.role === "user"
+      );
+
+      const title =
+        firstUserMessage?.content
+          ?.replace(/\s+/g, " ")
+          .trim()
+          .slice(0, 60) || "Grace conversation";
+
+      await supabase
+        .from("grace_conversations")
+        .update({
+          title,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", conversationId)
+        .eq("user_id", userId);
+    }, 700);
+
+    return () => window.clearTimeout(timer);
+  }, [
+    messages,
+    historyReady,
+    conversationId,
+    userId,
+  ]);
 
   useEffect(() => {
     messagesRef.current = messages;
