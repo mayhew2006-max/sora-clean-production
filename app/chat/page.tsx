@@ -2588,7 +2588,7 @@ Do not say you cannot see the photo if images are attached.
             href="/pay"
             className="inline-block bg-[#f3a683] text-white rounded-2xl px-8 py-4 font-black shadow-lg"
           >
-            Upgrade — $5/month
+            Upgrade — $4.99/month
           </a>
           <p className="text-xs text-[#9a6b5a] mt-2">Cancel anytime.</p>
         </div>
