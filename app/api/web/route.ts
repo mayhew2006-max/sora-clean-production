@@ -1,6 +1,6 @@
 export async function POST(req: Request) {
   try {
-    const { query, memory } = await req.json();
+    const { query, memory, conversation } = await req.json();
 
     if (!query || !String(query).trim()) {
       return Response.json(
@@ -22,6 +22,86 @@ export async function POST(req: Request) {
       });
     }
 
+    const recentConversation = Array.isArray(conversation)
+      ? conversation
+          .slice(-8)
+          .map(
+            (m: any) =>
+              `${m?.role === "assistant" ? "Grace" : "User"}: ${
+                m?.content || ""
+              }`
+          )
+          .join("\n")
+          .slice(-5000)
+      : "";
+
+    let searchQuery = String(query).trim();
+
+    if (recentConversation) {
+      try {
+        const queryRes = await fetch(
+          "https://api.openai.com/v1/chat/completions",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: "Bearer " + process.env.OPENAI_API_KEY,
+            },
+            body: JSON.stringify({
+              model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+              temperature: 0,
+              max_tokens: 120,
+              messages: [
+                {
+                  role: "system",
+                  content: `
+Turn the user's latest request into one concise web search query.
+
+Use the recent conversation to resolve references such as:
+- this
+- that
+- it
+- similar ones
+- similar cars
+- near me
+- those
+
+Preserve important identifying details such as year, make, model,
+trim, engine, location, price range, condition, or product type.
+
+Return ONLY the search query.
+Do not answer the user.
+                  `.trim(),
+                },
+                {
+                  role: "user",
+                  content: `
+Recent conversation:
+${recentConversation}
+
+Latest request:
+${query}
+                  `.trim(),
+                },
+              ],
+            }),
+          }
+        );
+
+        if (queryRes.ok) {
+          const queryData = await queryRes.json();
+          const rewritten =
+            queryData?.choices?.[0]?.message?.content?.trim();
+
+          if (rewritten) {
+            searchQuery = rewritten;
+          }
+        }
+      } catch {
+        // Fall back to the user's original query.
+      }
+    }
+
     const tavilyRes = await fetch("https://api.tavily.com/search", {
       method: "POST",
       headers: {
@@ -29,7 +109,7 @@ export async function POST(req: Request) {
       },
       body: JSON.stringify({
         api_key: process.env.TAVILY_API_KEY,
-        query,
+        query: searchQuery,
         search_depth: "advanced",
         max_results: 5,
         include_answer: false,
@@ -57,52 +137,58 @@ Snippet: ${r?.content || "No summary available"}
             .join("\n\n")
         : "No search results found.";
 
-    const aiRes = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: "Bearer " + process.env.OPENAI_API_KEY,
-      },
-      body: JSON.stringify({
-        model: process.env.OPENAI_MODEL || "gpt-4o-mini",
-        temperature: 0.20,
-        max_tokens: 1400,
-        messages: [
-          {
-            role: "system",
-            content: `
+    const aiRes = await fetch(
+      "https://api.openai.com/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer " + process.env.OPENAI_API_KEY,
+        },
+        body: JSON.stringify({
+          model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+          temperature: 0.2,
+          max_tokens: 1400,
+          messages: [
+            {
+              role: "system",
+              content: `
 You are Grace.
 
 Do not call yourself AI unless directly asked.
 You are warm, useful, direct, conversational, practical, and safe.
 
-You are helping with a WEB SEARCH result.
+You are answering with current web search results.
 
 Instructions:
-- Answer the user's question using the search results provided.
+- Use the recent conversation to understand what the user is referring to.
+- Answer the user's latest request using the search results provided.
+- Never claim that you cannot search the web when search results are provided.
 - Do not simply summarize links.
 - Compare the strongest possibilities.
 - Give the closest-to-correct answer first.
-- Use confidence percentages/ranges when useful.
 - Separate facts from assumptions.
-- Mention uncertainty when the search results are incomplete or conflicting.
+- Mention uncertainty when results are incomplete or conflicting.
+- When searching products, vehicles, property, equipment, or listings,
+  give useful comparable results when available.
+- Include useful prices, locations, years/models/specs when supported.
 - Give practical next steps.
 - Do not use generic filler.
-- Be clear and useful.
-- If the user asked for a comparison, compare clearly.
-- If the user asked for a recommendation, give one and explain why.
-- If the results are weak or mixed, say that honestly.
-- If appropriate, give next steps.
-- End with a short SOURCES section listing the source titles and URLs.
-- Do not say you browsed the web unless natural phrasing calls for it.
-- You can use the saved memory as helpful context, but do not invent facts.
-            `.trim(),
-          },
-          {
-            role: "user",
-            content: `
-User question:
+- End with a short SOURCES section listing source titles and URLs.
+- Use saved memory only as helpful context. Do not invent facts.
+              `.trim(),
+            },
+            {
+              role: "user",
+              content: `
+Recent conversation:
+${recentConversation || "No recent conversation supplied."}
+
+Latest request:
 ${query}
+
+Search query used:
+${searchQuery}
 
 Saved memory:
 ${memory || "No saved memory."}
@@ -110,12 +196,13 @@ ${memory || "No saved memory."}
 Search results:
 ${resultsText}
 
-Write the answer as Grace.
-            `.trim(),
-          },
-        ],
-      }),
-    });
+Answer as Grace.
+              `.trim(),
+            },
+          ],
+        }),
+      }
+    );
 
     const aiData = await aiRes.json();
 
@@ -132,7 +219,9 @@ Write the answer as Grace.
     });
   } catch (error: any) {
     return Response.json({
-      reply: "Grace web search hit a glitch: " + (error?.message || "Unknown error"),
+      reply:
+        "Grace web search hit a glitch: " +
+        (error?.message || "Unknown error"),
     });
   }
 }

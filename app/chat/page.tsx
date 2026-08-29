@@ -1200,6 +1200,13 @@ Do not put any business name on the report except the user's provided business/n
         body: JSON.stringify({
           query: cleanQuery,
           memory,
+          conversation: messagesRef.current
+            .filter((m) => m.role === "user" || m.role === "assistant")
+            .slice(-8)
+            .map((m) => ({
+              role: m.role,
+              content: m.content,
+            })),
         }),
       });
 
@@ -1262,6 +1269,16 @@ Do not put any business name on the report except the user's provided business/n
       "deal",
       "facebook marketplace",
       "marketplace",
+      "on the web",
+      "web search",
+      "online",
+      "internet",
+      "browse",
+      "look online",
+      "find online",
+      "find me online",
+      "listings",
+      "for sale online",
     ];
 
     return webWords.some((word) => clean.includes(word));
