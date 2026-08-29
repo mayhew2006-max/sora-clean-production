@@ -496,53 +496,60 @@ export default function GraceChat() {
   }, [userId]);
 
  async function updateMemory(text: string) {
-    const lower = text.toLowerCase();
+    const clean = text.trim();
+    if (!clean) return;
 
-    const important =
-      lower.includes("my name is") ||
-      lower.includes("remember") ||
-      lower.includes("i lost") ||
-      lower.includes("my dad") ||
-      lower.includes("my mom") ||
-      lower.includes("my daughter") ||
-      lower.includes("my son") ||
-      lower.includes("i feel") ||
-      lower.includes("i like") ||
-      lower.includes("i struggle") ||
-      lower.includes("i miss") ||
-      lower.includes("i love") ||
-      lower.includes("my business") ||
-      lower.includes("my company") ||
-      lower.includes("my project");
+    try {
+      const res = await fetch("/api/memory", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          text: clean,
+          memory: memoryRef.current,
+        }),
+      });
 
-    if (!important) return;
+      if (!res.ok) return;
 
-    const updated = `${memoryRef.current}\nUser said: ${text}`.trim().slice(-3500);
+      const data = await res.json();
 
-    memoryRef.current = updated;
-    setMemory(updated);
-
-    // Keep the local copy as a fallback.
-    localStorage.setItem("grace_memory", updated);
-
-    // Also save memory to the signed-in Grace account.
-    if (userId) {
-      const { error } = await supabase
-        .from("grace_user_memory")
-        .upsert(
-          {
-            user_id: userId,
-            memory: updated,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "user_id" }
-        );
-
-      if (error) {
-        console.error("Grace account memory save failed:", error);
+      if (
+        !data?.changed ||
+        typeof data?.memory !== "string" ||
+        !data.memory.trim()
+      ) {
+        return;
       }
+
+      const updated = data.memory.trim().slice(-6000);
+
+      memoryRef.current = updated;
+      setMemory(updated);
+      localStorage.setItem("grace_memory", updated);
+
+      if (userId) {
+        const { error } = await supabase
+          .from("grace_user_memory")
+          .upsert(
+            {
+              user_id: userId,
+              memory: updated,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "user_id" }
+          );
+
+        if (error) {
+          console.error("Grace account memory save failed:", error);
+        }
+      }
+    } catch (error) {
+      console.error("Grace smart memory skipped:", error);
     }
   }
+
 
   function splitForSpeech(text: string) {
     const clean = text
