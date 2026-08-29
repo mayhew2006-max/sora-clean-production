@@ -7,6 +7,8 @@ export default function AccountPage() {
   const [email, setEmail] = useState("");
   const [paid, setPaid] = useState(false);
   const [founder, setFounder] = useState(false);
+  const [billingBusy, setBillingBusy] = useState(false);
+  const [billingMessage, setBillingMessage] = useState("");
 
   useEffect(() => {
     async function load() {
@@ -31,6 +33,45 @@ export default function AccountPage() {
 
     load();
   }, []);
+
+  async function manageSubscription() {
+    setBillingBusy(true);
+    setBillingMessage("");
+
+    try {
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+
+      if (!token) {
+        window.location.href = "/login";
+        return;
+      }
+
+      const res = await fetch("/api/create-portal-session", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const json = await res.json();
+
+      if (!res.ok || !json.url) {
+        setBillingMessage(
+          json.error || "Unable to open subscription management."
+        );
+        return;
+      }
+
+      window.location.href = json.url;
+    } catch {
+      setBillingMessage(
+        "Unable to open subscription management right now."
+      );
+    } finally {
+      setBillingBusy(false);
+    }
+  }
 
   async function logout() {
     await supabase.auth.signOut();
@@ -59,13 +100,32 @@ export default function AccountPage() {
           </p>
         </div>
 
-        <a
-          href="https://billing.stripe.com/p/login/14A3cw1AZfbD2bM6Pc1gs00"
-          target="_blank"
-          className="block w-full bg-zinc-950 text-white rounded-2xl py-4 font-bold mb-3"
-        >
-          Manage Subscription
-        </a>
+        {founder ? (
+          <div className="block w-full bg-black/5 text-zinc-700 rounded-2xl py-4 font-bold mb-3">
+            Founder access — no subscription needed
+          </div>
+        ) : paid ? (
+          <button
+            onClick={manageSubscription}
+            disabled={billingBusy}
+            className="block w-full bg-zinc-950 text-white rounded-2xl py-4 font-bold mb-3 disabled:opacity-60"
+          >
+            {billingBusy ? "Opening billing..." : "Manage Subscription"}
+          </button>
+        ) : (
+          <a
+            href="/pay"
+            className="block w-full bg-zinc-950 text-white rounded-2xl py-4 font-bold mb-3"
+          >
+            Upgrade to Grace Pro
+          </a>
+        )}
+
+        {billingMessage && (
+          <p className="text-sm text-zinc-700 bg-black/5 rounded-2xl p-3 mb-3">
+            {billingMessage}
+          </p>
+        )}
 
         <button
           onClick={logout}
