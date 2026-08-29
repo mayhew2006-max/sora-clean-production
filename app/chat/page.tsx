@@ -2156,6 +2156,13 @@ Do not say you cannot see the photo if images are attached.
 
             <div className="flex gap-2">
               <a
+                href="mailto:mayhew2006@gmail.com?subject=Grace%20Feedback"
+                className="rounded-2xl border border-[#efb99f] bg-white/80 px-4 py-3 text-sm font-black text-[#6f3b2a] shadow-sm"
+              >
+                Feedback
+              </a>
+
+              <a
                 href="/account"
                 className="rounded-2xl border border-[#efb99f] bg-white/80 px-4 py-3 text-sm font-black text-[#6f3b2a] shadow-sm"
               >
