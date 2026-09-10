@@ -151,6 +151,7 @@ export default function GraceChat() {
   const [inAppBrowser, setInAppBrowser] = useState(false);
   const [hideBrowserWarning, setHideBrowserWarning] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
+ const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const [toolType, setToolType] = useState("Photo Analysis");
   const [images, setImages] = useState<string[]>([]);
@@ -2112,7 +2113,7 @@ Do not say you cannot see the photo if images are attached.
   }
 
   return (
-    <main className="min-h-[100dvh] bg-[#fff7f1] text-[#2f2723] flex flex-col overflow-hidden">
+    <main className="h-[100dvh] bg-[#fff7f1] text-[#2f2723] flex flex-col overflow-hidden">
       <input
         ref={cameraInputRef}
         type="file"
@@ -2135,43 +2136,52 @@ Do not say you cannot see the photo if images are attached.
         <div className="relative h-full px-5 pt-4 overflow-hidden">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(251,146,60,0.22),transparent_42%),radial-gradient(circle_at_bottom_left,rgba(244,114,182,0.12),transparent_40%)] pointer-events-none" />
 
-          <header className="relative z-10 flex justify-between items-start">
-            <div>
-              <h1 className="text-4xl font-black tracking-tight text-[#2f2723]">
-                Grace
-              </h1>
+          <header className="relative z-30 h-16 shrink-0 border-b border-[#efb99f] bg-[#fff7f1]/95 backdrop-blur px-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setSidebarOpen(true)}
+                aria-label="Open Grace memory"
+                className="rounded-xl border border-[#efb99f] bg-white px-3 py-2 text-lg font-black text-[#6f3b2a] shadow-sm"
+              >
+                ☰
+              </button>
 
-              {!paid && (
-                <p className="mt-2 inline-flex items-center rounded-full border border-[#efb99f] bg-white/75 px-4 py-2 text-sm font-semibold text-[#8b4b34] shadow-sm">
-                  {freeLeft} free messages/actions left
-                </p>
-              )}
+              <img
+                src={graceAvatar}
+                alt="Grace"
+                className="w-10 h-10 rounded-full object-cover object-top border border-[#efb99f] shadow-sm"
+              />
 
-              {webMode && (
-                <p className="mt-2 inline-flex items-center rounded-full border border-[#efb99f] bg-[#fff1e8] px-4 py-2 text-xs font-black uppercase tracking-wide text-[#8b4b34] shadow-sm">
-                  Web mode on
-                </p>
-              )}
+              <div className="leading-tight">
+                <h1 className="text-lg font-black tracking-tight text-[#2f2723]">
+                  Grace
+                </h1>
+
+                {!paid && (
+                  <p className="text-[11px] font-semibold text-[#8b4b34]">
+                    {freeLeft} free left
+                  </p>
+                )}
+              </div>
             </div>
 
-            <div className="flex gap-2">
-              <a
-                href="mailto:mayhew2006@gmail.com?subject=Grace%20Feedback"
-                className="rounded-2xl border border-[#efb99f] bg-white/80 px-4 py-3 text-sm font-black text-[#6f3b2a] shadow-sm"
-              >
-                Feedback
-              </a>
+            <div className="flex items-center gap-2">
+              {webMode && (
+                <span className="hidden sm:inline-flex rounded-full border border-[#efb99f] bg-[#fff1e8] px-3 py-1 text-[10px] font-black uppercase tracking-wide text-[#8b4b34]">
+                  Web on
+                </span>
+              )}
 
               <a
                 href="/account"
-                className="rounded-2xl border border-[#efb99f] bg-white/80 px-4 py-3 text-sm font-black text-[#6f3b2a] shadow-sm"
+                className="rounded-xl border border-[#efb99f] bg-white px-3 py-2 text-sm font-black text-[#6f3b2a] shadow-sm"
               >
                 Account
               </a>
             </div>
           </header>
 
-          {inAppBrowser && !hideBrowserWarning && (
+ {inAppBrowser && !hideBrowserWarning && (
             <div className="relative z-20 mt-4 rounded-[1.5rem] border border-[#efb99f] bg-white/95 p-4 shadow-xl">
               <div className="flex items-start gap-3">
                 <div className="text-2xl">⚠️</div>
@@ -2211,43 +2221,7 @@ Do not say you cannot see the photo if images are attached.
             </div>
           )}
 
- <div className="relative z-10 mt-5 flex flex-col items-center text-center">
-            <div
-              className={`relative w-[31vh] max-w-[310px] aspect-square rounded-[2.4rem] overflow-hidden border border-white/80 bg-white shadow-2xl ${
-                listening || loading || toolLoading
-                  ? "shadow-[0_0_70px_rgba(251,146,60,0.65)] animate-pulse"
-                  : "shadow-[0_18px_60px_rgba(120,60,30,0.25)]"
-              }`}
-            >
-              <img
-                src={graceAvatar}
-                alt="Grace"
-                className="w-full h-full object-cover object-top scale-105"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent" />
-            </div>
-
-            <p className="mt-4 inline-flex items-center gap-2 rounded-full bg-white/80 border border-[#efb99f] px-5 py-3 text-sm font-semibold text-[#6f3b2a] shadow-sm backdrop-blur">
-              <span
-                className={`w-3 h-3 rounded-full ${
-                  listening
-                    ? "bg-green-500"
-                    : loading || toolLoading
-                    ? "bg-[#f3a683]"
-                    : "bg-[#d97757]"
-                }`}
-              />
-              {toolLoading
-                ? "Grace is building it..."
-                : loading
-                ? "Grace is thinking..."
-                : listening
-                ? "Grace is listening..."
-                : "Ready when you are"}
-            </p>
-          </div>
-
-          {images.length > 0 && (
+ {images.length > 0 && (
             <div className="relative z-10 mt-3 rounded-[1.5rem] border border-[#efb99f] bg-white/85 p-3 shadow-lg">
               <div className="mb-2 flex items-center justify-between">
                 <p className="text-xs font-black text-[#6f3b2a]">
@@ -2285,148 +2259,9 @@ Do not say you cannot see the photo if images are attached.
             </div>
           )}
 
-          {lastToolAnswer && !locked && (
-            <div className="relative z-20 mt-3 rounded-[1.5rem] border border-[#efb99f] bg-white/90 p-3 shadow-xl backdrop-blur">
-              <p className="mb-2 text-xs font-black uppercase tracking-wide text-[#8b4b34]">
-                Grace actions
-              </p>
+          {/* Grace actions are command-based and hidden. */}
 
-              <div className="grid grid-cols-4 gap-2">
-                <button
-                  onClick={copyLastAnswer}
-                  disabled={loading || toolLoading}
-                  className="rounded-2xl border border-[#efb99f] bg-[#fff7f1] px-3 py-3 text-sm font-black text-[#6f3b2a] shadow-sm disabled:opacity-40"
-                >
-                  Copy
-                </button>
 
-                <button
-                  onClick={() => downloadPDF()}
-                  disabled={loading || toolLoading}
-                  className="rounded-2xl bg-[#2f2723] px-3 py-3 text-sm font-black text-white shadow-sm disabled:opacity-40"
-                >
-                  PDF
-                </button>
-
-                <button
-                  onClick={() =>
-                    speak(lastToolAnswer).catch(() =>
-                      console.log("voice playback failed")
-                    )
-                  }
-                  disabled={loading || toolLoading}
-                  className="rounded-2xl border border-[#efb99f] bg-[#fff7f1] px-3 py-3 text-sm font-black text-[#6f3b2a] shadow-sm disabled:opacity-40"
-                >
-                  Read
-                </button>
-
-                <button
-                  onClick={saveCurrentResult}
-                  disabled={loading || toolLoading}
-                  className="rounded-2xl border border-[#efb99f] bg-[#fff7f1] px-3 py-3 text-sm font-black text-[#6f3b2a] shadow-sm disabled:opacity-40"
-                >
-                  Save
-                </button>
-              </div>
-
-              <p className="mt-2 text-xs text-[#9a6b5a]">
-                You can also ask Grace: “make that a PDF,” “copy that,” “read that out loud,” or “save that.”
-              </p>
-            </div>
-          )}
-
- {/* Tools are now command-based and hidden behind Grace. */}
-
- {savedReportsOpen && (
-            <div className="relative z-20 mt-3 rounded-[2rem] border border-[#efb99f] bg-white/95 p-4 shadow-xl">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-black text-[#6f3b2a]">
-                    Saved Reports
-                  </p>
-                  <p className="mt-1 text-xs text-[#9a6b5a]">
-                    Reopen, read, download, or delete reports Grace has saved on this device.
-                  </p>
-                </div>
-
-                <button
-                  onClick={() => setSavedReportsOpen(false)}
-                  className="text-sm font-bold text-[#9a6b5a]"
-                >
-                  Close
-                </button>
-              </div>
-
-              {savedReports.length === 0 ? (
-                <div className="mt-4 rounded-2xl border border-[#efb99f] bg-[#fff7f1] p-4 text-sm font-semibold text-[#8b6a5f]">
-                  No saved reports yet. Create a result with Grace, then tap Save.
-                </div>
-              ) : (
-                <div className="mt-4 max-h-[42vh] space-y-3 overflow-y-auto pr-1">
-                  {savedReports.map((report) => (
-                    <div
-                      key={report.id}
-                      className="rounded-2xl border border-[#efb99f] bg-[#fff7f1] p-4 shadow-sm"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="font-black text-[#2f2723]">
-                            {report.title}
-                          </p>
-                          <p className="mt-1 text-xs text-[#9a6b5a]">
-                            {new Date(report.createdAt).toLocaleString()}
-                          </p>
-                          {report.projectName ? (
-                            <p className="mt-1 text-xs font-semibold text-[#8b6a5f]">
-                              Project: {report.projectName}
-                            </p>
-                          ) : null}
-                        </div>
-
-                        <button
-                          onClick={() => deleteSavedReport(report.id)}
-                          className="rounded-full bg-white px-3 py-1 text-xs font-black text-[#8b4b34]"
-                        >
-                          Delete
-                        </button>
-                      </div>
-
-                      <p className="mt-3 line-clamp-3 text-sm leading-6 text-[#6f3b2a]">
-                        {report.answer}
-                      </p>
-
-                      <div className="mt-3 grid grid-cols-3 gap-2">
-                        <button
-                          onClick={() => openSavedReport(report)}
-                          className="rounded-2xl bg-[#f3a683] px-3 py-3 text-xs font-black text-white"
-                        >
-                          Open
-                        </button>
-
-                        <button
-                          onClick={() =>
-                            speak(report.answer).catch(() =>
-                              console.log("voice playback failed")
-                            )
-                          }
-                          className="rounded-2xl border border-[#efb99f] bg-white px-3 py-3 text-xs font-black text-[#6f3b2a]"
-                        >
-                          Read
-                        </button>
-
-                        <button
-                          onClick={() => downloadPDF(report.answer, report.title)}
-                          className="rounded-2xl bg-[#2f2723] px-3 py-3 text-xs font-black text-white"
-                        >
-                          PDF
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
 
  {detailsOpen && (
             <div className="relative z-20 mt-3 rounded-[2rem] border border-[#efb99f] bg-white/95 p-4 shadow-xl">
@@ -2525,8 +2360,8 @@ Do not say you cannot see the photo if images are attached.
             </div>
           )}
 
-          <div className="relative z-10 mt-4 bg-white/70 border border-[#efb99f] rounded-[2rem] p-3 backdrop-blur shadow-xl">
-            <div className="max-h-[58vh] overflow-y-auto space-y-3 pr-1">
+          <div className="relative z-10 h-[calc(100%-4rem)] overflow-hidden">
+            <div className="grace-message-scroll h-full overflow-y-auto px-4 sm:px-6 py-5 pb-32 space-y-4">
               {messages.slice(-10).map((message, index) => (
                 <div
                   key={index}
@@ -2547,10 +2382,10 @@ Do not say you cannot see the photo if images are attached.
                       <img
                         src={graceAvatar}
                         alt="Grace"
-                        className="w-11 h-11 rounded-full object-cover object-top border border-[#efb99f] shadow-sm"
+                        className="w-8 h-8 rounded-full object-cover object-top border border-[#efb99f] shadow-sm shrink-0"
                       />
 
-                      <div className="bg-[#fffaf6] border border-[#f1c7b4] text-[#2f2723] rounded-3xl px-5 py-4 shadow-sm whitespace-pre-wrap leading-relaxed">
+                      <div className="text-[#2f2723] px-1 py-2 whitespace-pre-wrap leading-7 max-w-3xl">
                         {message.content}
                       </div>
                     </>
@@ -2578,7 +2413,87 @@ Do not say you cannot see the photo if images are attached.
         </div>
       </section>
 
-      {locked && (
+      {sidebarOpen && (
+        <div className="fixed inset-0 z-50">
+          <button
+            aria-label="Close sidebar"
+            onClick={() => setSidebarOpen(false)}
+            className="absolute inset-0 bg-black/30"
+          />
+
+          <aside className="absolute left-0 top-0 h-full w-[88%] max-w-sm bg-[#fff7f1] border-r border-[#efb99f] shadow-2xl flex flex-col">
+            <div className="h-16 border-b border-[#efb99f] px-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <img
+                  src={graceAvatar}
+                  alt="Grace"
+                  className="w-9 h-9 rounded-full object-cover object-top border border-[#efb99f]"
+                />
+                <div>
+                  <p className="font-black text-[#2f2723]">Grace</p>
+                  <p className="text-xs text-[#9a6b5a]">Memory & saved items</p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setSidebarOpen(false)}
+                className="rounded-xl border border-[#efb99f] bg-white px-3 py-2 font-black text-[#6f3b2a]"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-5">
+              <section>
+                <p className="mb-2 text-xs font-black uppercase tracking-wide text-[#8b4b34]">
+                  Memory
+                </p>
+
+                <div className="rounded-2xl border border-[#efb99f] bg-white p-4 text-sm leading-6 text-[#6f3b2a] whitespace-pre-wrap">
+                  {memory.trim() || "Grace has not saved any long-term memory yet."}
+                </div>
+              </section>
+
+              <section>
+                <div className="mb-2 flex items-center justify-between">
+                  <p className="text-xs font-black uppercase tracking-wide text-[#8b4b34]">
+                    Saved reports
+                  </p>
+                  <span className="text-xs text-[#9a6b5a]">{savedReports.length}</span>
+                </div>
+
+                {savedReports.length === 0 ? (
+                  <div className="rounded-2xl border border-[#efb99f] bg-white p-4 text-sm text-[#8b6a5f]">
+                    No saved reports yet.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {savedReports.map((report) => (
+                      <button
+                        key={report.id}
+                        onClick={() => {
+                          openSavedReport(report);
+                          setSidebarOpen(false);
+                        }}
+                        className="w-full rounded-2xl border border-[#efb99f] bg-white p-3 text-left shadow-sm"
+                      >
+                        <p className="font-black text-[#2f2723]">
+                          {report.title}
+                        </p>
+                        <p className="mt-1 text-xs text-[#9a6b5a]">
+                          {new Date(report.createdAt).toLocaleString()}
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </section>
+            </div>
+          </aside>
+        </div>
+      )}
+
+ {locked && (
         <div className="p-4 border-t border-[#efb99f] text-center bg-white/95 backdrop-blur">
           <p className="text-[#6f3b2a] mb-3 font-semibold">
             You used your 50 free messages/actions. Upgrade to keep using Grace.
@@ -2645,7 +2560,8 @@ Do not say you cannot see the photo if images are attached.
         </div>
       )}
 
- <footer className="grace-input-bar fixed bottom-0 left-0 right-0 z-30 p-3 pb-[calc(0.5rem+env(safe-area-inset-bottom))] border-t border-[#efb99f] bg-[#fff7f1]/95 backdrop-blur flex gap-2 items-end">
+ <footer className="grace-input-bar fixed bottom-0 left-0 right-0 z-30 px-3 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] bg-gradient-to-t from-[#fff7f1] via-[#fff7f1]/98 to-transparent">
+        <div className="mx-auto max-w-3xl rounded-[1.6rem] border border-[#efb99f] bg-white p-2 shadow-xl flex gap-2 items-end">
         <button
           onClick={() => setToolsOpen((v) => !v)}
           disabled={locked || loading || toolLoading}
@@ -2685,6 +2601,7 @@ Do not say you cannot see the photo if images are attached.
         >
           Send
         </button>
+        </div>
       </footer>
     </main>
   );
