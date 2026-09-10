@@ -184,16 +184,18 @@ export default function GraceChat() {
     let alive = true;
 
     async function loadGraceAccount() {
-      const { data, error } = await supabase.auth.getUser();
+      const { data: sessionData } = await supabase.auth.getSession();
 
       if (!alive) return;
 
-      if (error || !data.user) {
+      const session = sessionData.session;
+
+      if (!session?.user) {
         window.location.href = "/login";
         return;
       }
 
-      const user = data.user;
+      const user = session.user;
 
       setUserId(user.id);
       setUserEmail(user.email || "");
