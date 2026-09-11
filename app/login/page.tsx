@@ -9,6 +9,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -105,13 +106,23 @@ export default function LoginPage() {
         <input
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          type="password"
+          type={showPassword ? "text" : "password"}
           placeholder="Password"
-          className="w-full rounded-2xl border border-black/10 bg-white px-4 py-4 mb-4 outline-none"
+          className="w-full rounded-2xl border border-black/10 bg-white px-4 py-4 mb-2 outline-none"
           onKeyDown={(e) => {
             if (e.key === "Enter") submit();
           }}
         />
+
+        <label className="mb-4 flex items-center gap-2 text-sm text-zinc-600">
+          <input
+            type="checkbox"
+            checked={showPassword}
+            onChange={(e) => setShowPassword(e.target.checked)}
+            className="h-4 w-4"
+          />
+          Show password
+        </label>
 
         <button
           disabled={busy}
