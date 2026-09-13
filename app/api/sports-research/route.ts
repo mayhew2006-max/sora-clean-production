@@ -326,7 +326,155 @@ Do not invent a line.
       if (researchResults.length >= maxResearch) break;
     }
 
+   
     // -------------------------------------------------------
+    // CANDIDATE VERIFICATION GATE
+    // -------------------------------------------------------
+
+    const verifierRes = await fetch(
+      "https://api.openai.com/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization:
+            "Bearer " + process.env.OPENAI_API_KEY,
+        },
+        body: JSON.stringify({
+          model:
+            process.env.OPENAI_MODEL || "gpt-4o-mini",
+          temperature: 0,
+          max_tokens: 1200,
+          messages: [
+            {
+              role: "system",
+              content: `
+You are Grace's sports verification gate.
+
+Today is:
+${easternDate}
+
+Request mode:
+${wantsLive ? "LIVE" : "PREGAME"}
+
+Your ONLY job is to verify what the public research actually supports.
+
+Do not make picks.
+Do not analyze value.
+Do not add new events.
+
+Return ONLY valid JSON:
+
+{
+  "verifiedFacts": [
+    {
+      "sport": "",
+      "event": "",
+      "eventVerified": true,
+      "dateVerified": true,
+      "pregameVerified": true,
+      "markets": [
+        {
+          "market": "",
+          "selection": "",
+          "line": "",
+          "marketVerified": true,
+          "lineVerified": true
+        }
+      ],
+      "facts": [
+        ""
+      ],
+      "confidence": "high|medium|low"
+    }
+  ],
+  "rejected": [
+    {
+      "claim": "",
+      "reason": ""
+    }
+  ]
+}
+
+VERIFICATION RULES:
+
+1. EVENT:
+- The event must be supported by research.
+- If event/date cannot be established, reject it.
+
+2. DATE:
+- For requests about today, only accept events supported as occurring today.
+- Reject stale previews, old races, old fights, old matches, old finals, and prior-season events.
+
+3. PREGAME:
+- In PREGAME mode, reject events that research indicates have already started or finished.
+- If start status cannot be established confidently, mark pregameVerified false.
+
+4. MARKET:
+- Do not assume a market exists just because it is common.
+- Only mark marketVerified true when the research actually supports the market.
+
+5. EXACT LINE:
+- Exact numbers such as -1.5, O2.5, over 9.5 corners, 6.5 strikeouts, etc.
+  require actual support.
+- If a side/market is supported but the exact number is not, keep the market
+  but set lineVerified false and line to "".
+- Never manufacture a line.
+
+6. PLAYER PROPS:
+- Verify the player is in the correct event/team.
+- Verify the prop/market if possible.
+- If only player matchup evidence exists but not the actual sportsbook line,
+  lineVerified must be false.
+
+7. SOURCES:
+- Prefer fresh official/current information.
+- Stale search snippets must not override fresh evidence.
+- Conflicting evidence lowers confidence.
+
+8. DO NOT infer facts from general knowledge.
+Use ONLY the supplied research.
+              `.trim(),
+            },
+            {
+              role: "user",
+              content: `
+USER REQUEST:
+${userQuery}
+
+PUBLIC RESEARCH:
+${JSON.stringify(researchResults)}
+
+Verify what is real and current.
+              `.trim(),
+            },
+          ],
+        }),
+      }
+    );
+
+    const verifierData = await verifierRes.json();
+
+    let verification: any = {
+      verifiedFacts: [],
+      rejected: [],
+    };
+
+    try {
+      const rawVerification =
+        verifierData?.choices?.[0]?.message?.content
+          ?.replace(/```json/gi, "")
+          .replace(/```/g, "")
+          .trim();
+
+      const parsedVerification = JSON.parse(rawVerification);
+
+      if (parsedVerification) {
+        verification = parsedVerification;
+      }
+    } catch {}
+
+ // -------------------------------------------------------
     // FINAL UNIVERSAL SPORTS BRAIN
     // -------------------------------------------------------
 
@@ -652,6 +800,19 @@ ${baselineAnalysis || "No structured baseline available."}
 
 PUBLIC RESEARCH:
 ${JSON.stringify(researchResults)}
+
+VERIFICATION GATE:
+${JSON.stringify(verification)}
+
+ABSOLUTE VERIFICATION RULES:
+- Recommend ONLY events with eventVerified=true.
+- For PREGAME requests, require pregameVerified=true.
+- For "today" requests, require dateVerified=true.
+- If a market has marketVerified=false, do not recommend that market.
+- If an exact line has lineVerified=false, do not quote that number.
+- You may say a side or market is worth watching when the exact line is unavailable.
+- Anything listed under verification.rejected is forbidden from the final recommendations.
+- Do not revive rejected candidates using general sports knowledge.
 
 Cross-check the evidence.
 
