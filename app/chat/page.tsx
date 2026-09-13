@@ -1436,47 +1436,30 @@ Only use business/report fields when the user specifically requests a report or 
  function shouldUseSportsAnalysis(text: string) {
     const clean = text.trim().toLowerCase();
 
-    const analysisWords = [
-      "best pick",
-      "best picks",
-      "best bet",
-      "best bets",
-      "best 2 leg",
-      "best 2-leg",
-      "best 3 leg",
-      "best 3-leg",
-      "2 leg",
-      "2-leg",
-      "3 leg",
-      "3-leg",
-      "rank these",
-      "rank them",
-      "rank the picks",
-      "strongest pick",
-      "strongest picks",
-      "confidence",
-      "prediction",
-      "predict",
-      "who should win",
-      "who will win",
-      "moneyline pick",
-      "spread pick",
-      "over under",
-      "over/under",
-      "prop",
-      "props",
-      "player prop",
-      "player props",
-      "good pick",
-      "good picks",
-      "anything look good",
-      "what looks good",
-      "which one is best",
-      "which are best",
+    const analysisPatterns = [
+      /\bpicks?\b/,
+      /\bbets?\b/,
+      /\bpredictions?\b/,
+      /\bpredict\b/,
+      /\bmoney\s*line\b/,
+      /\bmoneyline\b/,
+      /\bspread\b/,
+      /\bover\s*\/?\s*under\b/,
+      /\bprops?\b/,
+      /\bparlays?\b/,
+      /\b\d+\s*[- ]?legs?\b/,
+      /\bbest\s+.*\bpicks?\b/,
+      /\bstrongest\s+.*\bpicks?\b/,
+      /\brank\s+.*\bpicks?\b/,
+      /\bconfidence\b/,
+      /\bwho\s+(should|will)\s+win\b/,
+      /\banything\s+look\s+good\b/,
+      /\bwhat\s+looks\s+good\b/,
+      /\bwhich\s+.*\bbest\b/,
     ];
 
-    return analysisWords.some((word) =>
-      clean.includes(word)
+    return analysisPatterns.some((pattern) =>
+      pattern.test(clean)
     );
   }
 
