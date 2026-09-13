@@ -78,13 +78,22 @@ export async function POST(req: Request) {
 
     const selected = detectLeague();
 
+    const now = new Date();
+    const currentYear = now.getUTCFullYear();
+
+    const startOfYear = `${currentYear}0101`;
+    const endOfYear = `${currentYear}1231`;
+
     const scoreboardUrl =
       `https://site.api.espn.com/apis/site/v2/sports/` +
-      `${selected.sport}/${selected.league}/scoreboard?limit=100`;
+      `${selected.sport}/${selected.league}/scoreboard` +
+      `?limit=1000&dates=${startOfYear}-${endOfYear}` +
+      `${selected.league === "nfl" ? "&seasontype=2" : ""}`;
 
     const standingsUrl =
       `https://site.api.espn.com/apis/v2/sports/` +
-      `${selected.sport}/${selected.league}/standings`;
+      `${selected.sport}/${selected.league}/standings` +
+      `?season=${currentYear}`;
 
     const [scoreboardRes, standingsRes] = await Promise.all([
       fetch(scoreboardUrl, { cache: "no-store" }),
@@ -223,13 +232,17 @@ export async function POST(req: Request) {
       ? liveGames
       : pregameGames;
 
-    const recentFinals = [...finalGames]
+    const recentFinals = finalGames
+      .filter(
+        (game: any) =>
+          new Date(game.date).getTime() <= now.getTime()
+      )
       .sort(
         (a: any, b: any) =>
           new Date(b.date).getTime() -
           new Date(a.date).getTime()
       )
-      .slice(0, 24);
+      .slice(0, 80);
 
     function getTeamStanding(teamName: string) {
       return standingsRows.find(
@@ -278,14 +291,39 @@ export async function POST(req: Request) {
         });
     }
 
+    function summarizeRecent(results: any[]) {
+      const wins = results.filter((r: any) => r.result === "W").length;
+      const losses = results.filter((r: any) => r.result === "L").length;
+
+      const pointDiff = results.reduce(
+        (sum: number, r: any) =>
+          sum + (Number(r.teamScore) - Number(r.opponentScore)),
+        0
+      );
+
+      return {
+        games: results.length,
+        wins,
+        losses,
+        pointDiff,
+      };
+    }
+
     const enrichedEligibleGames = eligibleGames.map(
-      (game: any) => ({
-        ...game,
-        homeStanding: getTeamStanding(game.home) || null,
-        awayStanding: getTeamStanding(game.away) || null,
-        homeRecentResults: getRecentTeamResults(game.home),
-        awayRecentResults: getRecentTeamResults(game.away),
-      })
+      (game: any) => {
+        const homeRecentResults = getRecentTeamResults(game.home);
+        const awayRecentResults = getRecentTeamResults(game.away);
+
+        return {
+          ...game,
+          homeStanding: getTeamStanding(game.home) || null,
+          awayStanding: getTeamStanding(game.away) || null,
+          homeRecentResults,
+          awayRecentResults,
+          homeRecentSummary: summarizeRecent(homeRecentResults),
+          awayRecentSummary: summarizeRecent(awayRecentResults),
+        };
+      }
     );
 
     const context = {
@@ -366,6 +404,18 @@ FORBIDDEN REASONING:
 - Do not invent current injuries, trends, odds, rankings, or statistics
 
 If the supplied data does not support a claim, do not make that claim.
+
+ABSOLUTE RULE:
+If you are tempted to say things like:
+- "strong team in recent seasons"
+- "dominant in recent years"
+- "historically better"
+- "usually good"
+- "has potential"
+and that evidence is not explicitly present in the supplied context,
+DO NOT SAY IT.
+
+Use current-season record, current-season standings, and supplied recent completed results only.
 
 SCORING:
 Give each viable option a confidence score from 1-10 based on supplied evidence only.
