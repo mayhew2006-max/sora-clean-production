@@ -182,7 +182,50 @@ export default function GraceChat() {
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const historySyncedCountRef = useRef(0);
 
-  function urlBase64ToUint8Array(base64String: string) {
+  async function copyGraceLink() {
+    if (typeof window === "undefined") return;
+
+    const url = window.location.href;
+
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedLink(true);
+
+      window.setTimeout(() => {
+        setCopiedLink(false);
+      }, 2000);
+    } catch {
+      setCopiedLink(false);
+    }
+  }
+
+  function openInBrowser() {
+    if (typeof window === "undefined") return;
+
+    const url = window.location.href;
+
+    try {
+      const opened = window.open(
+        url,
+        "_blank",
+        "noopener,noreferrer"
+      );
+
+      if (!opened) {
+        navigator.clipboard
+          ?.writeText(url)
+          .then(() => setCopiedLink(true))
+          .catch(() => {});
+      }
+    } catch {
+      navigator.clipboard
+        ?.writeText(url)
+        .then(() => setCopiedLink(true))
+        .catch(() => {});
+    }
+  }
+
+ function urlBase64ToUint8Array(base64String: string) {
     const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
     const base64 = (base64String + padding)
       .replace(/-/g, "+")
@@ -201,29 +244,62 @@ export default function GraceChat() {
     setNotificationBusy(true);
 
     try {
+      if (typeof window === "undefined") {
+        throw new Error("Notifications are not available here.");
+      }
+
       if (!("serviceWorker" in navigator)) {
-        throw new Error("This device does not support Grace notifications.");
+        throw new Error(
+          "This browser does not support Grace background notifications."
+        );
+      }
+
+      if (!("Notification" in window)) {
+        throw new Error(
+          "This browser does not expose notification permission. Open Grace in Chrome or the installed Grace app."
+        );
       }
 
       if (!("PushManager" in window)) {
-        throw new Error("Push notifications are not supported on this device.");
+        throw new Error(
+          "Push notifications are not supported in this browser."
+        );
       }
 
-      const permission = await Notification.requestPermission();
+      let permission = Notification.permission;
+
+      if (permission === "default") {
+        permission = await Notification.requestPermission();
+      }
+
+      if (permission === "denied") {
+        throw new Error(
+          "Notifications are blocked for Grace. Allow notifications for Grace in your browser/app settings, then try again."
+        );
+      }
 
       if (permission !== "granted") {
-        throw new Error("Notification permission was not granted.");
+        throw new Error(
+          "Notification permission was not granted."
+        );
       }
 
       const publicKey =
         process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "";
 
       if (!publicKey) {
-        throw new Error("Grace notification public key is missing.");
+        throw new Error(
+          "Grace notification public key is missing."
+        );
       }
 
+      // Register directly here too.
+      // This prevents Grace from waiting forever if layout registration
+      // has not completed yet.
       const registration =
-        await navigator.serviceWorker.ready;
+        await navigator.serviceWorker.register("/sw.js");
+
+      await navigator.serviceWorker.ready;
 
       let subscription =
         await registration.pushManager.getSubscription();
@@ -244,21 +320,36 @@ export default function GraceChat() {
         sessionData.session?.access_token;
 
       if (!token) {
-        throw new Error("Grace could not verify your signed-in account.");
+        throw new Error(
+          "Grace could not verify your signed-in account."
+        );
       }
 
-      const res = await fetch("/api/push-subscribe", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          subscription: subscription.toJSON(),
-        }),
-      });
+      const controller = new AbortController();
 
-      const data = await res.json();
+      const timeout = window.setTimeout(() => {
+        controller.abort();
+      }, 15000);
+
+      let res: Response;
+
+      try {
+        res = await fetch("/api/push-subscribe", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            subscription: subscription.toJSON(),
+          }),
+          signal: controller.signal,
+        });
+      } finally {
+        window.clearTimeout(timeout);
+      }
+
+      const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
         throw new Error(
@@ -278,487 +369,20 @@ export default function GraceChat() {
         },
       ]);
     } catch (error: any) {
-      alert(
-        error?.message ||
-        "Grace could not enable notifications."
+      console.error(
+        "Grace notification setup failed:",
+        error
       );
+
+      const message =
+        error?.name === "AbortError"
+          ? "Grace timed out while connecting notifications. Try once more."
+          : error?.message ||
+            "Grace could not enable notifications.";
+
+      alert(message);
     } finally {
       setNotificationBusy(false);
-    }
-  }
-
-  useEffect(() => {
-    if (
-      typeof window === "undefined" ||
-      !("serviceWorker" in navigator) ||
-      !("Notification" in window)
-    ) {
-      return;
-    }
-
-    if (Notification.permission !== "granted") {
-      return;
-    }
-
-    navigator.serviceWorker.ready
-      .then((registration) =>
-        registration.pushManager.getSubscription()
-      )
-      .then((subscription) => {
-        setNotificationsEnabled(Boolean(subscription));
-      })
-      .catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    let alive = true;
-
-    async function loadGraceAccount() {
-      const { data: sessionData } = await supabase.auth.getSession();
-
-      if (!alive) return;
-
-      const session = sessionData.session;
-
-      if (!session?.user) {
-        window.location.href = "/login";
-        return;
-      }
-
-      const user = session.user;
-
-      setUserId(user.id);
-      setUserEmail(user.email || "");
-
-      const { data: usage, error: usageError } = await supabase
-        .from("grace_user_usage")
-        .select("free_messages_used, paid, founder")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      if (!alive) return;
-
-      if (usageError) {
-        console.error("Grace account usage load failed:", usageError);
-      }
-
-      if (!usage) {
-        const { error: createError } = await supabase
-          .from("grace_user_usage")
-          .insert({
-            user_id: user.id,
-            email: user.email || "",
-            free_messages_used: 0,
-          });
-
-        if (createError) {
-          console.error("Grace account creation failed:", createError);
-        }
-
-        setAccountFreeUsed(0);
-        setPaid(false);
-      } else {
-        setAccountFreeUsed(Number(usage.free_messages_used || 0));
-
-        const accountPaid =
-          Boolean(usage.paid) || Boolean(usage.founder);
-
-        setPaid(accountPaid);
-      }
-
-      setAuthReady(true);
-    }
-
-    loadGraceAccount();
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session) {
-        window.location.href = "/login";
-      }
-    });
-
-    return () => {
-      alive = false;
-      subscription.unsubscribe();
-    };
-  }, []);
-
-  useEffect(() => {
-    const graceBrandVersion = "grace-auth-v1";
-    const savedBrandVersion = localStorage.getItem("grace_brand_version");
-
-    if (savedBrandVersion !== graceBrandVersion) {
-      localStorage.setItem("grace_brand_version", graceBrandVersion);
-      localStorage.removeItem("grace_messages");
-    }
-
-    const savedMessages = localStorage.getItem("grace_messages");
-    const savedMemory = localStorage.getItem("grace_memory");
-    // Paid/founder status now comes from the signed-in Grace account.
-
-    if (savedMessages) setMessages(JSON.parse(savedMessages));
-
-    if (savedMemory) {
-      setMemory(savedMemory);
-      memoryRef.current = savedMemory;
-    }
-
-       try {
-      const savedDetails = localStorage.getItem("grace_report_details");
-      if (savedDetails) {
-        const details = JSON.parse(savedDetails);
-        setReportTitle(details.reportTitle || "");
-        setPreparedFor(details.preparedFor || "");
-        setBusinessName(details.businessName || "");
-        setProjectName(details.projectName || "");
-        setJobLocation(details.jobLocation || "");
-      }
-    } catch {}
-
-    try {
-      const saved = localStorage.getItem("grace_saved_reports_inside");
-      if (saved) setSavedReports(JSON.parse(saved));
-    } catch {}
-  }, []);
-
-  useEffect(() => {
-    if (!userId) return;
-
-    let cancelled = false;
-
-    async function loadConversationHistory() {
-      setHistoryReady(false);
-
-      const { data: existingConversation, error: conversationError } =
-        await supabase
-          .from("grace_conversations")
-          .select("id, title")
-          .eq("user_id", userId)
-          .order("updated_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-      if (cancelled) return;
-
-      if (conversationError) {
-        console.error(
-          "Grace conversation load failed:",
-          conversationError
-        );
-        setHistoryReady(true);
-        return;
-      }
-
-      let currentConversation = existingConversation;
-
-      if (!currentConversation) {
-        const { data: createdConversation, error: createError } =
-          await supabase
-            .from("grace_conversations")
-            .insert({
-              user_id: userId,
-              title: "New conversation",
-            })
-            .select("id, title")
-            .single();
-
-        if (cancelled) return;
-
-        if (createError || !createdConversation) {
-          console.error(
-            "Grace conversation creation failed:",
-            createError
-          );
-          setHistoryReady(true);
-          return;
-        }
-
-        currentConversation = createdConversation;
-      }
-
-      const id = currentConversation.id;
-      setConversationId(id);
-
-      const { data: savedRows, error: messageError } =
-        await supabase
-          .from("grace_conversation_messages")
-          .select("role, content, created_at")
-          .eq("conversation_id", id)
-          .eq("user_id", userId)
-          .order("created_at", { ascending: false })
-          .limit(200);
-
-      if (cancelled) return;
-
-      if (messageError) {
-        console.error(
-          "Grace conversation messages failed:",
-          messageError
-        );
-        setHistoryReady(true);
-        return;
-      }
-
-      if (savedRows && savedRows.length > 0) {
-        const loadedMessages: Message[] = [...savedRows]
-          .reverse()
-          .filter(
-            (row) =>
-              (row.role === "user" || row.role === "assistant") &&
-              typeof row.content === "string" &&
-              row.content.trim()
-          )
-          .map((row) => ({
-            role: row.role as "user" | "assistant",
-            content: row.content,
-          }));
-
-        historySyncedCountRef.current = loadedMessages.length;
-        messagesRef.current = loadedMessages;
-        setMessages(loadedMessages);
-
-        try {
-          localStorage.setItem(
-            "grace_messages",
-            JSON.stringify(loadedMessages.slice(-40))
-          );
-        } catch {}
-
-        setHistoryReady(true);
-        return;
-      }
-
-      // First account-history migration:
-      // preserve the conversation already stored in this browser.
-      let localMessages: Message[] = [];
-
-      try {
-        const saved = localStorage.getItem("grace_messages");
-
-        if (saved) {
-          const parsed = JSON.parse(saved);
-
-          if (Array.isArray(parsed)) {
-            localMessages = parsed
-              .filter(
-                (message: Message) =>
-                  message &&
-                  (message.role === "user" ||
-                    message.role === "assistant") &&
-                  typeof message.content === "string" &&
-                  message.content.trim()
-              )
-              .slice(-40);
-          }
-        }
-      } catch {}
-
-      if (localMessages.length > 0) {
-        const { error: migrationError } = await supabase
-          .from("grace_conversation_messages")
-          .insert(
-            localMessages.map((message) => ({
-              conversation_id: id,
-              user_id: userId,
-              role: message.role,
-              content: message.content,
-            }))
-          );
-
-        if (migrationError) {
-          console.error(
-            "Grace conversation migration failed:",
-            migrationError
-          );
-        } else {
-          historySyncedCountRef.current = localMessages.length;
-          messagesRef.current = localMessages;
-          setMessages(localMessages);
-        }
-      }
-
-      setHistoryReady(true);
-    }
-
-    loadConversationHistory();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [userId]);
-
-  useEffect(() => {
-    if (!historyReady || !conversationId || !userId) return;
-
-    const persistentMessages = messages
-      .filter(
-        (message) =>
-          (message.role === "user" ||
-            message.role === "assistant") &&
-          typeof message.content === "string" &&
-          message.content.trim() &&
-          message.content !== "I’m working on it..."
-      )
-      .map((message) => ({
-        role: message.role as "user" | "assistant",
-        content: message.content!.trim(),
-      }));
-
-    const alreadySaved = historySyncedCountRef.current;
-
-    if (persistentMessages.length <= alreadySaved) return;
-
-    const messagesToSave = persistentMessages.slice(alreadySaved);
-    const targetCount = persistentMessages.length;
-
-    const timer = window.setTimeout(async () => {
-      // Claim these messages before the network request so fast
-      // follow-up responses do not duplicate the user message.
-      historySyncedCountRef.current = targetCount;
-
-      const { error } = await supabase
-        .from("grace_conversation_messages")
-        .insert(
-          messagesToSave.map((message) => ({
-            conversation_id: conversationId,
-            user_id: userId,
-            role: message.role,
-            content: message.content,
-          }))
-        );
-
-      if (error) {
-        console.error(
-          "Grace conversation save failed:",
-          error
-        );
-
-        historySyncedCountRef.current = alreadySaved;
-        return;
-      }
-
-      const firstUserMessage = persistentMessages.find(
-        (message) => message.role === "user"
-      );
-
-      const title =
-        firstUserMessage?.content
-          ?.replace(/\s+/g, " ")
-          .trim()
-          .slice(0, 60) || "Grace conversation";
-
-      await supabase
-        .from("grace_conversations")
-        .update({
-          title,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", conversationId)
-        .eq("user_id", userId);
-    }, 700);
-
-    return () => window.clearTimeout(timer);
-  }, [
-    messages,
-    historyReady,
-    conversationId,
-    userId,
-  ]);
-
-  useEffect(() => {
-    messagesRef.current = messages;
-
-    // Do not persist generated base64 images in localStorage.
-    // They can exceed browser storage limits and crash the page.
-    const messagesForStorage = messages
-      .filter((message) => message.role !== "assistant-image")
-      .slice(-40);
-
-    try {
-      localStorage.setItem(
-        "grace_messages",
-        JSON.stringify(messagesForStorage)
-      );
-    } catch (error) {
-      console.warn("Grace message storage skipped:", error);
-    }
-
-    setTimeout(() => {
-      bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-    }, 100);
-  }, [messages, loading, toolLoading, listening]);
-
-  useEffect(() => {
-    localStorage.setItem(
-      "grace_saved_reports_inside",
-      JSON.stringify(savedReports.slice(0, 100))
-    );
-  }, [savedReports]);
-
-  useEffect(() => {
-    const ua = navigator.userAgent || "";
-    const lower = ua.toLowerCase();
-
-    const isInApp =
-      lower.includes("tiktok") ||
-      lower.includes("musical_ly") ||
-      lower.includes("bytedance") ||
-      lower.includes("instagram") ||
-      lower.includes("fbav") ||
-      lower.includes("fban") ||
-      lower.includes("fb_iab") ||
-      lower.includes("messenger");
-
-    setInAppBrowser(isInApp);
-  }, []);
-
-  async function openInBrowser() {
-    const url = window.location.href;
-
-    try {
-      await navigator.clipboard.writeText(url);
-      setCopiedLink(true);
-      setTimeout(() => setCopiedLink(false), 3500);
-    } catch {}
-
-    const ua = navigator.userAgent.toLowerCase();
-    const isAndroid = ua.includes("android");
-    const cleanUrl = url.replace(/^https?:\/\//, "");
-
-    try {
-      if (isAndroid) {
-        window.location.href =
-          "intent://" +
-          cleanUrl +
-          "#Intent;scheme=https;package=com.android.chrome;end";
-        return;
-      }
-
-      window.open(url, "_blank", "noopener,noreferrer");
-
-      setTimeout(() => {
-        alert(
-          "TikTok may block this button. I copied the Grace link for you. Tap the three dots in TikTok and choose Open in browser, or paste the copied link into Safari/Chrome."
-        );
-      }, 700);
-    } catch {
-      alert(
-        "TikTok blocked opening your browser. I copied the Grace link for you. Tap the three dots in TikTok and choose Open in browser, or paste the link into Safari/Chrome."
-      );
-    }
-  }
-
-  async function copyGraceLink() {
-    const url = window.location.href;
-
-    try {
-      await navigator.clipboard.writeText(url);
-      setCopiedLink(true);
-      setTimeout(() => setCopiedLink(false), 2500);
-    } catch {
-      alert("Copy this link: " + url);
     }
   }
 
