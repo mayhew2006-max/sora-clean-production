@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { jsPDF } from "jspdf";
 
 type Message = {
-  role: "user" | "assistant" | "assistant-image";
+  role: "user" | "user-image" | "assistant" | "assistant-image";
   content?: string;
   image?: string;
 };
@@ -950,20 +950,48 @@ export default function GraceChat() {
     setImageStatus("Preparing photo for Grace...");
 
     try {
-      const converted = await Promise.all(selected.map((file) => compressImage(file)));
-      setImages((prev) => {
-        const next = [...prev, ...converted].slice(0, 4);
-        imagesRef.current = next;
-        return next;
-      });
-      setImageStatus("Photo attached. Grace can analyze it now.");
-      // Keep Grace clean: photo attaches without opening the tools menu.
+      const converted = await Promise.all(
+        selected.map((file) => compressImage(file))
+      );
+
+      // A new upload becomes the active image context.
+      // Older attached images do not leak into the new request.
+      const newestImages = converted.slice(-4);
+
+      imagesRef.current = newestImages;
+      setImages(newestImages);
+
+      const imageMessages: Message[] = newestImages.map((image) => ({
+        role: "user-image",
+        image,
+      }));
+
+      const nextChat = [
+        ...messagesRef.current,
+        ...imageMessages,
+      ];
+
+      messagesRef.current = nextChat;
+      setMessages(nextChat);
+
+      setImageStatus("Photo added to the conversation.");
+
+      // If the user already typed a question, use it.
+      // Otherwise Grace automatically recognizes/analyzes the new photo.
+      const photoRequest =
+        input.trim() ||
+        "Look at the newest photo I uploaded. Tell me what you see, what is important, and anything useful I should know.";
+
+      await recordGraceUserMessage();
+      await runGraceTool(photoRequest, "Photo Analysis");
     } catch {
-      setImageStatus("Grace could not prepare that image. Try a different photo.");
+      setImageStatus(
+        "Grace could not prepare that image. Try a different photo."
+      );
     }
   }
 
-  function removeImage(index: number) {
+ function removeImage(index: number) {
     setImages((prev) => {
       const next = prev.filter((_, i) => i !== index);
       imagesRef.current = next;
@@ -1187,6 +1215,9 @@ Do not put any business name on the report except the user's provided business/n
 
     setLoading(true);
     loadingRef.current = true;
+    setInput("");
+    setToolsOpen(false);
+    recognitionRef.current?.stop();
 
     setMessages((prev) => [
       ...prev,
@@ -1219,7 +1250,9 @@ Do not put any business name on the report except the user's provided business/n
         throw new Error(data?.reply || "Grace web search failed.");
       }
 
-      const reply = data?.reply || "Grace searched, but did not get a useful answer.";
+      const reply =
+        data?.reply ||
+        "Grace searched, but did not get a useful answer.";
 
       setMessages((prev) => [
         ...prev,
@@ -1227,16 +1260,22 @@ Do not put any business name on the report except the user's provided business/n
       ]);
 
       setLastToolAnswer(reply);
+      speak(reply).catch(() =>
+        console.log("voice playback failed")
+      );
     } catch (error: any) {
+      const reply =
+        "Grace web search hit a glitch: " +
+        (error?.message || "Unknown error");
+
       setMessages((prev) => [
         ...prev,
-        {
-          role: "assistant",
-          content:
-            "Grace web search hit a glitch: " +
-            (error?.message || "Unknown error"),
-        },
+        { role: "assistant", content: reply },
       ]);
+
+      speak(reply).catch(() =>
+        console.log("voice playback failed")
+      );
     } finally {
       setLoading(false);
       loadingRef.current = false;
@@ -2425,12 +2464,21 @@ Do not say you cannot see the photo if images are attached.
                 <div
                   key={index}
                   className={
-                    message.role === "user"
-                      ? "ml-auto max-w-[85%] bg-[#f3a683] text-white rounded-3xl px-5 py-4 shadow-lg whitespace-pre-wrap"
+                    message.role === "user" ||
+                    message.role === "user-image"
+                      ? "ml-auto max-w-[85%]"
                       : "mr-auto max-w-[88%] flex gap-3 items-start"
                   }
                 >
-                  {message.role === "assistant-image" ? (
+                  {message.role === "user-image" ? (
+                    <div className="rounded-3xl bg-[#f3a683] p-2 shadow-lg">
+                      <img
+                        src={message.image}
+                        alt="Uploaded photo"
+                        className="max-h-80 w-auto max-w-full rounded-2xl object-contain"
+                      />
+                    </div>
+                  ) : message.role === "assistant-image" ? (
                     <img
                       src={message.image}
                       alt="Generated Grace"
@@ -2449,12 +2497,14 @@ Do not say you cannot see the photo if images are attached.
                       </div>
                     </>
                   ) : (
-                    message.content
+                    <div className="bg-[#f3a683] text-white rounded-3xl px-5 py-4 shadow-lg whitespace-pre-wrap">
+                      {message.content}
+                    </div>
                   )}
                 </div>
               ))}
 
-              {(loading || toolLoading) && (
+ {(loading || toolLoading) && (
                 <p className="text-[#9a6b5a] animate-pulse pl-14">
                   Grace is working...
                 </p>
