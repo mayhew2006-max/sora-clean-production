@@ -1,6 +1,18 @@
 export async function POST(req: Request) {
   try {
-    const { query } = await req.json();
+    const body = await req.json();
+
+    const query = body?.query;
+
+    const screenshotImages = Array.isArray(body?.images)
+      ? body.images
+          .filter(
+            (image: unknown) =>
+              typeof image === "string" &&
+              image.startsWith("data:image/")
+          )
+          .slice(0, 4)
+      : [];
 
     if (!query || !String(query).trim()) {
       return Response.json(
@@ -24,6 +36,151 @@ export async function POST(req: Request) {
     }
 
     const userQuery = String(query).trim();
+
+    // GRACE_SCREENSHOT_READ_V1
+    // Read user-provided sportsbook/web screenshots before research.
+    let screenshotContext = "";
+
+    if (screenshotImages.length > 0) {
+      try {
+        const visionRes = await fetch(
+          "https://api.openai.com/v1/chat/completions",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization:
+                "Bearer " + process.env.OPENAI_API_KEY,
+            },
+            body: JSON.stringify({
+              model: "gpt-4o-mini",
+              temperature: 0,
+              max_tokens: 1600,
+              response_format: {
+                type: "json_object",
+              },
+              messages: [
+                {
+                  role: "system",
+                  content: `
+You read sports and sportsbook screenshots for Grace.
+
+Extract only what is visibly present.
+
+Return JSON:
+
+{
+  "summary": "brief description of the board",
+  "items": [
+    {
+      "sport": "",
+      "event": "",
+      "player": "",
+      "team": "",
+      "market": "",
+      "selection": "",
+      "line": "",
+      "odds": ""
+    }
+  ]
+}
+
+Rules:
+- Read players, teams, matchups, markets, More/Less, Over/Under,
+  spreads, moneylines, totals, props and visible lines.
+- Preserve exact visible numbers.
+- Preserve exact visible player/team names.
+- Do not invent an opponent.
+- Do not invent a line.
+- Do not invent odds.
+- If text is unreadable, leave that field blank.
+- Include up to 40 clearly readable items.
+                  `.trim(),
+                },
+                {
+                  role: "user",
+                  content: [
+                    {
+                      type: "text",
+                      text:
+                        "Read these user-provided sports screenshots carefully.",
+                    },
+                    ...screenshotImages.map((image: string) => ({
+                      type: "image_url",
+                      image_url: {
+                        url: image,
+                        detail: "high",
+                      },
+                    })),
+                  ],
+                },
+              ],
+            }),
+          }
+        );
+
+        if (visionRes.ok) {
+          const visionData = await visionRes.json();
+
+          const raw =
+            visionData?.choices?.[0]?.message?.content
+              ?.replace(/```json/gi, "")
+              .replace(/```/g, "")
+              .trim();
+
+          if (raw) {
+            const parsed = JSON.parse(raw);
+
+            const items = Array.isArray(parsed?.items)
+              ? parsed.items.slice(0, 40)
+              : [];
+
+            const itemText = items
+              .map((item: any, index: number) => {
+                return [
+                  `${index + 1}.`,
+                  item?.sport ? `Sport=${item.sport}` : "",
+                  item?.event ? `Event=${item.event}` : "",
+                  item?.player ? `Player=${item.player}` : "",
+                  item?.team ? `Team=${item.team}` : "",
+                  item?.market ? `Market=${item.market}` : "",
+                  item?.selection
+                    ? `Selection=${item.selection}`
+                    : "",
+                  item?.line ? `Line=${item.line}` : "",
+                  item?.odds ? `Odds=${item.odds}` : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ");
+              })
+              .filter(Boolean)
+              .join("\n");
+
+            screenshotContext = [
+              "USER-PROVIDED SCREENSHOT DATA:",
+              typeof parsed?.summary === "string"
+                ? parsed.summary
+                : "",
+              itemText,
+            ]
+              .filter(Boolean)
+              .join("\n");
+          }
+        }
+      } catch (error) {
+        console.error(
+          "Grace screenshot reading failed:",
+          error
+        );
+      }
+    }
+
+    const researchUserQuery = screenshotContext
+      ? `${userQuery}
+
+${screenshotContext}`
+      : userQuery;
+
     const clean = userQuery.toLowerCase();
 
     const now = new Date();
@@ -83,7 +240,7 @@ export async function POST(req: Request) {
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
-              query: userQuery,
+              query: researchUserQuery,
             }),
             cache: "no-store",
           }
@@ -188,7 +345,7 @@ Do not invent a line.
               },
               {
                 role: "user",
-                content: userQuery,
+                content: researchUserQuery,
               },
             ],
           }),
@@ -218,10 +375,10 @@ Do not invent a line.
 
       if (!searchQueries.length) {
         searchQueries = [
-          `${userQuery} ${easternDate} upcoming event odds`,
-          `${userQuery} injuries starters lineup ${easternDate}`,
-          `${userQuery} stats recent form matchup ${easternDate}`,
-          `${userQuery} weather news coach comments ${easternDate}`,
+          `${researchUserQuery} ${easternDate} upcoming event odds`,
+          `${researchUserQuery} injuries starters lineup ${easternDate}`,
+          `${researchUserQuery} stats recent form matchup ${easternDate}`,
+          `${researchUserQuery} weather news coach comments ${easternDate}`,
         ];
       }
     }
@@ -1284,7 +1441,7 @@ Be concise, direct and practical.
               role: "user",
               content: `
 USER REQUEST:
-${userQuery}
+${researchUserQuery}
 
 SPORT:
 ${sportLabel}
@@ -1295,15 +1452,27 @@ ${eventLabel}
 STEP 9 STRUCTURED BASELINE:
 ${baselineAnalysis || "No structured baseline available."}
 
-SANITIZED VERIFIED EVIDENCE ONLY:
+USER-PROVIDED SCREENSHOT MARKET DATA:
+${screenshotContext || "No screenshot market data supplied."}
+
+SANITIZED VERIFIED WEB EVIDENCE:
 ${JSON.stringify(safeVerification)}
+
+GRACE_SCREENSHOT_MARKET_EVIDENCE_V1
 
 ABSOLUTE VERIFICATION RULES:
 - Recommend ONLY events with eventVerified=true.
 - For PREGAME requests, require pregameVerified=true.
 - For "today" requests, require dateVerified=true.
 - Event/date/pregame verification is mandatory.
-- If an exact line has lineVerified=false, NEVER quote that number.
+- If an exact line appears clearly in USER-PROVIDED SCREENSHOT MARKET DATA,
+  Grace MAY quote that exact visible line because the user's screenshot verifies
+  what market/line is being offered.
+- A screenshot does NOT verify the event date, start status, injury status,
+  statistics, recent form, weather, lineup information, or predictive reasons.
+- Those facts still require verified current web evidence.
+- If an exact line is NOT present in the screenshot data and lineVerified=false,
+  NEVER quote that number.
 - For simple winner/side analysis, if the EVENT is verified and the verified facts
   provide enough evidence, you MAY recommend "Team/Player to win" without quoting odds.
 - Do not label that recommendation with an unverified sportsbook price.
@@ -1315,7 +1484,9 @@ ABSOLUTE VERIFICATION RULES:
   "Pick: Angels to win" rather than "Angels -120."
 - Anything listed under verification.rejected is forbidden from the final recommendations.
 - Do not revive rejected candidates using general sports knowledge.
-- The SANITIZED VERIFIED EVIDENCE ONLY object is your entire factual universe.
+- Your factual universe consists ONLY of:
+  1. USER-PROVIDED SCREENSHOT MARKET DATA for the visibly offered market/line, and
+  2. SANITIZED VERIFIED WEB EVIDENCE for event/date/status and predictive facts.
 - If a matchup has fewer than two verified participants, it cannot be recommended.
 - Never output generic events such as "ATP Tournament", "UEFA Champions League",
   "MLB", "NFL", "NBA", "UFC", or another league/tournament name without the

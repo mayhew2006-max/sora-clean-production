@@ -1065,6 +1065,63 @@ export default function GraceChat() {
   }
 
 
+ // GRACE_SPORTS_SCREENSHOT_ROUTING_V1
+  function isSportsScreenshotRequest(text: string) {
+    const clean = text.trim().toLowerCase();
+
+    const sportsWords = [
+      "sport",
+      "sports",
+      "bet",
+      "bets",
+      "betting",
+      "pick",
+      "picks",
+      "prop",
+      "props",
+      "parlay",
+      "leg",
+      "legs",
+      "moneyline",
+      "spread",
+      "total",
+      "over",
+      "under",
+      "more",
+      "less",
+      "strikeout",
+      "strikeouts",
+      "total bases",
+      "pra",
+      "touchdown",
+      "touchdowns",
+      "goals",
+      "shots",
+      "winner",
+      "matchup",
+      "draftkings",
+      "fanduel",
+      "anything look good",
+      "anything good",
+      "anything worth",
+      "best 2",
+      "best two",
+      "best 3",
+      "best three",
+      "6-leg",
+      "6 leg",
+      "six-leg",
+      "six leg",
+      "no reuse",
+      "don't reuse",
+      "do not reuse",
+    ];
+
+    return sportsWords.some((word) =>
+      clean.includes(word)
+    );
+  }
+
  async function handleImages(files: FileList | null) {
     if (!files) return;
 
@@ -1108,12 +1165,25 @@ export default function GraceChat() {
 
       // If the user already typed a question, use it.
       // Otherwise Grace automatically recognizes/analyzes the new photo.
+      const typedPhotoRequest = input.trim();
+
       const photoRequest =
-        input.trim() ||
+        typedPhotoRequest ||
         "Look at the newest photo I uploaded. Tell me what you see, what is important, and anything useful I should know.";
 
       await recordGraceUserMessage();
-      await runGraceTool(photoRequest, "Photo Analysis");
+
+      if (
+        typedPhotoRequest &&
+        isSportsScreenshotRequest(typedPhotoRequest)
+      ) {
+        await runGraceSportsAnalysis(photoRequest);
+      } else {
+        await runGraceTool(
+          photoRequest,
+          "Photo Analysis"
+        );
+      }
     } catch {
       setImageStatus(
         "Grace could not prepare that image. Try a different photo."
@@ -1264,11 +1334,9 @@ Only use business/report fields when the user specifically requests a report or 
       setMessages([...nextMessages, { role: "assistant", content: reply }]);
     }
 
-    // The uploaded photo stays visible in chat, but it is no longer
-    // active context after Grace finishes this response.
-    imagesRef.current = [];
-    setImages([]);
-    setImageStatus("");
+    // Keep the newest uploaded screenshots/photos active.
+    // The next upload replaces this context automatically.
+    setImageStatus("Photo is active for follow-up questions.");
 
     loadingRef.current = false;
     setToolLoading(false);
@@ -1351,6 +1419,11 @@ Only use business/report fields when the user specifically requests a report or 
     const cleanQuery = query.trim();
     if (!cleanQuery) return;
 
+    const attachedImages =
+      imagesRef.current.length
+        ? imagesRef.current
+        : images;
+
     trackEvent("grace_sports_analysis_used");
 
     setLoading(true);
@@ -1374,6 +1447,7 @@ Only use business/report fields when the user specifically requests a report or 
         },
         body: JSON.stringify({
           query: cleanQuery,
+          images: attachedImages,
         }),
       });
 
@@ -2079,7 +2153,22 @@ function isMarketplaceQuery(text: string) {
       return;
     }
 
+    const activeImageCount =
+      (
+        imagesRef.current.length
+          ? imagesRef.current
+          : images
+      ).length;
+
     if (
+      activeImageCount > 0 &&
+      isSportsScreenshotRequest(clean)
+    ) {
+      await runGraceSportsAnalysis(clean);
+      return;
+    }
+
+ if (
       (imagesRef.current.length ? imagesRef.current : images).length > 0 &&
       (lower.includes("deal") ||
         lower.includes("marketplace") ||
