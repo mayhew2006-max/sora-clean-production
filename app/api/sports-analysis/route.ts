@@ -223,11 +223,76 @@ export async function POST(req: Request) {
       ? liveGames
       : pregameGames;
 
+    const recentFinals = [...finalGames]
+      .sort(
+        (a: any, b: any) =>
+          new Date(b.date).getTime() -
+          new Date(a.date).getTime()
+      )
+      .slice(0, 24);
+
+    function getTeamStanding(teamName: string) {
+      return standingsRows.find(
+        (row: any) =>
+          String(row.team || "").toLowerCase() ===
+          String(teamName || "").toLowerCase()
+      );
+    }
+
+    function getRecentTeamResults(teamName: string) {
+      const name = String(teamName || "").toLowerCase();
+
+      return recentFinals
+        .filter((game: any) => {
+          return (
+            String(game.home || "").toLowerCase() === name ||
+            String(game.away || "").toLowerCase() === name
+          );
+        })
+        .slice(0, 5)
+        .map((game: any) => {
+          const isHome =
+            String(game.home || "").toLowerCase() === name;
+
+          const teamScore = Number(
+            isHome ? game.homeScore : game.awayScore
+          );
+
+          const oppScore = Number(
+            isHome ? game.awayScore : game.homeScore
+          );
+
+          const opponent = isHome ? game.away : game.home;
+
+          let result = "T";
+          if (teamScore > oppScore) result = "W";
+          if (teamScore < oppScore) result = "L";
+
+          return {
+            opponent,
+            result,
+            teamScore,
+            opponentScore: oppScore,
+            date: game.date,
+          };
+        });
+    }
+
+    const enrichedEligibleGames = eligibleGames.map(
+      (game: any) => ({
+        ...game,
+        homeStanding: getTeamStanding(game.home) || null,
+        awayStanding: getTeamStanding(game.away) || null,
+        homeRecentResults: getRecentTeamResults(game.home),
+        awayRecentResults: getRecentTeamResults(game.away),
+      })
+    );
+
     const context = {
       league: selected.label,
       currentTime: new Date().toISOString(),
       requestMode: wantsLiveAnalysis ? "live" : "pregame",
-      eligibleGames,
+      eligibleGames: enrichedEligibleGames,
       pregameGames,
       liveGames,
       finalGames,
@@ -278,32 +343,46 @@ GAME-STATE RULE:
 - If no eligible pregame games are available, say so instead of using live/final games as substitutes.
 
 RANKING METHOD:
-Evaluate each candidate using whatever evidence is actually available.
+Evaluate each candidate ONLY from evidence actually present in the supplied context.
 
-Consider:
-1. Team/player strength
-2. Opponent strength
-3. Record and performance gap
-4. Home/away context
-5. Recent/current result information when supplied
-6. Matchup quality
-7. Line difficulty when the user supplies a line
-8. Volatility/risk
-9. Missing information
-10. Whether multiple picks are overly correlated
+Allowed evidence includes:
+1. Current standings/record
+2. Recent completed results supplied in context
+3. Home/away status
+4. Opponent current record
+5. Score differential from supplied recent games
+6. User-supplied line/odds/prop number
+7. Current game state when requestMode is live
+8. Missing-data risk
+
+FORBIDDEN REASONING:
+- Do not use "historically strong"
+- Do not use "traditionally good"
+- Do not use "has shown potential"
+- Do not use "past seasons"
+- Do not use roster reputation
+- Do not use unsupported star-player assumptions
+- Do not use general sports knowledge that is not in the supplied data
+- Do not invent current injuries, trends, odds, rankings, or statistics
+
+If the supplied data does not support a claim, do not make that claim.
 
 SCORING:
-Give each viable option a confidence score from 1-10.
+Give each viable option a confidence score from 1-10 based on supplied evidence only.
 
 A 10 is extremely rare.
-Do not inflate confidence just because the user wants picks.
 
 Use:
-8.5-10 = exceptional evidence
-7.5-8.4 = strong
-6.5-7.4 = usable
+8.5-10 = exceptional evidence from multiple strong current-data signals
+7.5-8.4 = strong current-data support
+6.5-7.4 = usable but incomplete
 5.5-6.4 = weak/marginal
-below 5.5 = pass
+below 5.5 = PASS
+
+IMPORTANT:
+If recent performance data is missing or weak, confidence MUST come down.
+Do not give a 7.5+ score based mainly on home-field advantage or team reputation.
+If there is not enough current statistical evidence, say PASS.
 
 If there is not enough statistical evidence for a strong rating, say PASS.
 
@@ -311,14 +390,15 @@ USER EXPERIENCE:
 - Answer naturally.
 - Do not turn this into a formal report.
 - Put the strongest option first.
-- Explain WHY in plain language.
+- Explain WHY using only current evidence from the supplied data.
 - Be concise unless the user asks for detail.
 - If asked for a 2-leg or 3-leg, choose the strongest non-duplicate options available.
 - Avoid reusing the same player or team when reasonable.
 - Do not pretend certainty.
 - Do not mention APIs, ESPN, feeds, websites, or providers.
-- Do not say "bet responsibly" unless it is actually relevant to the conversation.
 - Do not claim a guaranteed winner.
+- If evidence is weak, say PASS instead of forcing a pick.
+- Do not justify picks with vague phrases like "strong team," "good history," "potential," or "recent seasons" unless the supporting current data is explicitly supplied.
 
 IMPORTANT:
 This is Step 9 statistical ranking only.
