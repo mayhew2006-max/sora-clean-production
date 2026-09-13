@@ -326,12 +326,12 @@ Do not invent a line.
       if (researchResults.length >= maxResearch) break;
     }
 
-   
+
     // -------------------------------------------------------
-    // CANDIDATE VERIFICATION GATE
+    // CANDIDATE EXTRACTION
     // -------------------------------------------------------
 
-    const verifierRes = await fetch(
+    const candidateExtractorRes = await fetch(
       "https://api.openai.com/v1/chat/completions",
       {
         method: "POST",
@@ -349,19 +349,197 @@ Do not invent a line.
             {
               role: "system",
               content: `
-You are Grace's sports verification gate.
+You extract possible sports betting candidates from public research.
 
-Today is:
+Today is ${easternDate}.
+
+Return ONLY valid JSON:
+
+{
+  "candidates": [
+    {
+      "sport": "",
+      "event": "",
+      "market": "",
+      "selection": "",
+      "line": ""
+    }
+  ]
+}
+
+RULES:
+- Extract only actual named events/matchups/fights/races/matches found in research.
+- Extract a market only if research suggests one.
+- Extract an exact line only if it is actually present.
+- Do not invent odds.
+- Do not invent prop numbers.
+- Do not invent events.
+- Include up to 12 useful candidates across different sports/markets.
+- Prefer candidates that appear relevant to TODAY.
+              `.trim(),
+            },
+            {
+              role: "user",
+              content: JSON.stringify(researchResults),
+            },
+          ],
+        }),
+      }
+    );
+
+    const candidateExtractorData =
+      await candidateExtractorRes.json();
+
+    let extractedCandidates: any[] = [];
+
+    try {
+      const rawCandidates =
+        candidateExtractorData?.choices?.[0]?.message?.content
+          ?.replace(/```json/gi, "")
+          .replace(/```/g, "")
+          .trim();
+
+      const parsedCandidates =
+        JSON.parse(rawCandidates);
+
+      if (Array.isArray(parsedCandidates?.candidates)) {
+        extractedCandidates =
+          parsedCandidates.candidates.slice(0, 12);
+      }
+    } catch {}
+
+    // -------------------------------------------------------
+    // INDEPENDENT TARGETED VERIFICATION SEARCH
+    // -------------------------------------------------------
+
+    async function targetedSearch(searchQuery: string) {
+      try {
+        const res = await fetch(
+          "https://api.tavily.com/search",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              api_key: process.env.TAVILY_API_KEY,
+              query: searchQuery,
+              search_depth: "advanced",
+              max_results: 5,
+              include_answer: false,
+              include_raw_content: false,
+            }),
+            cache: "no-store",
+          }
+        );
+
+        if (!res.ok) return [];
+
+        const data = await res.json();
+
+        return Array.isArray(data?.results)
+          ? data.results.map((r: any) => ({
+              title: String(r?.title || "").slice(0, 220),
+              url: String(r?.url || ""),
+              summary: String(r?.content || "").slice(0, 900),
+              score: r?.score ?? null,
+              sourceWeight: classifySource(String(r?.url || "")),
+            }))
+          : [];
+      } catch {
+        return [];
+      }
+    }
+
+    const verificationPackets = await Promise.all(
+      extractedCandidates.map(async (candidate: any) => {
+        const sport =
+          String(candidate?.sport || "").trim();
+
+        const event =
+          String(candidate?.event || "").trim();
+
+        const market =
+          String(candidate?.market || "").trim();
+
+        const selection =
+          String(candidate?.selection || "").trim();
+
+        const line =
+          String(candidate?.line || "").trim();
+
+        if (!event) {
+          return {
+            candidate,
+            eventResults: [],
+            marketResults: [],
+          };
+        }
+
+        const eventQuery =
+          `"${event}" ${easternDate} ` +
+          `${sport} schedule start time today official`;
+
+        let marketQuery =
+          `"${event}" ${market} ${selection} ${easternDate}`;
+
+        if (line) {
+          marketQuery += ` "${line}"`;
+        }
+
+        marketQuery +=
+          ` odds line market sportsbook`;
+
+        const [eventResults, marketResults] =
+          await Promise.all([
+            targetedSearch(eventQuery),
+            targetedSearch(marketQuery),
+          ]);
+
+        return {
+          candidate,
+          eventResults,
+          marketResults,
+        };
+      })
+    );
+
+    // -------------------------------------------------------
+    // HARD VERIFICATION GATE
+    // -------------------------------------------------------
+
+    const verifierRes = await fetch(
+      "https://api.openai.com/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization:
+            "Bearer " + process.env.OPENAI_API_KEY,
+        },
+        body: JSON.stringify({
+          model:
+            process.env.OPENAI_MODEL || "gpt-4o-mini",
+          temperature: 0,
+          max_tokens: 1800,
+          messages: [
+            {
+              role: "system",
+              content: `
+You are Grace's HARD sports verification gate.
+
+TODAY:
 ${easternDate}
 
-Request mode:
+MODE:
 ${wantsLive ? "LIVE" : "PREGAME"}
 
-Your ONLY job is to verify what the public research actually supports.
+The discovery research has already happened.
 
-Do not make picks.
-Do not analyze value.
-Do not add new events.
+You are now looking at NEW TARGETED searches made specifically
+for each candidate.
+
+Your job is verification only.
 
 Return ONLY valid JSON:
 
@@ -396,56 +574,69 @@ Return ONLY valid JSON:
   ]
 }
 
-VERIFICATION RULES:
+ABSOLUTE RULES:
 
-1. EVENT:
-- The event must be supported by research.
-- If event/date cannot be established, reject it.
+EVENT VERIFICATION
+- The exact event must be supported by the targeted search.
+- Event names from stale articles are NOT enough.
+- The event must actually match today's date for a TODAY request.
+- Wrong date = reject.
+- Old race = reject.
+- Old fight = reject.
+- Old match = reject.
+- Old tournament = reject.
 
-2. DATE:
-- For requests about today, only accept events supported as occurring today.
-- Reject stale previews, old races, old fights, old matches, old finals, and prior-season events.
+PREGAME VERIFICATION
+- In PREGAME mode, the event must still be upcoming.
+- If targeted evidence says it started or finished, reject it.
+- If you cannot establish that it is still upcoming, set pregameVerified=false.
+- Never assume that because an article says "preview" the event has not started.
 
-3. PREGAME:
-- In PREGAME mode, reject events that research indicates have already started or finished.
-- If start status cannot be established confidently, mark pregameVerified false.
+MARKET VERIFICATION
+- Market must be supported separately.
+- Common sportsbook availability is NOT proof.
+- If the targeted market search does not establish the market, marketVerified=false.
 
-4. MARKET:
-- Do not assume a market exists just because it is common.
-- Only mark marketVerified true when the research actually supports the market.
+EXACT LINE VERIFICATION
+- Exact numbers require exact support.
+- -120, -1.5, O2, O9.5, 6.5 Ks, etc. require evidence.
+- If the market exists but exact line is not confirmed:
+  lineVerified=false
+  line=""
 
-5. EXACT LINE:
-- Exact numbers such as -1.5, O2.5, over 9.5 corners, 6.5 strikeouts, etc.
-  require actual support.
-- If a side/market is supported but the exact number is not, keep the market
-  but set lineVerified false and line to "".
-- Never manufacture a line.
+PLAYER PROP RULE
+- Verify player/team/event relationship.
+- Verify the actual prop separately.
+- Player matchup evidence alone does NOT verify a betting line.
 
-6. PLAYER PROPS:
-- Verify the player is in the correct event/team.
-- Verify the prop/market if possible.
-- If only player matchup evidence exists but not the actual sportsbook line,
-  lineVerified must be false.
+FACT RULE
+- Facts must come directly from targeted evidence.
+- Do not introduce facts from memory.
+- Do not add general sports knowledge.
+- Do not say someone is "in form" unless evidence supports it.
+- Do not say someone was fastest in practice unless evidence supports it.
+- Do not claim injuries without evidence.
 
-7. SOURCES:
-- Prefer fresh official/current information.
-- Stale search snippets must not override fresh evidence.
-- Conflicting evidence lowers confidence.
+SOURCE RULE
+- Official/current sources are strongest.
+- Multiple independent fresh sources increase confidence.
+- Conflicts reduce confidence.
+- Old/stale content cannot verify today's event.
 
-8. DO NOT infer facts from general knowledge.
-Use ONLY the supplied research.
+WHEN IN DOUBT:
+REJECT.
               `.trim(),
             },
             {
               role: "user",
               content: `
-USER REQUEST:
+ORIGINAL REQUEST:
 ${userQuery}
 
-PUBLIC RESEARCH:
-${JSON.stringify(researchResults)}
+TARGETED VERIFICATION PACKETS:
+${JSON.stringify(verificationPackets)}
 
-Verify what is real and current.
+Verify each candidate independently.
               `.trim(),
             },
           ],
@@ -453,7 +644,8 @@ Verify what is real and current.
       }
     );
 
-    const verifierData = await verifierRes.json();
+    const verifierData =
+      await verifierRes.json();
 
     let verification: any = {
       verifiedFacts: [],
@@ -467,10 +659,12 @@ Verify what is real and current.
           .replace(/```/g, "")
           .trim();
 
-      const parsedVerification = JSON.parse(rawVerification);
+      const parsedVerification =
+        JSON.parse(rawVerification);
 
       if (parsedVerification) {
-        verification = parsedVerification;
+        verification =
+          parsedVerification;
       }
     } catch {}
 
@@ -798,10 +992,7 @@ ${eventLabel}
 STEP 9 STRUCTURED BASELINE:
 ${baselineAnalysis || "No structured baseline available."}
 
-PUBLIC RESEARCH:
-${JSON.stringify(researchResults)}
-
-VERIFICATION GATE:
+VERIFIED EVIDENCE ONLY:
 ${JSON.stringify(verification)}
 
 ABSOLUTE VERIFICATION RULES:
@@ -813,6 +1004,16 @@ ABSOLUTE VERIFICATION RULES:
 - You may say a side or market is worth watching when the exact line is unavailable.
 - Anything listed under verification.rejected is forbidden from the final recommendations.
 - Do not revive rejected candidates using general sports knowledge.
+- The VERIFIED EVIDENCE ONLY object is your entire factual universe.
+- Do not introduce a team, player, event, market, line, odds number, injury,
+  statistic, trend, practice result, weather fact, coach comment, lineup,
+  starter, or factual reason unless it appears in verified evidence.
+- If verified evidence says Angels Moneyline but does NOT verify -120,
+  say Angels Moneyline. NEVER add -120.
+- If verified evidence confirms an event but no verified betting market exists,
+  do not turn it into a betting recommendation.
+- If fewer than two plays survive verification, do not manufacture a 2-leg.
+- If nothing survives verification, say PASS.
 
 Cross-check the evidence.
 
