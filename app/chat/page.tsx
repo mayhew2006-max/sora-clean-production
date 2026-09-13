@@ -1252,8 +1252,22 @@ Do not put any business name on the report except the user's provided business/n
       "search",
       "look up",
       "current",
+      "currently",
       "latest",
       "today",
+      "tonight",
+      "tomorrow",
+      "yesterday",
+      "this week",
+      "this month",
+      "this year",
+      "right now",
+      "now",
+      "recent",
+      "recently",
+      "updated",
+      "update",
+      "breaking",
       "price",
       "worth",
       "value",
@@ -1263,11 +1277,18 @@ Do not put any business name on the report except the user's provided business/n
       "reviews",
       "specs",
       "law",
+      "laws",
       "rules",
+      "regulations",
       "news",
       "weather",
+      "forecast",
+      "temperature",
       "stock",
+      "stocks",
+      "market",
       "available",
+      "availability",
       "sale",
       "deal",
       "facebook marketplace",
@@ -1282,21 +1303,57 @@ Do not put any business name on the report except the user's provided business/n
       "find me online",
       "listings",
       "for sale online",
+      "score",
+      "scores",
+      "game",
+      "schedule",
+      "standings",
+      "ranking",
+      "rankings",
+      "injury",
+      "injuries",
+      "starting lineup",
+      "starter",
+      "starting quarterback",
+      "starting pitcher",
+      "odds",
+      "line",
+      "spread",
+      "moneyline",
+      "over under",
+      "who won",
+      "who is playing",
+      "who plays",
+      "when does",
+      "where can i buy",
+      "how much is",
+      "what is happening",
+      "what happened",
     ];
 
-    return webWords.some((word) => clean.includes(word));
+    if (webWords.some((word) => clean.includes(word))) {
+      return true;
+    }
+
+    const likelyCurrentQuestionPatterns = [
+      /^who (is|are) .+ (now|today|currently)\??$/,
+      /^what (is|are) .+ (now|today|currently)\??$/,
+      /^where (is|are) .+ (now|today|currently)\??$/,
+      /^when (is|are|does|do) .+\??$/,
+      /^how much (is|are) .+\??$/,
+      /^is .+ open\??$/,
+      /^is .+ available\??$/,
+      /^does .+ still .+\??$/,
+      /^can i still .+\??$/,
+    ];
+
+    return likelyCurrentQuestionPatterns.some((pattern) =>
+      pattern.test(clean)
+    );
   }
 
 
- 
-  
-
-
-
-  
-
- 
-  function isImageGenerationQuery(text: string) {
+ function isImageGenerationQuery(text: string) {
     const clean = text.trim().toLowerCase();
 
     const actionWords = [
