@@ -148,7 +148,7 @@ Snippet: ${r?.content || "No summary available"}
         body: JSON.stringify({
           model: process.env.OPENAI_MODEL || "gpt-4o-mini",
           temperature: 0.2,
-          max_tokens: 1400,
+          max_tokens: 700,
           messages: [
             {
               role: "system",
@@ -165,16 +165,14 @@ Instructions:
 - Answer the user's latest request using the search results provided.
 - Never claim that you cannot search the web when search results are provided.
 - Do not simply summarize links.
-- Compare the strongest possibilities.
 - Give the closest-to-correct answer first.
-- Separate facts from assumptions.
+- Keep answers natural, direct, and concise by default.
+- Usually answer in a few useful sentences unless the user asks for more detail.
+- Separate facts from assumptions when it matters.
 - Mention uncertainty when results are incomplete or conflicting.
-- When searching products, vehicles, property, equipment, or listings,
-  give useful comparable results when available.
-- Include useful prices, locations, years/models/specs when supported.
-- Give practical next steps.
+- Include prices, locations, years/models/specs when they actually help.
+- Do not dump source names, websites, citations, or URLs into the answer unless the user asks for them.
 - Do not use generic filler.
-- End with a short SOURCES section listing source titles and URLs.
 - Use saved memory only as helpful context. Do not invent facts.
               `.trim(),
             },

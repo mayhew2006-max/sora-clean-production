@@ -1011,12 +1011,15 @@ User request:
 ${request || input || "Analyze this and create a useful response."}
 
 Instructions:
-Create the result as Grace inside the conversation.
-Be practical, clear, and useful.
-If a report is requested, make it PDF-ready.
-If a photo is included, describe visible details, useful observations, risks/concerns, ideas, and next steps.
+Answer as Grace inside the normal conversation.
+Be practical, clear, natural, and useful.
+Answer the user's actual question first.
+Do not automatically turn answers into reports, checklists, plans, summaries, or formal sections.
+Only use report, checklist, plan, proposal, scope, or PDF-style formatting when the user explicitly asks for it.
+For ordinary photo questions, answer conversationally and include only the details that actually help.
+If a photo is included, use what is visibly relevant to the user's question.
 Do not mention OTG.
-Do not put any business name on the report except the user's provided business/name fields above.
+Only use business/report fields when the user specifically requests a report or document.
 `.trim();
   }
 
@@ -1055,9 +1058,10 @@ Do not put any business name on the report except the user's provided business/n
     setToolsOpen(false);
 
     const userLabel =
-      attachedImages.length > 0
-        ? `${activeTool}: ${request || "Use the attached photo and give me useful ideas, notes, and next steps."}`
-        : `${activeTool}: ${request}`;
+      request ||
+      (attachedImages.length > 0
+        ? "Analyze this photo."
+        : activeTool);
 
     const nextMessages: Message[] = [
       ...messagesRef.current,
@@ -1129,6 +1133,12 @@ Do not put any business name on the report except the user's provided business/n
         (err?.message || "Unknown error");
       setMessages([...nextMessages, { role: "assistant", content: reply }]);
     }
+
+    // The uploaded photo stays visible in chat, but it is no longer
+    // active context after Grace finishes this response.
+    imagesRef.current = [];
+    setImages([]);
+    setImageStatus("");
 
     loadingRef.current = false;
     setToolLoading(false);
@@ -2319,45 +2329,8 @@ Do not say you cannot see the photo if images are attached.
             </div>
           )}
 
- {images.length > 0 && (
-            <div className="relative z-10 mt-3 rounded-[1.5rem] border border-[#efb99f] bg-white/85 p-3 shadow-lg">
-              <div className="mb-2 flex items-center justify-between">
-                <p className="text-xs font-black text-[#6f3b2a]">
-                  Photos attached
-                </p>
-                <button
-                  onClick={() => {
-                    imagesRef.current = [];
-                    setImages([]);
-                    setImageStatus("");
-                  }}
-                  className="text-xs font-bold text-[#9a6b5a]"
-                >
-                  Clear
-                </button>
-              </div>
 
-              <div className="grid grid-cols-4 gap-2">
-                {images.map((img, i) => (
-                  <div key={i} className="relative">
-                    <img
-                      src={img}
-                      alt={`Attached photo ${i + 1}`}
-                      className="h-20 w-full rounded-xl object-cover border border-[#efb99f]"
-                    />
-                    <button
-                      onClick={() => removeImage(i)}
-                      className="absolute -right-1 -top-1 rounded-full bg-[#2f2723] px-2 py-0.5 text-xs text-white"
-                    >
-                      ×
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Grace actions are command-based and hidden. */}
+ {/* Grace actions are command-based and hidden. */}
 
 
 
