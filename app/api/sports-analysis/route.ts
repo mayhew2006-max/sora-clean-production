@@ -81,13 +81,25 @@ export async function POST(req: Request) {
     const now = new Date();
     const currentYear = now.getUTCFullYear();
 
-    const startOfYear = `${currentYear}0101`;
-    const endOfYear = `${currentYear}1231`;
+    // NFL season boundary:
+    // January belongs to the PREVIOUS NFL season.
+    // August is preseason.
+    // For current-season NFL analysis, use September through December
+    // plus January of the following calendar year only when needed later.
+    const seasonStart =
+      selected.league === "nfl"
+        ? `${currentYear}0901`
+        : `${currentYear}0101`;
+
+    const seasonEnd =
+      selected.league === "nfl"
+        ? `${currentYear}1231`
+        : `${currentYear}1231`;
 
     const scoreboardUrl =
       `https://site.api.espn.com/apis/site/v2/sports/` +
       `${selected.sport}/${selected.league}/scoreboard` +
-      `?limit=1000&dates=${startOfYear}-${endOfYear}` +
+      `?limit=1000&dates=${seasonStart}-${seasonEnd}` +
       `${selected.league === "nfl" ? "&seasontype=2" : ""}`;
 
     const standingsUrl =
@@ -140,6 +152,17 @@ export async function POST(req: Request) {
             state = "final";
           }
 
+          const gameDate = new Date(event?.date || "");
+          const month = gameDate.getUTCMonth() + 1;
+
+          const isNFLRegularSeason =
+            selected.league !== "nfl" ||
+            (
+              gameDate.getUTCFullYear() === currentYear &&
+              month >= 9 &&
+              month <= 12
+            );
+
           return {
             name: event?.name || "",
             date: event?.date || "",
@@ -154,8 +177,10 @@ export async function POST(req: Request) {
             awayScore: away?.score || "",
             homeRecords: home?.records || [],
             awayRecords: away?.records || [],
+            isNFLRegularSeason,
           };
         })
+        .filter((game: any) => game.isNFLRegularSeason)
       : [];
 
     function extractStandings(node: any): any[] {
@@ -314,14 +339,34 @@ export async function POST(req: Request) {
         const homeRecentResults = getRecentTeamResults(game.home);
         const awayRecentResults = getRecentTeamResults(game.away);
 
+        const homeRecentSummary = summarizeRecent(homeRecentResults);
+        const awayRecentSummary = summarizeRecent(awayRecentResults);
+
+        const homeStanding = getTeamStanding(game.home) || null;
+        const awayStanding = getTeamStanding(game.away) || null;
+
+        const homeEvidenceCount =
+          homeRecentResults.length +
+          (homeStanding?.wins || homeStanding?.losses ? 1 : 0);
+
+        const awayEvidenceCount =
+          awayRecentResults.length +
+          (awayStanding?.wins || awayStanding?.losses ? 1 : 0);
+
         return {
           ...game,
-          homeStanding: getTeamStanding(game.home) || null,
-          awayStanding: getTeamStanding(game.away) || null,
+          homeStanding,
+          awayStanding,
           homeRecentResults,
           awayRecentResults,
-          homeRecentSummary: summarizeRecent(homeRecentResults),
-          awayRecentSummary: summarizeRecent(awayRecentResults),
+          homeRecentSummary,
+          awayRecentSummary,
+          evidence: {
+            homeEvidenceCount,
+            awayEvidenceCount,
+            totalEvidenceCount:
+              homeEvidenceCount + awayEvidenceCount,
+          },
         };
       }
     );
@@ -380,6 +425,12 @@ GAME-STATE RULE:
 - Only analyze live games when the user explicitly asks for live picks, live betting, in-game analysis, or something "right now."
 - If no eligible pregame games are available, say so instead of using live/final games as substitutes.
 
+NFL SEASON RULE:
+- Ignore NFL preseason games completely for normal regular-season analysis.
+- Ignore January games that belong to the prior NFL season.
+- Use only current-season NFL regular-season results for recent form.
+- Do not treat preseason records, preseason point differential, or preseason head-to-head as meaningful regular-season evidence.
+
 RANKING METHOD:
 Evaluate each candidate ONLY from evidence actually present in the supplied context.
 
@@ -433,6 +484,18 @@ IMPORTANT:
 If recent performance data is missing or weak, confidence MUST come down.
 Do not give a 7.5+ score based mainly on home-field advantage or team reputation.
 If there is not enough current statistical evidence, say PASS.
+
+HARD CONFIDENCE CAPS:
+- If context.eligibleGames[*].evidence.totalEvidenceCount is 0-1:
+  maximum confidence is 5.4 -> PASS.
+- If totalEvidenceCount is 2:
+  maximum confidence is 6.0.
+- If totalEvidenceCount is 3-4:
+  maximum confidence is 6.8.
+- Only allow 7.0+ when there are multiple current-season evidence signals.
+- Only allow 7.5+ when both sides have meaningful current-season evidence.
+- Home-field advantage by itself is NEVER enough for a pick above 5.4.
+- If this is Week 1 and current-season evidence is thin, PASS is expected and correct.
 
 If there is not enough statistical evidence for a strong rating, say PASS.
 
