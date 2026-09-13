@@ -152,6 +152,8 @@ export default function GraceChat() {
   const [hideBrowserWarning, setHideBrowserWarning] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [notificationBusy, setNotificationBusy] = useState(false);
 
   const [toolType, setToolType] = useState("Photo Analysis");
   const [images, setImages] = useState<string[]>([]);
@@ -179,6 +181,134 @@ export default function GraceChat() {
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const historySyncedCountRef = useRef(0);
+
+  function urlBase64ToUint8Array(base64String: string) {
+    const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+    const base64 = (base64String + padding)
+      .replace(/-/g, "+")
+      .replace(/_/g, "/");
+
+    const rawData = window.atob(base64);
+
+    return Uint8Array.from(
+      [...rawData].map((char) => char.charCodeAt(0))
+    );
+  }
+
+  async function enableGraceNotifications() {
+    if (notificationBusy) return;
+
+    setNotificationBusy(true);
+
+    try {
+      if (!("serviceWorker" in navigator)) {
+        throw new Error("This device does not support Grace notifications.");
+      }
+
+      if (!("PushManager" in window)) {
+        throw new Error("Push notifications are not supported on this device.");
+      }
+
+      const permission = await Notification.requestPermission();
+
+      if (permission !== "granted") {
+        throw new Error("Notification permission was not granted.");
+      }
+
+      const publicKey =
+        process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "";
+
+      if (!publicKey) {
+        throw new Error("Grace notification public key is missing.");
+      }
+
+      const registration =
+        await navigator.serviceWorker.ready;
+
+      let subscription =
+        await registration.pushManager.getSubscription();
+
+      if (!subscription) {
+        subscription =
+          await registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey:
+              urlBase64ToUint8Array(publicKey),
+          });
+      }
+
+      const { data: sessionData } =
+        await supabase.auth.getSession();
+
+      const token =
+        sessionData.session?.access_token;
+
+      if (!token) {
+        throw new Error("Grace could not verify your signed-in account.");
+      }
+
+      const res = await fetch("/api/push-subscribe", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          subscription: subscription.toJSON(),
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(
+          data?.error ||
+          "Grace could not save the notification subscription."
+        );
+      }
+
+      setNotificationsEnabled(true);
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content:
+            "Notifications are on. I can send Grace alerts to this device now.",
+        },
+      ]);
+    } catch (error: any) {
+      alert(
+        error?.message ||
+        "Grace could not enable notifications."
+      );
+    } finally {
+      setNotificationBusy(false);
+    }
+  }
+
+  useEffect(() => {
+    if (
+      typeof window === "undefined" ||
+      !("serviceWorker" in navigator) ||
+      !("Notification" in window)
+    ) {
+      return;
+    }
+
+    if (Notification.permission !== "granted") {
+      return;
+    }
+
+    navigator.serviceWorker.ready
+      .then((registration) =>
+        registration.pushManager.getSubscription()
+      )
+      .then((subscription) => {
+        setNotificationsEnabled(Boolean(subscription));
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -2877,6 +3007,20 @@ Do not say you cannot see the photo if images are attached.
               </span>
             </button>
           </div>
+        </div>
+      )}
+
+ {!notificationsEnabled && !locked && (
+        <div className="fixed bottom-[6.7rem] left-0 right-0 z-30 flex justify-center px-4 pointer-events-none">
+          <button
+            onClick={enableGraceNotifications}
+            disabled={notificationBusy}
+            className="pointer-events-auto rounded-full border border-[#efb99f] bg-white px-5 py-3 text-sm font-black text-[#6f3b2a] shadow-xl disabled:opacity-50"
+          >
+            {notificationBusy
+              ? "Turning notifications on..."
+              : "Enable Grace notifications"}
+          </button>
         </div>
       )}
 

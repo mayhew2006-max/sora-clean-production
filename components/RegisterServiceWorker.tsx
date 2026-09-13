@@ -8,11 +8,23 @@ export default function RegisterServiceWorker() {
     if (!("serviceWorker" in navigator)) return;
     if (process.env.NODE_ENV !== "production") return;
 
-    window.addEventListener("load", () => {
-      navigator.serviceWorker.register("/sw.js").catch(() => {
-        // Grace still works without install support.
-      });
-    });
+    async function registerGraceWorker() {
+      try {
+        await navigator.serviceWorker.register("/sw.js");
+      } catch (error) {
+        console.error("Grace service worker registration failed:", error);
+      }
+    }
+
+    if (document.readyState === "complete") {
+      registerGraceWorker();
+    } else {
+      window.addEventListener("load", registerGraceWorker, { once: true });
+
+      return () => {
+        window.removeEventListener("load", registerGraceWorker);
+      };
+    }
   }, []);
 
   return null;
