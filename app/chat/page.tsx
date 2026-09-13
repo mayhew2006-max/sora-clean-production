@@ -3010,20 +3010,6 @@ Do not say you cannot see the photo if images are attached.
         </div>
       )}
 
- {!notificationsEnabled && !locked && (
-        <div className="fixed bottom-[6.7rem] left-0 right-0 z-30 flex justify-center px-4 pointer-events-none">
-          <button
-            onClick={enableGraceNotifications}
-            disabled={notificationBusy}
-            className="pointer-events-auto rounded-full border border-[#efb99f] bg-white px-5 py-3 text-sm font-black text-[#6f3b2a] shadow-xl disabled:opacity-50"
-          >
-            {notificationBusy
-              ? "Turning notifications on..."
-              : "Enable Grace notifications"}
-          </button>
-        </div>
-      )}
-
  <footer className="grace-input-bar fixed bottom-0 left-0 right-0 z-30 px-3 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] bg-gradient-to-t from-[#fff7f1] via-[#fff7f1]/98 to-transparent">
         <div className="mx-auto max-w-3xl rounded-[1.6rem] border border-[#efb99f] bg-white p-2 shadow-xl flex gap-2 items-end">
         <button
