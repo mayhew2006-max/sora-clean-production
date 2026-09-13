@@ -112,12 +112,32 @@ export async function POST(req: Request) {
             (c: any) => c?.homeAway === "away"
           );
 
+          const statusType = competition?.status?.type || {};
+
+          let state = "pre";
+
+          if (
+            statusType?.state === "in" ||
+            statusType?.completed === false &&
+              String(statusType?.description || "").toLowerCase().includes("half")
+          ) {
+            state = "live";
+          }
+
+          if (
+            statusType?.state === "post" ||
+            statusType?.completed === true
+          ) {
+            state = "final";
+          }
+
           return {
             name: event?.name || "",
             date: event?.date || "",
+            state,
             status:
-              competition?.status?.type?.detail ||
-              competition?.status?.type?.description ||
+              statusType?.detail ||
+              statusType?.description ||
               "",
             home: home?.team?.displayName || "",
             homeScore: home?.score || "",
@@ -181,10 +201,36 @@ export async function POST(req: Request) {
 
     const standingsRows = extractStandings(standings);
 
+    const wantsLiveAnalysis =
+      clean.includes("live") ||
+      clean.includes("in game") ||
+      clean.includes("in-game") ||
+      clean.includes("right now");
+
+    const pregameGames = games.filter(
+      (game: any) => game.state === "pre"
+    );
+
+    const liveGames = games.filter(
+      (game: any) => game.state === "live"
+    );
+
+    const finalGames = games.filter(
+      (game: any) => game.state === "final"
+    );
+
+    const eligibleGames = wantsLiveAnalysis
+      ? liveGames
+      : pregameGames;
+
     const context = {
       league: selected.label,
       currentTime: new Date().toISOString(),
-      games,
+      requestMode: wantsLiveAnalysis ? "live" : "pregame",
+      eligibleGames,
+      pregameGames,
+      liveGames,
+      finalGames,
       standings: standingsRows,
     };
 
@@ -224,6 +270,12 @@ CORE RULE:
 Evidence first. Never invent statistics, lines, injuries, odds, player trends, or matchup facts.
 
 Use only information actually supplied in the request or structured sports data.
+
+GAME-STATE RULE:
+- For ordinary pick, prediction, moneyline, spread, prop, or "best picks" requests, analyze PRE-GAME events only.
+- Do NOT use live scores or completed-game results to justify a normal pregame prediction.
+- Only analyze live games when the user explicitly asks for live picks, live betting, in-game analysis, or something "right now."
+- If no eligible pregame games are available, say so instead of using live/final games as substitutes.
 
 RANKING METHOD:
 Evaluate each candidate using whatever evidence is actually available.
@@ -282,6 +334,10 @@ ${query}
 
 Available structured sports context:
 ${JSON.stringify(context)}
+
+IMPORTANT:
+Use only context.eligibleGames for candidate picks.
+Do not select from liveGames or finalGames unless requestMode is "live".
 
 Analyze and rank the request as Grace.
               `.trim(),
