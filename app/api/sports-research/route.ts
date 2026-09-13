@@ -548,6 +548,8 @@ Return ONLY valid JSON:
     {
       "sport": "",
       "event": "",
+      "eventType": "head_to_head|field",
+      "participants": [],
       "eventVerified": true,
       "dateVerified": true,
       "pregameVerified": true,
@@ -586,6 +588,25 @@ EVENT VERIFICATION
 - Old match = reject.
 - Old tournament = reject.
 
+EVENT IDENTITY:
+- Set eventType="head_to_head" for normal team-vs-team, player-vs-player,
+  fighter-vs-fighter, tennis, baseball, football, basketball, hockey,
+  soccer, combat, and similar direct matchups.
+- Set eventType="field" only for races, golf tournaments, large-field events,
+  or competitions where many participants compete simultaneously.
+- For head_to_head events, participants MUST contain the two actual verified opponents.
+- "Manchester City in UEFA Champions League" is NOT enough.
+- "Carlos Alcaraz in ATP Tournament" is NOT enough.
+- "MLB" is NOT an event.
+- "NFL" is NOT an event.
+- A league or tournament name without the actual matchup is not verified.
+- If both opponents cannot be established, reject the candidate.
+
+SELECTION IDENTITY:
+- For a head_to_head winner prediction, the selected team/player/fighter
+  must be one of the verified participants.
+- Do not allow a selection that is not part of the verified event.
+
 PREGAME VERIFICATION
 - In PREGAME mode, the event must still be upcoming.
 - If targeted evidence says it started or finished, reject it.
@@ -611,7 +632,15 @@ EXACT LINE VERIFICATION
 PLAYER PROP RULE
 - Verify player/team/event relationship.
 - Verify the actual prop separately.
+- Verify the EXACT numeric prop line separately.
 - Player matchup evidence alone does NOT verify a betting line.
+- "Player Strikeouts" by itself is not enough.
+- "Max Scherzer Over 7.5 Strikeouts" requires direct evidence that
+  7.5 strikeouts is an actual current line for that specific game.
+- If exact numeric prop evidence is missing:
+  marketVerified=false
+  lineVerified=false
+  line=""
 
 FACT RULE
 - Facts must come directly from targeted evidence.
@@ -671,6 +700,276 @@ Verify each candidate independently.
           parsedVerification;
       }
     } catch {}
+
+    // -------------------------------------------------------
+    // HARD CODE-LEVEL SANITIZER
+    // The model cannot override these rules.
+    // -------------------------------------------------------
+
+    const numericMarketWords = [
+      "spread",
+      "run line",
+      "puck line",
+      "over",
+      "under",
+      "total",
+      "team total",
+      "strikeout",
+      "strikeouts",
+      "total bases",
+      "hits",
+      "home runs",
+      "rebounds",
+      "assists",
+      "pra",
+      "points",
+      "threes",
+      "passing",
+      "rushing",
+      "receiving",
+      "touchdowns",
+      "shots",
+      "saves",
+      "corners",
+      "aces",
+      "games",
+      "sets",
+      "rounds",
+      "method",
+      "placement",
+      "podium",
+      "top ",
+    ];
+
+    function requiresExactLine(market: string) {
+      const cleanMarket = String(market || "").toLowerCase();
+
+      return numericMarketWords.some((word) =>
+        cleanMarket.includes(word)
+      );
+    }
+
+    function isSimpleWinnerMarket(market: string) {
+      const cleanMarket = String(market || "").toLowerCase();
+
+      return (
+        cleanMarket.includes("moneyline") ||
+        cleanMarket.includes("money line") ||
+        cleanMarket.includes("match winner") ||
+        cleanMarket.includes("outright winner") ||
+        cleanMarket === "winner" ||
+        cleanMarket.includes("to win")
+      );
+    }
+
+    const sanitizedVerifiedFacts: any[] = [];
+    const sanitizerRejected: any[] = [];
+
+    for (const fact of Array.isArray(verification?.verifiedFacts)
+      ? verification.verifiedFacts
+      : []) {
+
+      const sport = String(fact?.sport || "").trim();
+      const event = String(fact?.event || "").trim();
+      const eventType = String(fact?.eventType || "").trim();
+      const participants = Array.isArray(fact?.participants)
+        ? fact.participants
+            .map((p: any) => String(p || "").trim())
+            .filter(Boolean)
+        : [];
+
+      const eventPass =
+        fact?.eventVerified === true &&
+        fact?.dateVerified === true &&
+        (wantsLive || fact?.pregameVerified === true);
+
+      if (!eventPass) {
+        sanitizerRejected.push({
+          claim: event || sport || "Unknown event",
+          reason:
+            "Failed hard event/date/pregame verification.",
+        });
+        continue;
+      }
+
+      if (
+        eventType === "head_to_head" &&
+        participants.length < 2
+      ) {
+        sanitizerRejected.push({
+          claim: event || sport || "Unknown matchup",
+          reason:
+            "Head-to-head event does not have two verified opponents.",
+        });
+        continue;
+      }
+
+      if (
+        eventType !== "head_to_head" &&
+        eventType !== "field"
+      ) {
+        sanitizerRejected.push({
+          claim: event || sport || "Unknown event",
+          reason:
+            "Event type was not independently verified.",
+        });
+        continue;
+      }
+
+      const safeMarkets: any[] = [];
+
+      for (const market of Array.isArray(fact?.markets)
+        ? fact.markets
+        : []) {
+
+        const marketName =
+          String(market?.market || "").trim();
+
+        const selection =
+          String(market?.selection || "").trim();
+
+        const line =
+          String(market?.line || "").trim();
+
+        const marketVerified =
+          market?.marketVerified === true;
+
+        const lineVerified =
+          market?.lineVerified === true;
+
+        if (!marketName || !selection) {
+          continue;
+        }
+
+        // Winner picks need a real verified participant
+        // for head-to-head events.
+        if (
+          eventType === "head_to_head" &&
+          isSimpleWinnerMarket(marketName)
+        ) {
+          const selectionMatchesParticipant =
+            participants.some(
+              (p: string) =>
+                p.toLowerCase() ===
+                selection.toLowerCase()
+            );
+
+          if (!selectionMatchesParticipant) {
+            sanitizerRejected.push({
+              claim: `${event} - ${selection}`,
+              reason:
+                "Winner selection is not one of the two verified participants.",
+            });
+            continue;
+          }
+
+          safeMarkets.push({
+            market: marketName,
+            selection,
+            line:
+              lineVerified && line
+                ? line
+                : "",
+            marketVerified: true,
+            lineVerified:
+              Boolean(lineVerified && line),
+          });
+
+          continue;
+        }
+
+        // Numeric markets / props MUST have both
+        // verified market and verified exact line.
+        if (requiresExactLine(marketName)) {
+          if (
+            !marketVerified ||
+            !lineVerified ||
+            !line
+          ) {
+            sanitizerRejected.push({
+              claim:
+                `${event} - ${selection} ${marketName}`.trim(),
+              reason:
+                "Numeric market/prop did not have a verified exact current line.",
+            });
+            continue;
+          }
+
+          safeMarkets.push({
+            market: marketName,
+            selection,
+            line,
+            marketVerified: true,
+            lineVerified: true,
+          });
+
+          continue;
+        }
+
+        // Anything else still needs a verified market.
+        if (!marketVerified) {
+          sanitizerRejected.push({
+            claim:
+              `${event} - ${selection} ${marketName}`.trim(),
+            reason:
+              "Market itself was not verified.",
+          });
+          continue;
+        }
+
+        safeMarkets.push({
+          market: marketName,
+          selection,
+          line:
+            lineVerified && line
+              ? line
+              : "",
+          marketVerified: true,
+          lineVerified:
+            Boolean(lineVerified && line),
+        });
+      }
+
+      // Keep the event even when no numeric prop survives,
+      // because a verified winner market may still exist.
+      if (safeMarkets.length === 0) {
+        sanitizerRejected.push({
+          claim: event,
+          reason:
+            "Event survived, but no betting market survived hard verification.",
+        });
+        continue;
+      }
+
+      sanitizedVerifiedFacts.push({
+        sport,
+        event,
+        eventType,
+        participants,
+        eventVerified: true,
+        dateVerified: true,
+        pregameVerified:
+          wantsLive ? fact?.pregameVerified : true,
+        markets: safeMarkets,
+        facts: Array.isArray(fact?.facts)
+          ? fact.facts
+              .map((f: any) => String(f || "").trim())
+              .filter(Boolean)
+              .slice(0, 8)
+          : [],
+        confidence: fact?.confidence || "low",
+      });
+    }
+
+    const safeVerification = {
+      verifiedFacts: sanitizedVerifiedFacts,
+      rejected: [
+        ...(Array.isArray(verification?.rejected)
+          ? verification.rejected
+          : []),
+        ...sanitizerRejected,
+      ],
+    };
 
  // -------------------------------------------------------
     // FINAL UNIVERSAL SPORTS BRAIN
@@ -996,8 +1295,8 @@ ${eventLabel}
 STEP 9 STRUCTURED BASELINE:
 ${baselineAnalysis || "No structured baseline available."}
 
-VERIFIED EVIDENCE ONLY:
-${JSON.stringify(verification)}
+SANITIZED VERIFIED EVIDENCE ONLY:
+${JSON.stringify(safeVerification)}
 
 ABSOLUTE VERIFICATION RULES:
 - Recommend ONLY events with eventVerified=true.
@@ -1016,7 +1315,14 @@ ABSOLUTE VERIFICATION RULES:
   "Pick: Angels to win" rather than "Angels -120."
 - Anything listed under verification.rejected is forbidden from the final recommendations.
 - Do not revive rejected candidates using general sports knowledge.
-- The VERIFIED EVIDENCE ONLY object is your entire factual universe.
+- The SANITIZED VERIFIED EVIDENCE ONLY object is your entire factual universe.
+- If a matchup has fewer than two verified participants, it cannot be recommended.
+- Never output generic events such as "ATP Tournament", "UEFA Champions League",
+  "MLB", "NFL", "NBA", "UFC", or another league/tournament name without the
+  actual verified matchup or field event.
+- For player props and numeric markets, the exact number must already appear
+  in sanitized verified evidence.
+- You are forbidden from creating a new market or number in your response.
 - Do not introduce a team, player, event, market, line, odds number, injury,
   statistic, trend, practice result, weather fact, coach comment, lineup,
   starter, or factual reason unless it appears in verified evidence.
@@ -1058,6 +1364,9 @@ Answer as Grace.
       sport: sportLabel,
       event: eventLabel,
       researchCount: researchResults.length,
+      extractedCandidateCount: extractedCandidates.length,
+      verifiedEventCount: sanitizedVerifiedFacts.length,
+      rejectedCount: safeVerification.rejected.length,
     });
   } catch (error: any) {
     return Response.json(
