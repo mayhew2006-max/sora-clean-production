@@ -1215,6 +1215,75 @@ Only use business/report fields when the user specifically requests a report or 
     }
   }
 
+ async function runGraceSportsData(query: string) {
+    if (locked || loadingRef.current || toolLoading) return;
+
+    const cleanQuery = query.trim();
+    if (!cleanQuery) return;
+
+    trackEvent("grace_sports_data_used");
+
+    setLoading(true);
+    loadingRef.current = true;
+    setInput("");
+    setToolsOpen(false);
+    recognitionRef.current?.stop();
+
+    const nextMessages: Message[] = [
+      ...messagesRef.current,
+      { role: "user", content: cleanQuery },
+    ];
+
+    setMessages(nextMessages);
+
+    try {
+      const res = await fetch("/api/sports", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          query: cleanQuery,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data?.reply || "Grace sports data failed.");
+      }
+
+      const reply =
+        data?.reply || "I pulled the sports data, but I couldn't get a useful answer.";
+
+      setMessages([
+        ...nextMessages,
+        { role: "assistant", content: reply },
+      ]);
+
+      speak(reply).catch(() =>
+        console.log("voice playback failed")
+      );
+    } catch (error: any) {
+      const reply =
+        "Grace sports data hit a glitch: " +
+        (error?.message || "Unknown error");
+
+      setMessages([
+        ...nextMessages,
+        { role: "assistant", content: reply },
+      ]);
+
+      speak(reply).catch(() =>
+        console.log("voice playback failed")
+      );
+    } finally {
+      setLoading(false);
+      loadingRef.current = false;
+    }
+  }
+
+
  async function runGraceWebSearch(query: string) {
     if (locked || loadingRef.current || toolLoading) return;
 
@@ -1291,6 +1360,50 @@ Only use business/report fields when the user specifically requests a report or 
       loadingRef.current = false;
     }
   }
+
+ function shouldUseSportsQuery(text: string) {
+    const clean = text.trim().toLowerCase();
+
+    const sportsWords = [
+      "nfl",
+      "nba",
+      "wnba",
+      "mlb",
+      "nhl",
+      "ncaaf",
+      "ncaam",
+      "college football",
+      "college basketball",
+      "cfb",
+      "march madness",
+      "soccer",
+      "premier league",
+      "epl",
+      "champions league",
+      "ucl",
+      "mls",
+      "football game",
+      "basketball game",
+      "baseball game",
+      "hockey game",
+      "score",
+      "scores",
+      "standings",
+      "schedule",
+      "game tonight",
+      "game today",
+      "who won",
+      "who plays",
+      "who is playing",
+      "record",
+      "playoff seed",
+      "starting pitcher",
+      "starting quarterback",
+    ];
+
+    return sportsWords.some((word) => clean.includes(word));
+  }
+
 
  function shouldUseWebQuery(text: string) {
     const clean = text.trim().toLowerCase();
@@ -1746,6 +1859,11 @@ function isMarketplaceQuery(text: string) {
 
     if (isMarketplaceQuery(clean) && !isAmbiguousMarketplaceQuery(clean)) {
       await runGraceTool(clean, "Deal Check");
+      return;
+    }
+
+    if (shouldUseSportsQuery(clean)) {
+      await runGraceSportsData(clean);
       return;
     }
 
