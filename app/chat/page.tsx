@@ -1237,7 +1237,7 @@ Only use business/report fields when the user specifically requests a report or 
     setMessages(nextMessages);
 
     try {
-      const res = await fetch("/api/sports-analysis", {
+      const res = await fetch("/api/sports-research", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
