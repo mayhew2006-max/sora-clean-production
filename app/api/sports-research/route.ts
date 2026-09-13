@@ -198,11 +198,22 @@ ${screenshotContext}`
       clean.includes("in game") ||
       clean.includes("in-game");
 
-    const crossSportRequest =
+    const screenshotBoardRequest =
+      screenshotImages.length > 0;
+
+    // Only require multiple sports when the user ACTUALLY asks
+    // Grace to search across multiple sports.
+    const explicitCrossSportRequest =
       clean.includes("any sport") ||
       clean.includes("all sports") ||
       clean.includes("every sport") ||
       clean.includes("across sports") ||
+      clean.includes("across all sports") ||
+      clean.includes("scan every sport");
+
+    // Phrases such as "anything look good here?" refer to the
+    // supplied screenshots when screenshots are attached.
+    const generalBoardScanRequest =
       clean.includes("scan everything") ||
       clean.includes("scan the board") ||
       clean.includes("whole board") ||
@@ -213,12 +224,19 @@ ${screenshotContext}`
       clean.includes("anything worth betting") ||
       clean.includes("anything look good");
 
+    const crossSportRequest =
+      explicitCrossSportRequest ||
+      (!screenshotBoardRequest && generalBoardScanRequest);
+
     const dailyReportRequest =
       crossSportRequest ||
-      clean.includes("daily sports report") ||
-      clean.includes("sports report today") ||
-      clean.includes("today's sports report") ||
-      clean.includes("todays sports report");
+      (!screenshotBoardRequest &&
+        (
+          clean.includes("daily sports report") ||
+          clean.includes("sports report today") ||
+          clean.includes("today's sports report") ||
+          clean.includes("todays sports report")
+        ));
 
     // -------------------------------------------------------
     // STEP 9 STRUCTURED BASELINE

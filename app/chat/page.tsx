@@ -1141,14 +1141,23 @@ export default function GraceChat() {
         selected.map((file) => compressImage(file))
       );
 
-      // A new upload becomes the active image context.
-      // Older attached images do not leak into the new request.
-      const newestImages = converted.slice(-4);
+      // Keep up to 4 active screenshots/photos.
+      // New uploads add to the current batch instead of replacing it.
+      const existingImages =
+        imagesRef.current.length
+          ? imagesRef.current
+          : images;
 
-      imagesRef.current = newestImages;
-      setImages(newestImages);
+      const activeImages = [
+        ...existingImages,
+        ...converted,
+      ].slice(-4);
 
-      const imageMessages: Message[] = newestImages.map((image) => ({
+      imagesRef.current = activeImages;
+      setImages(activeImages);
+
+      // Only add the newly uploaded pictures to the visible chat.
+      const imageMessages: Message[] = converted.map((image) => ({
         role: "user-image",
         image,
       }));
