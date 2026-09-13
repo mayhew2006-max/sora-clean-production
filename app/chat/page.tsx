@@ -1215,6 +1215,78 @@ Only use business/report fields when the user specifically requests a report or 
     }
   }
 
+ async function runGraceSportsAnalysis(query: string) {
+    if (locked || loadingRef.current || toolLoading) return;
+
+    const cleanQuery = query.trim();
+    if (!cleanQuery) return;
+
+    trackEvent("grace_sports_analysis_used");
+
+    setLoading(true);
+    loadingRef.current = true;
+    setInput("");
+    setToolsOpen(false);
+    recognitionRef.current?.stop();
+
+    const nextMessages: Message[] = [
+      ...messagesRef.current,
+      { role: "user", content: cleanQuery },
+    ];
+
+    setMessages(nextMessages);
+
+    try {
+      const res = await fetch("/api/sports-analysis", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          query: cleanQuery,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(
+          data?.reply || "Grace sports analysis failed."
+        );
+      }
+
+      const reply =
+        data?.reply ||
+        "I couldn't get enough solid evidence to rank that.";
+
+      setMessages([
+        ...nextMessages,
+        { role: "assistant", content: reply },
+      ]);
+
+      speak(reply).catch(() =>
+        console.log("voice playback failed")
+      );
+    } catch (error: any) {
+      const reply =
+        "Grace sports analysis hit a glitch: " +
+        (error?.message || "Unknown error");
+
+      setMessages([
+        ...nextMessages,
+        { role: "assistant", content: reply },
+      ]);
+
+      speak(reply).catch(() =>
+        console.log("voice playback failed")
+      );
+    } finally {
+      setLoading(false);
+      loadingRef.current = false;
+    }
+  }
+
+
  async function runGraceSportsData(query: string) {
     if (locked || loadingRef.current || toolLoading) return;
 
@@ -1360,6 +1432,54 @@ Only use business/report fields when the user specifically requests a report or 
       loadingRef.current = false;
     }
   }
+
+ function shouldUseSportsAnalysis(text: string) {
+    const clean = text.trim().toLowerCase();
+
+    const analysisWords = [
+      "best pick",
+      "best picks",
+      "best bet",
+      "best bets",
+      "best 2 leg",
+      "best 2-leg",
+      "best 3 leg",
+      "best 3-leg",
+      "2 leg",
+      "2-leg",
+      "3 leg",
+      "3-leg",
+      "rank these",
+      "rank them",
+      "rank the picks",
+      "strongest pick",
+      "strongest picks",
+      "confidence",
+      "prediction",
+      "predict",
+      "who should win",
+      "who will win",
+      "moneyline pick",
+      "spread pick",
+      "over under",
+      "over/under",
+      "prop",
+      "props",
+      "player prop",
+      "player props",
+      "good pick",
+      "good picks",
+      "anything look good",
+      "what looks good",
+      "which one is best",
+      "which are best",
+    ];
+
+    return analysisWords.some((word) =>
+      clean.includes(word)
+    );
+  }
+
 
  function shouldUseSportsQuery(text: string) {
     const clean = text.trim().toLowerCase();
@@ -1859,6 +1979,11 @@ function isMarketplaceQuery(text: string) {
 
     if (isMarketplaceQuery(clean) && !isAmbiguousMarketplaceQuery(clean)) {
       await runGraceTool(clean, "Deal Check");
+      return;
+    }
+
+    if (shouldUseSportsAnalysis(clean)) {
+      await runGraceSportsAnalysis(clean);
       return;
     }
 
