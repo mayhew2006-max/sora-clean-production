@@ -237,13 +237,33 @@ export async function POST(req: Request) {
 
     const wantsLiveAnalysis =
       clean.includes("live") ||
+      clean.includes("live pick") ||
+      clean.includes("live bet") ||
       clean.includes("in game") ||
       clean.includes("in-game") ||
       clean.includes("right now");
 
-    const pregameGames = games.filter(
-      (game: any) => game.state === "pre"
-    );
+    // Use Eastern Time for U.S. sports slate boundaries.
+    function easternDateString(date: Date) {
+      return new Intl.DateTimeFormat("en-CA", {
+        timeZone: "America/New_York",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).format(date);
+    }
+
+    const todayEastern = easternDateString(now);
+
+    const pregameGames = games.filter((game: any) => {
+      const gameTime = new Date(game.date).getTime();
+
+      return (
+        game.state === "pre" &&
+        Number.isFinite(gameTime) &&
+        gameTime > now.getTime()
+      );
+    });
 
     const liveGames = games.filter(
       (game: any) => game.state === "live"
@@ -253,21 +273,31 @@ export async function POST(req: Request) {
       (game: any) => game.state === "final"
     );
 
-    const eligibleGames = wantsLiveAnalysis
-      ? liveGames
+    // If user says today/tonight, only consider today's remaining slate.
+    const asksToday =
+      clean.includes("today") ||
+      clean.includes("tonight");
+
+    const todaysPregameGames = pregameGames.filter(
+      (game: any) =>
+        easternDateString(new Date(game.date)) === todayEastern
+    );
+
+    const candidatePregameGames = asksToday
+      ? todaysPregameGames
       : pregameGames;
 
     const recentFinals = finalGames
       .filter(
         (game: any) =>
-          new Date(game.date).getTime() <= now.getTime()
+          new Date(game.date).getTime() < now.getTime()
       )
       .sort(
         (a: any, b: any) =>
           new Date(b.date).getTime() -
           new Date(a.date).getTime()
       )
-      .slice(0, 80);
+      .slice(0, 100);
 
     function getTeamStanding(teamName: string) {
       return standingsRows.find(
@@ -296,33 +326,38 @@ export async function POST(req: Request) {
             isHome ? game.homeScore : game.awayScore
           );
 
-          const oppScore = Number(
+          const opponentScore = Number(
             isHome ? game.awayScore : game.homeScore
           );
 
-          const opponent = isHome ? game.away : game.home;
-
           let result = "T";
-          if (teamScore > oppScore) result = "W";
-          if (teamScore < oppScore) result = "L";
+          if (teamScore > opponentScore) result = "W";
+          if (teamScore < opponentScore) result = "L";
 
           return {
-            opponent,
+            opponent: isHome ? game.away : game.home,
             result,
             teamScore,
-            opponentScore: oppScore,
+            opponentScore,
             date: game.date,
           };
         });
     }
 
     function summarizeRecent(results: any[]) {
-      const wins = results.filter((r: any) => r.result === "W").length;
-      const losses = results.filter((r: any) => r.result === "L").length;
+      const wins = results.filter(
+        (r: any) => r.result === "W"
+      ).length;
+
+      const losses = results.filter(
+        (r: any) => r.result === "L"
+      ).length;
 
       const pointDiff = results.reduce(
         (sum: number, r: any) =>
-          sum + (Number(r.teamScore) - Number(r.opponentScore)),
+          sum +
+          (Number(r.teamScore) -
+            Number(r.opponentScore)),
         0
       );
 
@@ -334,55 +369,89 @@ export async function POST(req: Request) {
       };
     }
 
-    const enrichedEligibleGames = eligibleGames.map(
-      (game: any) => {
-        const homeRecentResults = getRecentTeamResults(game.home);
-        const awayRecentResults = getRecentTeamResults(game.away);
+    function enrichPregame(game: any) {
+      const homeRecentResults =
+        getRecentTeamResults(game.home);
 
-        const homeRecentSummary = summarizeRecent(homeRecentResults);
-        const awayRecentSummary = summarizeRecent(awayRecentResults);
+      const awayRecentResults =
+        getRecentTeamResults(game.away);
 
-        const homeStanding = getTeamStanding(game.home) || null;
-        const awayStanding = getTeamStanding(game.away) || null;
+      const homeStanding =
+        getTeamStanding(game.home) || null;
 
-        const homeEvidenceCount =
-          homeRecentResults.length +
-          (homeStanding?.wins || homeStanding?.losses ? 1 : 0);
+      const awayStanding =
+        getTeamStanding(game.away) || null;
 
-        const awayEvidenceCount =
-          awayRecentResults.length +
-          (awayStanding?.wins || awayStanding?.losses ? 1 : 0);
+      const homeRecentSummary =
+        summarizeRecent(homeRecentResults);
 
-        return {
-          ...game,
-          homeStanding,
-          awayStanding,
-          homeRecentResults,
-          awayRecentResults,
-          homeRecentSummary,
-          awayRecentSummary,
-          evidence: {
-            homeEvidenceCount,
-            awayEvidenceCount,
-            totalEvidenceCount:
-              homeEvidenceCount + awayEvidenceCount,
-          },
-        };
-      }
+      const awayRecentSummary =
+        summarizeRecent(awayRecentResults);
+
+      const homeEvidenceCount =
+        homeRecentResults.length +
+        (homeStanding?.wins || homeStanding?.losses ? 1 : 0);
+
+      const awayEvidenceCount =
+        awayRecentResults.length +
+        (awayStanding?.wins || awayStanding?.losses ? 1 : 0);
+
+      // IMPORTANT:
+      // No current/live score fields are passed into pregame analysis.
+      return {
+        name: game.name,
+        date: game.date,
+        home: game.home,
+        away: game.away,
+        homeStanding,
+        awayStanding,
+        homeRecentResults,
+        awayRecentResults,
+        homeRecentSummary,
+        awayRecentSummary,
+        evidence: {
+          homeEvidenceCount,
+          awayEvidenceCount,
+          totalEvidenceCount:
+            homeEvidenceCount + awayEvidenceCount,
+        },
+      };
+    }
+
+    const eligiblePregameGames =
+      candidatePregameGames.map(enrichPregame);
+
+    const eligibleLiveGames = liveGames.map(
+      (game: any) => ({
+        name: game.name,
+        date: game.date,
+        home: game.home,
+        away: game.away,
+        homeScore: game.homeScore,
+        awayScore: game.awayScore,
+        status: game.status,
+      })
     );
 
-    const context = {
-      league: selected.label,
-      currentTime: new Date().toISOString(),
-      requestMode: wantsLiveAnalysis ? "live" : "pregame",
-      eligibleGames: enrichedEligibleGames,
-      pregameGames,
-      liveGames,
-      finalGames,
-      standings: standingsRows,
-    };
+    // HARD SEPARATION:
+    // Pregame model receives NO live or completed game objects.
+    // Live model receives only current live games.
+    const analysisContext = wantsLiveAnalysis
+      ? {
+          league: selected.label,
+          currentTime: now.toISOString(),
+          mode: "LIVE",
+          eligibleGames: eligibleLiveGames,
+        }
+      : {
+          league: selected.label,
+          currentTime: now.toISOString(),
+          slateDate: asksToday ? todayEastern : "upcoming",
+          mode: "PREGAME",
+          eligibleGames: eligiblePregameGames,
+        };
 
-    const aiRes = await fetch(
+ const aiRes = await fetch(
       "https://api.openai.com/v1/chat/completions",
       {
         method: "POST",
@@ -417,6 +486,15 @@ The user may ask for:
 CORE RULE:
 Evidence first. Never invent statistics, lines, injuries, odds, player trends, or matchup facts.
 
+NON-NEGOTIABLE PREGAME RULE:
+When analysisContext.mode is PREGAME:
+- A live score must NEVER influence a pick.
+- An in-progress game must NEVER be recommended.
+- A completed game must NEVER be presented as today's pick.
+- Do not guess what the current score might be.
+- Only games physically present inside analysisContext.eligibleGames exist for purposes of this analysis.
+- If there are not enough qualified candidates, PASS rather than filling the requested number.
+
 Use only information actually supplied in the request or structured sports data.
 
 GAME-STATE RULE:
@@ -430,6 +508,13 @@ NFL SEASON RULE:
 - Ignore January games that belong to the prior NFL season.
 - Use only current-season NFL regular-season results for recent form.
 - Do not treat preseason records, preseason point differential, or preseason head-to-head as meaningful regular-season evidence.
+
+MLB PREGAME RULE:
+- Never use the current score of an MLB game for a pregame moneyline recommendation.
+- Never recommend an MLB game after first pitch unless the user explicitly requests LIVE analysis.
+- Team record alone is not enough for a high-confidence MLB pick.
+- Starting pitcher, bullpen, lineup, injury, splits, park/weather, and deeper matchup evidence belong in the research layer and should increase or decrease confidence when available.
+- Until those deeper signals are available, keep confidence appropriately conservative.
 
 RANKING METHOD:
 Evaluate each candidate ONLY from evidence actually present in the supplied context.
@@ -525,12 +610,16 @@ If that missing information materially affects confidence, explicitly lower the 
 User request:
 ${query}
 
-Available structured sports context:
-${JSON.stringify(context)}
+ONLY AVAILABLE ANALYSIS CONTEXT:
+${JSON.stringify(analysisContext)}
 
-IMPORTANT:
-Use only context.eligibleGames for candidate picks.
-Do not select from liveGames or finalGames unless requestMode is "live".
+ABSOLUTE RULES:
+- Use ONLY analysisContext.eligibleGames.
+- If mode is PREGAME, these are the only games you may recommend.
+- Never infer or mention a current score in PREGAME mode.
+- Never recommend a game that has already started in PREGAME mode.
+- If the user requests 2 picks but fewer than 2 legitimate candidates have adequate evidence, say that clearly and give only the number that qualify, including zero.
+- Never force a pick simply to satisfy the requested count.
 
 Analyze and rank the request as Grace.
               `.trim(),
