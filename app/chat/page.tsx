@@ -1161,29 +1161,8 @@ export default function GraceChat() {
       messagesRef.current = nextChat;
       setMessages(nextChat);
 
-      setImageStatus("Photo added to the conversation.");
-
-      // If the user already typed a question, use it.
-      // Otherwise Grace automatically recognizes/analyzes the new photo.
-      const typedPhotoRequest = input.trim();
-
-      const photoRequest =
-        typedPhotoRequest ||
-        "Look at the newest photo I uploaded. Tell me what you see, what is important, and anything useful I should know.";
-
-      await recordGraceUserMessage();
-
-      if (
-        typedPhotoRequest &&
-        isSportsScreenshotRequest(typedPhotoRequest)
-      ) {
-        await runGraceSportsAnalysis(photoRequest);
-      } else {
-        await runGraceTool(
-          photoRequest,
-          "Photo Analysis"
-        );
-      }
+      // Upload only. Do not analyze until the user presses Send.
+      setImageStatus("Photo attached — ask Grace what you want to know.");
     } catch {
       setImageStatus(
         "Grace could not prepare that image. Try a different photo."
