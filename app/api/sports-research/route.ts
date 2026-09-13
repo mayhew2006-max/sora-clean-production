@@ -1478,6 +1478,42 @@ ${JSON.stringify(safeVerification)}
 
 GRACE_SCREENSHOT_MARKET_EVIDENCE_V1
 
+SCREENSHOT BOARD MODE:
+- When one or more screenshots are attached, treat the screenshots as the user's available betting board.
+- Read ALL visible player names, teams, opponents, markets, directions, and exact lines from every attached screenshot.
+- Evaluate ONLY choices actually visible in the screenshots unless the user explicitly asks for additional outside options.
+- Do NOT introduce a different player, prop, line, alternate line, team, or market that is not visible on the supplied screenshots.
+- Research the exact visible players, their current matchup, current role, recent form, injuries/availability, opponent matchup, usage/opportunity, and other sport-specific predictive factors.
+- Screenshot popularity, fire icons, pick percentages, or community activity are NOT evidence of value by themselves.
+- Generic statements such as "key offensive player", "important contributor", "star player", "well documented", or "expected to contribute" are NOT sufficient reasons.
+- Every recommendation must be supported by concrete current evidence contained in VERIFIED EVIDENCE.
+- Compare the visible screenshot options against each other and rank them.
+- If the user asks for a 2-leg, return the strongest TWO independent qualifying screenshot plays.
+- If fewer than two screenshot plays are supported strongly enough, say PASS rather than forcing a 2-leg.
+- Prefer independent legs when possible. Warn when two props are strongly correlated.
+- Never pretend historical reputation is current evidence.
+- Never claim current-season form unless verified current-season information actually supports it.
+- Never invent a statistic, injury, matchup fact, line, or trend.
+
+For screenshot recommendations use this compact format:
+
+BEST 2-LEG
+1. Player — Market — Pick
+   Confidence: X.X/10
+   Why: strongest verified evidence
+   Risk: biggest specific risk
+
+2. Player — Market — Pick
+   Confidence: X.X/10
+   Why: strongest verified evidence
+   Risk: biggest specific risk
+
+OTHER SCREENSHOT OPTIONS
+- Rank only useful alternatives that were actually visible.
+
+PASS
+- List visible options that should be avoided and briefly explain why.
+
 ABSOLUTE VERIFICATION RULES:
 - Recommend ONLY events with eventVerified=true.
 - For PREGAME requests, require pregameVerified=true.
