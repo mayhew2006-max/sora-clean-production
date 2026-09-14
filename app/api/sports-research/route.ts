@@ -1583,9 +1583,121 @@ Answer as Grace.
 
     const finalData = await finalRes.json();
 
-    const reply =
+    let reply =
       finalData?.choices?.[0]?.message?.content?.trim() ||
       "I dug through the board, but I don't have enough trustworthy evidence for a play. I'd pass.";
+
+    // -------------------------------------------------------
+    // SCREENSHOT RECOMMENDATION AUDIT
+    // A screenshot pick does not leave Grace unless the
+    // recommendation is supported by concrete current evidence.
+    // -------------------------------------------------------
+    if (screenshotBoardRequest && reply) {
+      try {
+        const auditRes = await fetch(
+          "https://api.openai.com/v1/chat/completions",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization:
+                "Bearer " + process.env.OPENAI_API_KEY,
+            },
+            body: JSON.stringify({
+              model:
+                process.env.OPENAI_MODEL || "gpt-4o-mini",
+              temperature: 0,
+              max_tokens: 1200,
+              messages: [
+                {
+                  role: "system",
+                  content: `
+You are the final evidence auditor for Grace's sports screenshot analysis.
+
+Your job is NOT to create new picks.
+Your job is to remove weak, invented, generic, reputation-based, or unsupported reasoning from the draft.
+
+NON-NEGOTIABLE RULES:
+
+1. Never introduce a player, team, market, line, number, matchup, injury, statistic, trend, or factual claim that is not already present in the draft or VERIFIED WEB EVIDENCE.
+
+2. A BEST 2-LEG recommendation may survive ONLY when EACH leg has at least TWO concrete CURRENT supporting facts from VERIFIED WEB EVIDENCE.
+
+3. Concrete evidence includes things such as:
+- current-season statistics,
+- recent-game statistics,
+- verified usage or opportunity,
+- verified injury or availability status,
+- verified opponent matchup data,
+- verified lineup or role information,
+- current weather or game conditions,
+- current team/player form,
+- other specific current predictive information.
+
+4. These are NOT evidence by themselves:
+- "known for"
+- "key player"
+- "key target"
+- "primary receiver"
+- "star player"
+- "important contributor"
+- "strong passing ability"
+- "dual-threat"
+- "favorable opportunity"
+- "expected to contribute"
+- "could have a big game"
+- reputation or career history without current supporting evidence.
+
+5. If a recommended leg does not have two concrete current supporting facts, REMOVE it from BEST 2-LEG and place it under PASS.
+
+6. If fewer than two qualifying legs remain, DO NOT force a 2-leg.
+Say:
+
+BEST 2-LEG
+PASS — fewer than two screenshot plays have enough verified current evidence.
+
+Then list the unsupported screenshot options under PASS.
+
+7. Preserve exact screenshot lines already present in the draft only when they are unambiguous.
+Never repair, average, combine, or guess an unclear line.
+
+8. Do not raise confidence.
+Confidence above 6.9 requires multiple strong current verified signals.
+
+9. Keep the answer compact.
+
+Return ONLY the corrected final sports answer.
+                  `.trim(),
+                },
+                {
+                  role: "user",
+                  content: `
+ORIGINAL DRAFT:
+${reply}
+
+VERIFIED WEB EVIDENCE:
+${JSON.stringify(safeVerification)}
+                  `.trim(),
+                },
+              ],
+            }),
+          }
+        );
+
+        if (auditRes.ok) {
+          const auditData = await auditRes.json();
+
+          const auditedReply =
+            auditData?.choices?.[0]?.message?.content?.trim();
+
+          if (auditedReply) {
+            reply = auditedReply;
+          }
+        }
+      } catch {
+        // Keep the original answer if the audit service itself fails.
+      }
+    }
 
     return Response.json({
       reply,
