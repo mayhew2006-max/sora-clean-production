@@ -1494,6 +1494,13 @@ SCREENSHOT BOARD MODE:
 - Never pretend historical reputation is current evidence.
 - Never claim current-season form unless verified current-season information actually supports it.
 - Never invent a statistic, injury, matchup fact, line, or trend.
+- If a screenshot market or line is unclear, merged, duplicated, or ambiguous, do NOT recommend it.
+- Examples such as "70/84.5", "36/36.5", or "0/0.5" must be treated as unresolved unless verified evidence clearly identifies the exact line.
+- Do not recommend a play using vague reasons such as "known for", "key player", "important contributor", "dual-threat", "favorable opportunity", or "expected to contribute".
+- Every BEST 2-LEG selection must have at least TWO concrete current supporting facts from verified evidence.
+- If a screenshot option does not have enough current evidence, move it to OTHER SCREENSHOT OPTIONS or PASS.
+- Do not use a player's reputation as evidence.
+- Do not assign confidence above 6.9 unless multiple concrete current factors actually support the play.
 
 For screenshot recommendations use this compact format:
 
