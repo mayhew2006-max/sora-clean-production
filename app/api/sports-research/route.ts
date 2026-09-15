@@ -1543,10 +1543,51 @@ ${JSON.stringify(researchResults)}
         const searchData =
           await freeJson(searchUrl, 3600);
 
-        const people =
+        let people =
           Array.isArray(searchData?.people)
             ? searchData.people
             : [];
+
+        // Sportsbooks sometimes shorten first names.
+        // If the full displayed name does not resolve through MLB,
+        // retry with the surname and let official MLB identity win.
+        if (!people.length) {
+          const nameParts =
+            cleanName
+              .split(/\s+/)
+              .filter(Boolean);
+
+          const surname =
+            nameParts.length > 1
+              ? nameParts[nameParts.length - 1]
+              : "";
+
+          if (surname) {
+            const surnameUrl =
+              "https://statsapi.mlb.com/api/v1/people/search" +
+              `?names=${encodeURIComponent(surname)}` +
+              "&active=true&sportIds=1";
+
+            const surnameData =
+              await freeJson(
+                surnameUrl,
+                3600
+              );
+
+            const surnamePeople =
+              Array.isArray(surnameData?.people)
+                ? surnameData.people
+                : [];
+
+            people =
+              surnamePeople.filter(
+                (person: any) =>
+                  String(person?.lastName || "")
+                    .toLowerCase() ===
+                  surname.toLowerCase()
+              );
+          }
+        }
 
         if (!people.length) return [];
 

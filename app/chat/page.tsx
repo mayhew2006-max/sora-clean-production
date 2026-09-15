@@ -1662,6 +1662,44 @@ Only use business/report fields when the user specifically requests a report or 
       /\bwho\s+(should|will)\s+win\b/,
     ];
 
+    const majorPropPatterns = [
+      /\bpassing yards?\b/,
+      /\brushing yards?\b/,
+      /\breceiving yards?\b/,
+      /\breceptions?\b/,
+      /\btargets?\b/,
+      /\bcarries\b/,
+      /\btouchdowns?\b/,
+      /\bstrikeouts?\b/,
+      /\btotal bases?\b/,
+      /\bhits?\b/,
+      /\brbis?\b/,
+      /\bpoints?\b/,
+      /\brebounds?\b/,
+      /\bassists?\b/,
+      /\bpra\b/,
+      /\bsaves?\b/,
+    ];
+
+    const hasMajorProp =
+      majorPropPatterns.some((pattern) =>
+        pattern.test(clean)
+      );
+
+    const hasPropLineOrDirection =
+      /\b(?:more|less|over|under)\b/.test(clean) ||
+      /\b\d+(?:\.\d+)?\b/.test(clean);
+
+    const asksForRecommendation =
+      /\b(?:good|bet|pick|play|worth|recommend|better)\b/.test(clean);
+
+    if (
+      hasMajorProp &&
+      (hasPropLineOrDirection || asksForRecommendation)
+    ) {
+      return true;
+    }
+
     return analysisPatterns.some((pattern) =>
       pattern.test(clean)
     );
