@@ -1693,6 +1693,28 @@ Only use business/report fields when the user specifically requests a report or 
       "basketball game",
       "baseball game",
       "hockey game",
+      "pitcher",
+      "quarterback",
+      "goalie",
+      "strikeout",
+      "strikeouts",
+      "home run",
+      "rbi",
+      "innings",
+      "touchdown",
+      "touchdowns",
+      "passing yards",
+      "rushing yards",
+      "receiving yards",
+      "targets",
+      "receptions",
+      "carries",
+      "rebounds",
+      "assists",
+      "pra",
+      "goals",
+      "saves",
+      "aces",
       "score",
       "scores",
       "standings",
@@ -1702,13 +1724,49 @@ Only use business/report fields when the user specifically requests a report or 
       "who won",
       "who plays",
       "who is playing",
-      "record",
-      "playoff seed",
       "starting pitcher",
       "starting quarterback",
+      "playoff seed",
     ];
 
-    return sportsWords.some((word) => clean.includes(word));
+    if (
+      sportsWords.some((word) =>
+        clean.includes(word)
+      )
+    ) {
+      return true;
+    }
+
+    const currentSportsPatterns = [
+      /\bwho does .+ play for\b/,
+      /\bwhat team does .+ play for\b/,
+      /\bwho is .+ playing for\b/,
+      /\bwho is .+ facing\b/,
+      /\bwho does .+ face\b/,
+      /\bwho are .+ playing (today|tonight)\b/,
+      /\bis .+ playing (today|tonight)\b/,
+      /\bis .+ starting (today|tonight)\b/,
+    ];
+
+    return currentSportsPatterns.some(
+      (pattern) => pattern.test(clean)
+    );
+  }
+
+  function hasRecentSportsContext() {
+    return messagesRef.current
+      .slice(-6)
+      .some((message) => {
+        const text =
+          String(message?.content || "");
+
+        if (!text) return false;
+
+        return (
+          shouldUseSportsAnalysis(text) ||
+          shouldUseSportsQuery(text)
+        );
+      });
   }
 
 
@@ -2150,7 +2208,12 @@ function isMarketplaceQuery(text: string) {
 
     if (
       activeImageCount > 0 &&
-      isSportsScreenshotRequest(clean)
+      (
+        isSportsScreenshotRequest(clean) ||
+        shouldUseSportsAnalysis(clean) ||
+        shouldUseSportsQuery(clean) ||
+        hasRecentSportsContext()
+      )
     ) {
       await runGraceSportsAnalysis(clean);
       return;
@@ -2189,7 +2252,10 @@ function isMarketplaceQuery(text: string) {
       return;
     }
 
-    if (shouldUseSportsQuery(clean)) {
+    if (
+      shouldUseSportsQuery(clean) ||
+      hasRecentSportsContext()
+    ) {
       await runGraceSportsData(clean);
       return;
     }
