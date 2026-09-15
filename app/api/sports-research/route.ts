@@ -245,26 +245,6 @@ Rules:
 ${screenshotContext}`
       : userQuery;
 
-    // TEMP SCREENSHOT DEBUG COMMAND
-    // Upload a screenshot and ask exactly: debug screenshot
-    if (
-      userQuery.trim().toLowerCase().includes("debug screenshot")
-    ) {
-      return Response.json({
-        reply:
-          "SCREENSHOT DEBUG\n\n" +
-          JSON.stringify(
-            {
-              screenshotCount: screenshotImages.length,
-              screenshotItems,
-              screenshotContext,
-            },
-            null,
-            2
-          ),
-      });
-    }
-
     const clean = userQuery.toLowerCase();
 
     const now = new Date();
@@ -1278,7 +1258,10 @@ ${JSON.stringify(researchResults)}
             sport: String(item?.sport || "").trim(),
             event: String(item?.event || "").trim(),
             player: String(item?.player || "").trim(),
-            team: String(item?.team || "").trim(),
+            team:
+              String(item?.player || "").trim()
+                ? ""
+                : String(item?.team || "").trim(),
             market: String(item?.market || "").trim(),
             line: String(item?.line || "").trim(),
             odds: String(item?.odds || "").trim(),
