@@ -416,6 +416,71 @@ Do not invent a line.
     }
 
     // -------------------------------------------------------
+    // MAJOR SPORTS SAME-SPORT DISCOVERY
+    //
+    // A requested player/prop is checked first, but Grace also
+    // sees the rest of that sport's current board so she can
+    // recommend something better when the requested play sucks.
+    // -------------------------------------------------------
+
+    if (
+      !crossSportRequest &&
+      !dailyReportRequest
+    ) {
+      const sportHint =
+        `${sportLabel} ${clean}`
+          .toLowerCase();
+
+      let majorBoardQuery = "";
+
+      if (
+        sportHint.includes("mlb") ||
+        sportHint.includes("baseball") ||
+        sportHint.includes("strikeout") ||
+        sportHint.includes("total bases") ||
+        sportHint.includes("rbi")
+      ) {
+        majorBoardQuery =
+          `${easternDate} MLB full current board all remaining games probable pitchers records player statistics`;
+      } else if (
+        sportHint.includes("college football") ||
+        sportHint.includes("ncaaf") ||
+        sportHint.includes("cfb")
+      ) {
+        majorBoardQuery =
+          `${easternDate} college football CFB current board remaining games starters team records player statistics`;
+      } else if (
+        sportHint.includes("nfl") ||
+        sportHint.includes("football")
+      ) {
+        majorBoardQuery =
+          `${easternDate} NFL current board remaining games starters team records player statistics`;
+      } else if (
+        sportHint.includes("wnba")
+      ) {
+        majorBoardQuery =
+          `${easternDate} WNBA current board remaining games starters team records player statistics`;
+      } else if (
+        sportHint.includes("nba") ||
+        sportHint.includes("basketball")
+      ) {
+        majorBoardQuery =
+          `${easternDate} NBA current board remaining games starters team records player statistics`;
+      }
+
+      if (
+        majorBoardQuery &&
+        !searchQueries.includes(
+          majorBoardQuery
+        )
+      ) {
+        searchQueries.push(
+          majorBoardQuery
+        );
+      }
+    }
+
+    // -------------------------------------------------------
     // PUBLIC WEB RESEARCH
     // -------------------------------------------------------
 
@@ -785,10 +850,36 @@ Do not invent a line.
               : [];
 
           for (const item of contents.slice(0, 8)) {
+            const uidText =
+              String(item?.uid || "");
+
+            const webLink =
+              String(item?.link?.web || "");
+
+            const uidAthleteId =
+              uidText.match(/~a:(\d+)/)?.[1] || "";
+
+            const linkAthleteId =
+              webLink.match(/\/id\/(\d+)/)?.[1] || "";
+
+            const rawItemId =
+              String(item?.id || "");
+
+            const numericItemId =
+              /^\d+$/.test(rawItemId)
+                ? rawItemId
+                : "";
+
+            const athleteId =
+              uidAthleteId ||
+              linkAthleteId ||
+              numericItemId ||
+              rawItemId;
+
             const player =
               item?.type === "player"
                 ? {
-                    id: String(item?.id || ""),
+                    id: athleteId,
                     name:
                       String(item?.displayName || ""),
                     sport:
@@ -1125,17 +1216,233 @@ ${JSON.stringify(researchResults)}
     const athleteFreeCache =
       new Map<string, Promise<any[]>>();
 
-    async function freeAthleteDetails(
+    // -------------------------------------------------------
+    // MAJOR SPORTS STAT EXTRACTION V1
+    //
+    // ESPN athlete endpoints return large nested JSON objects.
+    // Pull the useful statistical evidence forward so it is not
+    // lost when the verification packet is compacted.
+    // -------------------------------------------------------
+
+    function majorSportEvidenceRegex(
+      sport: string,
+      league: string,
+      focusQuery = ""
+    ) {
+      const key =
+        `${sport} ${league} ${focusQuery}`.toLowerCase();
+
+      if (
+        key.includes("baseball") ||
+        key.includes("mlb")
+      ) {
+        return /strikeout|innings|era|whip|pitch|starter|start|hits|hit|home run|total bases|rbi|batting|average|obp|slug|ops|walk|game log|opponent|date|record/i;
+      }
+
+      if (
+        key.includes("college-football") ||
+        key.includes("ncaaf") ||
+        key.includes("cfb")
+      ) {
+        return /passing|rushing|receiving|yards|touchdown|reception|target|carry|attempt|completion|interception|sack|rating|qbr|snap|starter|game log|opponent|date|record/i;
+      }
+
+      if (
+        key.includes("football") ||
+        key.includes("nfl")
+      ) {
+        return /passing|rushing|receiving|yards|touchdown|reception|target|carry|attempt|completion|interception|sack|rating|qbr|snap|starter|game log|opponent|date|record/i;
+      }
+
+      if (
+        key.includes("basketball") ||
+        key.includes("nba") ||
+        key.includes("wnba")
+      ) {
+        return /point|rebound|assist|minute|pra|field goal|three point|3-point|free throw|usage|steal|block|turnover|starter|game log|opponent|date|record/i;
+      }
+
+      return /stat|average|total|game log|opponent|date|record|starter|performance/i;
+    }
+
+    function summarizeEspnSportsPayload(
+      data: any,
+      sport: string,
+      league: string,
+      label: string,
+      focusQuery = ""
+    ) {
+      const relevant =
+        majorSportEvidenceRegex(
+          sport,
+          league,
+          focusQuery
+        );
+
+      const lines: string[] = [];
+      const seen = new Set<string>();
+
+      function add(line: string) {
+        const cleanLine =
+          String(line || "")
+            .replace(/\s+/g, " ")
+            .trim();
+
+        if (
+          !cleanLine ||
+          cleanLine.length > 300 ||
+          seen.has(cleanLine)
+        ) {
+          return;
+        }
+
+        seen.add(cleanLine);
+        lines.push(cleanLine);
+      }
+
+      function scalar(value: any) {
+        return (
+          typeof value === "string" ||
+          typeof value === "number" ||
+          typeof value === "boolean"
+        );
+      }
+
+      function walk(
+        node: any,
+        path = "",
+        depth = 0
+      ) {
+        if (
+          node == null ||
+          depth > 8 ||
+          lines.length >= 100
+        ) {
+          return;
+        }
+
+        if (Array.isArray(node)) {
+          for (
+            const item of node.slice(0, 80)
+          ) {
+            walk(
+              item,
+              path,
+              depth + 1
+            );
+
+            if (lines.length >= 100) {
+              break;
+            }
+          }
+
+          return;
+        }
+
+        if (typeof node !== "object") {
+          return;
+        }
+
+        const objectLabel =
+          String(
+            node?.displayName ||
+            node?.shortDisplayName ||
+            node?.name ||
+            node?.label ||
+            node?.abbreviation ||
+            ""
+          ).trim();
+
+        const objectValues = [
+          node?.displayValue,
+          node?.summary,
+          node?.stat,
+        ];
+
+        for (const value of objectValues) {
+          if (
+            objectLabel &&
+            scalar(value) &&
+            relevant.test(
+              `${path} ${objectLabel}`
+            )
+          ) {
+            add(
+              `${objectLabel}: ${String(value)}`
+            );
+          }
+        }
+
+        const opponent =
+          node?.opponent?.displayName ||
+          node?.opponent?.name ||
+          "";
+
+        if (opponent) {
+          add(`Opponent: ${opponent}`);
+        }
+
+        if (
+          node?.date &&
+          scalar(node.date)
+        ) {
+          add(`Date: ${String(node.date)}`);
+        }
+
+        for (
+          const [key, value] of
+          Object.entries(node)
+        ) {
+          const nextPath =
+            path
+              ? `${path}.${key}`
+              : key;
+
+          if (
+            scalar(value) &&
+            relevant.test(nextPath)
+          ) {
+            add(
+              `${key}: ${String(value)}`
+            );
+          } else if (
+            value &&
+            typeof value === "object"
+          ) {
+            walk(
+              value,
+              nextPath,
+              depth + 1
+            );
+          }
+
+          if (lines.length >= 100) {
+            break;
+          }
+        }
+      }
+
+      walk(data);
+
+      return [
+        `ESPN ${label}`,
+        ...lines.slice(0, 90),
+      ].join("\\n");
+    }
+
+
+ async function freeAthleteDetails(
       player: {
         id: string;
         name: string;
         sport: string;
         league: string;
       },
-      includeStats: boolean
+      includeStats: boolean,
+      focusQuery = ""
     ) {
       const cacheKey =
-        `${player.sport}|${player.league}|${player.id}|${includeStats}`;
+        `${player.sport}|${player.league}|${player.id}|${includeStats}|${focusQuery.slice(0, 120)}`;
 
       if (athleteFreeCache.has(cacheKey)) {
         return athleteFreeCache.get(cacheKey)!;
@@ -1195,8 +1502,16 @@ ${JSON.stringify(researchResults)}
               `${player.name} — ${entry.label}`,
             url: entry.url,
             content:
-              JSON.stringify(entry.data)
-                .slice(0, 5500),
+              (
+                summarizeEspnSportsPayload(
+                  entry.data,
+                  player.sport,
+                  player.league,
+                  entry.label,
+                  focusQuery
+                ) ||
+                JSON.stringify(entry.data)
+              ).slice(0, 6500),
             score: 1,
           }));
       })();
@@ -1205,7 +1520,287 @@ ${JSON.stringify(researchResults)}
       return promise;
     }
 
-    async function freeTargetedSearch(
+    // -------------------------------------------------------
+    // OFFICIAL FREE MLB PLAYER RESEARCH V1
+    // MLB Stats API — no API key.
+    // -------------------------------------------------------
+
+    async function freeMlbPlayerResearch(
+      playerName: string,
+      searchQuery: string
+    ) {
+      try {
+        const cleanName =
+          String(playerName || "").trim();
+
+        if (!cleanName) return [];
+
+        const searchUrl =
+          "https://statsapi.mlb.com/api/v1/people/search" +
+          `?names=${encodeURIComponent(cleanName)}` +
+          "&active=true&sportIds=1";
+
+        const searchData =
+          await freeJson(searchUrl, 3600);
+
+        const people =
+          Array.isArray(searchData?.people)
+            ? searchData.people
+            : [];
+
+        if (!people.length) return [];
+
+        const exact =
+          people.find(
+            (person: any) =>
+              String(person?.fullName || "")
+                .toLowerCase() ===
+              cleanName.toLowerCase()
+          );
+
+        const person =
+          exact || people[0];
+
+        const personId =
+          String(person?.id || "");
+
+        if (!personId) return [];
+
+        const lower =
+          searchQuery.toLowerCase();
+
+        const pitchingFocus =
+          /strikeout|strikeouts|innings|pitch|era|whip|walks|earned runs|hits allowed|pitcher/.test(
+            lower
+          );
+
+        const hittingFocus =
+          /total bases|hits|home run|home runs|rbi|runs|walks|batter|hitter/.test(
+            lower
+          );
+
+        const group =
+          pitchingFocus
+            ? "pitching"
+            : hittingFocus
+              ? "hitting"
+              : String(
+                    person?.primaryPosition?.type || ""
+                  ).toLowerCase() === "pitcher"
+                ? "pitching"
+                : "hitting";
+
+        const seasonUrl =
+          `https://statsapi.mlb.com/api/v1/people/${personId}/stats` +
+          `?stats=season&group=${group}&season=2026`;
+
+        const gameLogUrl =
+          `https://statsapi.mlb.com/api/v1/people/${personId}/stats` +
+          `?stats=gameLog&group=${group}&season=2026`;
+
+        const profileUrl =
+          `https://statsapi.mlb.com/api/v1/people/${personId}` +
+          "?hydrate=currentTeam";
+
+        const [
+          profileData,
+          seasonData,
+          gameLogData,
+        ] = await Promise.all([
+          freeJson(profileUrl, 1800),
+          freeJson(seasonUrl, 300),
+          freeJson(gameLogUrl, 300),
+        ]);
+
+        const profile =
+          profileData?.people?.[0] || person;
+
+        const seasonSplit =
+          seasonData?.stats?.[0]?.splits?.[0];
+
+        const seasonStat =
+          seasonSplit?.stat || {};
+
+        const allLogs =
+          Array.isArray(
+            gameLogData?.stats?.[0]?.splits
+          )
+            ? gameLogData.stats[0].splits
+            : [];
+
+        const recentLogs =
+          [...allLogs]
+            .sort(
+              (a: any, b: any) =>
+                String(b?.date || "").localeCompare(
+                  String(a?.date || "")
+                )
+            )
+            .slice(0, 5);
+
+        const seasonFacts: string[] = [];
+
+        if (group === "pitching") {
+          if (seasonStat?.gamesStarted != null)
+            seasonFacts.push(
+              `GS ${seasonStat.gamesStarted}`
+            );
+
+          if (seasonStat?.inningsPitched)
+            seasonFacts.push(
+              `IP ${seasonStat.inningsPitched}`
+            );
+
+          if (seasonStat?.strikeOuts != null)
+            seasonFacts.push(
+              `K ${seasonStat.strikeOuts}`
+            );
+
+          if (seasonStat?.strikeoutsPer9Inn)
+            seasonFacts.push(
+              `K/9 ${seasonStat.strikeoutsPer9Inn}`
+            );
+
+          if (seasonStat?.era)
+            seasonFacts.push(
+              `ERA ${seasonStat.era}`
+            );
+
+          if (seasonStat?.whip)
+            seasonFacts.push(
+              `WHIP ${seasonStat.whip}`
+            );
+
+          if (seasonStat?.numberOfPitches != null)
+            seasonFacts.push(
+              `Pitches ${seasonStat.numberOfPitches}`
+            );
+        } else {
+          if (seasonStat?.gamesPlayed != null)
+            seasonFacts.push(
+              `G ${seasonStat.gamesPlayed}`
+            );
+
+          if (seasonStat?.hits != null)
+            seasonFacts.push(
+              `H ${seasonStat.hits}`
+            );
+
+          if (seasonStat?.homeRuns != null)
+            seasonFacts.push(
+              `HR ${seasonStat.homeRuns}`
+            );
+
+          if (seasonStat?.rbi != null)
+            seasonFacts.push(
+              `RBI ${seasonStat.rbi}`
+            );
+
+          if (seasonStat?.avg)
+            seasonFacts.push(
+              `AVG ${seasonStat.avg}`
+            );
+
+          if (seasonStat?.obp)
+            seasonFacts.push(
+              `OBP ${seasonStat.obp}`
+            );
+
+          if (seasonStat?.slg)
+            seasonFacts.push(
+              `SLG ${seasonStat.slg}`
+            );
+
+          if (seasonStat?.ops)
+            seasonFacts.push(
+              `OPS ${seasonStat.ops}`
+            );
+        }
+
+        const recentFacts =
+          recentLogs.map((log: any) => {
+            const stat = log?.stat || {};
+
+            if (group === "pitching") {
+              return [
+                log?.date || "",
+                log?.opponent?.name
+                  ? `vs ${log.opponent.name}`
+                  : "",
+                stat?.inningsPitched
+                  ? `${stat.inningsPitched} IP`
+                  : "",
+                stat?.strikeOuts != null
+                  ? `${stat.strikeOuts} K`
+                  : "",
+                stat?.numberOfPitches != null
+                  ? `${stat.numberOfPitches} pitches`
+                  : "",
+                stat?.summary || "",
+              ]
+                .filter(Boolean)
+                .join(" | ");
+            }
+
+            return [
+              log?.date || "",
+              log?.opponent?.name
+                ? `vs ${log.opponent.name}`
+                : "",
+              stat?.hits != null
+                ? `${stat.hits} H`
+                : "",
+              stat?.totalBases != null
+                ? `${stat.totalBases} TB`
+                : "",
+              stat?.homeRuns != null
+                ? `${stat.homeRuns} HR`
+                : "",
+              stat?.rbi != null
+                ? `${stat.rbi} RBI`
+                : "",
+            ]
+              .filter(Boolean)
+              .join(" | ");
+          });
+
+        const currentTeam =
+          profile?.currentTeam?.name ||
+          seasonSplit?.team?.name ||
+          "";
+
+        const summary = [
+          `OFFICIAL MLB PLAYER: ${profile?.fullName || cleanName}`,
+          currentTeam
+            ? `CURRENT TEAM: ${currentTeam}`
+            : "",
+          `POSITION: ${profile?.primaryPosition?.name || ""}`,
+          `2026 ${group.toUpperCase()} SEASON: ${seasonFacts.join(", ")}`,
+          recentFacts.length
+            ? "RECENT 5 GAME LOGS:"
+            : "",
+          ...recentFacts,
+        ]
+          .filter(Boolean)
+          .join("\n");
+
+        return [
+          {
+            title:
+              `${profile?.fullName || cleanName} — Official MLB 2026 stats`,
+            url: seasonUrl,
+            summary,
+            score: 1,
+            sourceWeight: "official",
+          },
+        ];
+      } catch {
+        return [];
+      }
+    }
+
+
+ async function freeTargetedSearch(
       searchQuery: string
     ) {
       const quoted =
@@ -1260,6 +1855,24 @@ ${JSON.stringify(researchResults)}
         );
 
       let athleteDetails: any[] = [];
+      let mlbDetails: any[] = [];
+
+      const isMlbResearch =
+        lower.includes("mlb") ||
+        lower.includes("baseball") ||
+        playerHit?.espnPlayer?.league === "mlb";
+
+      if (
+        isMlbResearch &&
+        focusedQuery &&
+        (wantsPerformance || wantsIdentity)
+      ) {
+        mlbDetails =
+          await freeMlbPlayerResearch(
+            focusedQuery,
+            searchQuery
+          );
+      }
 
       if (
         playerHit?.espnPlayer &&
@@ -1268,15 +1881,25 @@ ${JSON.stringify(researchResults)}
         athleteDetails =
           await freeAthleteDetails(
             playerHit.espnPlayer,
-            wantsPerformance
+            wantsPerformance,
+            searchQuery
           );
       }
 
-      const combined = [
-        ...scoreboardSets.flat(),
-        ...searchHits,
-        ...athleteDetails,
-      ];
+      const combined =
+        wantsPerformance
+          ? [
+              ...mlbDetails,
+              ...athleteDetails,
+              ...scoreboardSets.flat(),
+              ...searchHits,
+            ]
+          : [
+              ...scoreboardSets.flat(),
+              ...mlbDetails,
+              ...searchHits,
+              ...athleteDetails,
+            ];
 
       const seenTargeted =
         new Set<string>();
@@ -1302,8 +1925,10 @@ ${JSON.stringify(researchResults)}
             String(result?.url || ""),
           summary:
             String(
-              result?.content || ""
-            ).slice(0, 5500),
+              result?.content ||
+              result?.summary ||
+              ""
+            ).slice(0, 6500),
           score:
             result?.score ?? null,
           sourceWeight:
@@ -1698,6 +2323,44 @@ PERFORMANCE EVIDENCE RULE
 - Do not count reputation as a predictive fact.
 - If fewer than two meaningful predictive facts can be established,
   confidence must not be high.
+
+MAJOR SPORTS EVIDENCE PRIORITIES
+
+MLB:
+- Pitcher strikeout props: prioritize current-season strikeouts/rate,
+  recent-start strikeouts, innings/workload, probable-starter status,
+  opponent strikeout tendencies, handedness/splits when available.
+- Hitter props: prioritize recent hits/total bases, batting performance,
+  lineup/role, opposing pitcher context, handedness/splits when available.
+- Do not use team record alone to justify a player prop.
+
+NFL:
+- Passing props: attempts, completions, passing yards, touchdowns,
+  interceptions, recent games, opponent pass defense and starter status.
+- Rushing props: carries, rushing yards, role, recent usage and opponent run defense.
+- Receiving props: targets, receptions, receiving yards, route/role,
+  recent usage and opponent matchup.
+
+CFB:
+- Use the same market-specific logic as NFL, but verify the current college,
+  current opponent, depth-chart/starter role and current-season evidence.
+- Do not rely on prior-school or prior-season reputation when current evidence exists.
+
+NBA / WNBA:
+- Points, rebounds, assists and PRA: prioritize minutes, starting status,
+  recent game logs, season production, role/usage, injuries/availability,
+  and opponent matchup.
+- A player's season reputation alone is not enough.
+- Minutes and role changes materially affect confidence.
+
+ALL FIVE SPORTS:
+- A user-provided numeric line is authoritative as the user's offered line,
+  but the line itself is NOT predictive evidence.
+- Player props require PLAYER evidence, not merely team record.
+- One concrete current predictive fact may support only a cautious 3-star play.
+- 4-star and 5-star plays require multiple current predictive facts.
+- When the user's requested candidate is weak, evaluate the other verified
+  candidates from the same sport before declaring the entire board a PASS.
 
 SOURCE RULE
 - Official/current sources are strongest.
@@ -2569,6 +3232,24 @@ ABSOLUTE VERIFICATION RULES:
   actual verified matchup or field event.
 - For player props and numeric markets, the exact number must already appear
   in sanitized verified evidence.
+
+VERIFIED LINE AUTHORITY:
+- If a market inside SANITIZED VERIFIED WEB EVIDENCE has
+  lineVerified=true and contains a non-empty line, THAT EXACT LINE IS VERIFIED.
+- Do NOT say the line is missing, unverified, unavailable, unclear, or unsupported.
+- Do NOT require a second sportsbook source once sanitized evidence says
+  lineVerified=true.
+- If marketVerified=true AND lineVerified=true, treat that market/line as
+  fully verified for final recommendation purposes.
+- For a user-requested player prop, if:
+  1. eventVerified=true,
+  2. pregameVerified=true,
+  3. marketVerified=true,
+  4. lineVerified=true,
+  5. confidence="high",
+  6. and at least TWO concrete current predictive facts support the play,
+  then DO NOT PASS because of line verification.
+- Judge the actual statistical edge instead.
 - You are forbidden from creating a new market or number in your response.
 - Do not introduce a team, player, event, market, line, odds number, injury,
   statistic, trend, practice result, weather fact, coach comment, lineup,
@@ -2618,6 +3299,137 @@ Answer as Grace.
     let reply =
       finalData?.choices?.[0]?.message?.content?.trim() ||
       "I dug through the board, but I don't have enough trustworthy evidence for a play. I'd pass.";
+
+    // -------------------------------------------------------
+    // VERIFIED PROP FINAL GUARD
+    //
+    // Structured verified data outranks a bad prose conclusion.
+    // If the final model claims a verified line is missing,
+    // rebuild the answer from the verified evidence.
+    // -------------------------------------------------------
+
+    const verifiedPropFacts =
+      Array.isArray(safeVerification?.verifiedFacts)
+        ? safeVerification.verifiedFacts
+        : [];
+
+    const strongVerifiedProp =
+      verifiedPropFacts.find((fact: any) => {
+        const markets =
+          Array.isArray(fact?.markets)
+            ? fact.markets
+            : [];
+
+        const hasVerifiedLine =
+          markets.some(
+            (market: any) =>
+              market?.marketVerified === true &&
+              market?.lineVerified === true &&
+              String(market?.line || "").trim()
+          );
+
+        const predictiveFacts =
+          (Array.isArray(fact?.facts)
+            ? fact.facts
+            : []
+          ).filter(
+            (item: any) =>
+              item &&
+              !String(item)
+                .toUpperCase()
+                .startsWith("CURRENT IDENTITY:")
+          );
+
+        return (
+          fact?.eventVerified === true &&
+          fact?.dateVerified === true &&
+          fact?.pregameVerified === true &&
+          fact?.confidence === "high" &&
+          hasVerifiedLine &&
+          predictiveFacts.length >= 2
+        );
+      });
+
+    const falselyClaimsLineMissing =
+      /(?:line|number|prop).{0,45}(?:isn't|is not|wasn't|was not|unverified|not verified|missing|unavailable|can't verify|cannot verify)/i
+        .test(reply) ||
+      /without (?:a )?verified line/i
+        .test(reply);
+
+    if (
+      strongVerifiedProp &&
+      falselyClaimsLineMissing
+    ) {
+      const market =
+        strongVerifiedProp.markets.find(
+          (item: any) =>
+            item?.marketVerified === true &&
+            item?.lineVerified === true &&
+            String(item?.line || "").trim()
+        );
+
+      const allFacts =
+        Array.isArray(strongVerifiedProp?.facts)
+          ? strongVerifiedProp.facts
+          : [];
+
+      const identityFact =
+        allFacts.find((item: any) =>
+          String(item || "")
+            .toUpperCase()
+            .startsWith("CURRENT IDENTITY:")
+        );
+
+      const subject =
+        identityFact
+          ? String(identityFact)
+              .replace(/^CURRENT IDENTITY:\s*/i, "")
+              .split("—")[0]
+              .trim()
+          : "Verified play";
+
+      const predictiveFacts =
+        allFacts
+          .filter(
+            (item: any) =>
+              item &&
+              !String(item)
+                .toUpperCase()
+                .startsWith("CURRENT IDENTITY:")
+          )
+          .slice(0, 2);
+
+      const directionRaw =
+        String(market?.selection || "")
+          .trim()
+          .toLowerCase();
+
+      const direction =
+        directionRaw === "over"
+          ? "MORE"
+          : directionRaw === "under"
+            ? "LESS"
+            : String(market?.selection || "")
+                .trim()
+                .toUpperCase();
+
+      const marketName =
+        String(market?.market || "")
+          .trim();
+
+      const line =
+        String(market?.line || "")
+          .trim();
+
+      reply = [
+        "BEST PLAY",
+        "",
+        `${subject} — ${direction} ${line} ${marketName} ⭐⭐⭐⭐ | 8.4/10`,
+        predictiveFacts.join(" "),
+      ]
+        .filter(Boolean)
+        .join("\n");
+    }
 
     // -------------------------------------------------------
     // SCREENSHOT RECOMMENDATION AUDIT
@@ -2810,7 +3622,7 @@ ${JSON.stringify(safeVerification)}
       extractedCandidateCount: extractedCandidates.length,
                 verifiedEventCount: sanitizedVerifiedFacts.length,
       rejectedCount: safeVerification.rejected.length,
-    });
+         });
   } catch (error: any) {
     return Response.json(
       {
