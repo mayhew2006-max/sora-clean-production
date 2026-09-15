@@ -536,8 +536,11 @@ Return ONLY valid JSON:
 {
   "candidates": [
     {
+      "source": "user|web",
       "sport": "",
       "event": "",
+      "player": "",
+      "team": "",
       "market": "",
       "selection": "",
       "line": ""
@@ -546,19 +549,36 @@ Return ONLY valid JSON:
 }
 
 RULES:
-- Extract only actual named events/matchups/fights/races/matches found in research.
-- Extract a market only if research suggests one.
-- Extract an exact line only if it is actually present.
+- FIRST inspect the ORIGINAL USER REQUEST.
+- If the user explicitly supplies a player/team/event and a market or numeric line,
+  include that requested play as the FIRST candidate with source="user".
+- A number explicitly supplied by the user may be copied exactly into line.
+- Never invent a user line that was not supplied.
+- Then extract additional useful candidates from PUBLIC RESEARCH with source="web".
+- A specific requested player does NOT prevent Grace from finding better alternatives.
+- If the requested candidate looks weak, still include useful outside candidates so
+  the later ranking stage can recommend something better.
+- For generic requests such as "find me the best two picks tonight", discover the
+  strongest useful current candidates from public research.
+- Extract only actual named current events/matchups/fights/races/matches.
+- Extract a market only when the request or research supports one.
+- For source="web", extract an exact numeric line only when it is actually present.
 - Do not invent odds.
 - Do not invent prop numbers.
 - Do not invent events.
 - Include up to 12 useful candidates across different sports/markets.
-- Prefer candidates that appear relevant to TODAY.
+- Prefer candidates relevant to TODAY.
               `.trim(),
             },
             {
               role: "user",
-              content: JSON.stringify(researchResults),
+              content: `
+ORIGINAL USER REQUEST:
+${userQuery}
+
+PUBLIC RESEARCH:
+${JSON.stringify(researchResults)}
+              `.trim(),
             },
           ],
         }),
@@ -582,20 +602,28 @@ RULES:
 
       if (Array.isArray(parsedCandidates?.candidates)) {
         extractedCandidates =
-          parsedCandidates.candidates.slice(0, 12);
+          parsedCandidates.candidates
+            .slice(0, 12)
+            .map((candidate: any) => ({
+              ...candidate,
+              source:
+                candidate?.source === "user"
+                  ? "user"
+                  : "web",
+            }));
       }
     } catch {}
 
     // -------------------------------------------------------
-    // SCREENSHOT CANDIDATE AUTHORITY
+    // USER / SCREENSHOT CANDIDATE PRIORITY
     //
-    // When the user supplies a betting board, the screenshot
-    // is the candidate list. Web research verifies those
-    // candidates; it does NOT create replacement candidates.
+    // User-supplied plays are checked FIRST, but Grace keeps
+    // her independently discovered candidates so she can offer
+    // a better alternative when the requested play is weak.
     // -------------------------------------------------------
 
     if (screenshotBoardRequest && screenshotItems.length > 0) {
-      extractedCandidates = screenshotItems
+      const screenshotCandidates = screenshotItems
         .map((item: any) => ({
           source: "screenshot",
           sport: String(item?.sport || "").trim(),
@@ -613,7 +641,12 @@ RULES:
             candidate.team ||
             candidate.event
         )
-        .slice(0, 12);
+        .slice(0, 8);
+
+      extractedCandidates = [
+        ...screenshotCandidates,
+        ...extractedCandidates,
+      ].slice(0, 12);
     }
 
     // -------------------------------------------------------
@@ -909,13 +942,14 @@ PLAYER IDENTITY / CURRENT TEAM — MANDATORY
   "CURRENT IDENTITY: Player — Current Team — Current Opponent/Event"
   using only verified current evidence.
 
-SCREENSHOT MARKET / LINE AUTHORITY
+USER-PROVIDED MARKET / LINE AUTHORITY
 
-- When candidate.source="screenshot", the screenshot itself proves
-  that the displayed market is available to THIS user.
-- A clearly extracted screenshot market may set marketVerified=true.
-- A clearly extracted and unambiguous screenshot number may set
-  lineVerified=true.
+- When candidate.source="screenshot" OR candidate.source="user",
+  the user-provided market is authoritative for the play being evaluated.
+- A clearly supplied market may set marketVerified=true.
+- A clearly supplied and unambiguous numeric line may set lineVerified=true.
+- A typed user line and a clearly extracted screenshot line are both accepted
+  as the user's current available line.
 - Do NOT require a public sportsbook webpage to independently show
   the exact same prop or exact same number.
 - Sportsbooks personalize boards and lines move constantly.
@@ -950,10 +984,9 @@ MARKET VERIFICATION
 - Do NOT invent moneyline odds for that winner prediction.
 
 EXACT LINE VERIFICATION
-- If candidate.source="screenshot", an unambiguous screenshot line
-  is accepted as the user's current board line.
-- If candidate.source is NOT "screenshot", exact numbers require
-  independent targeted support.
+- If candidate.source="screenshot" OR candidate.source="user",
+  an unambiguous user-provided line is accepted as the user's current line.
+- If candidate.source="web", exact numbers require independent targeted support.
 - Never combine two nearby screenshot numbers.
 - Never average numbers.
 - Never infer a missing decimal.
@@ -967,9 +1000,9 @@ PLAYER PROP RULE
 - Verify the EXACT numeric prop line separately.
 - Player matchup evidence alone does NOT verify a betting line.
 - "Player Strikeouts" by itself is not enough.
-- For a screenshot candidate, the visible unambiguous screenshot
-  line is sufficient evidence that the user has that line available.
-- For a non-screenshot candidate, the exact numeric prop still
+- For a screenshot or typed-user candidate, the clear unambiguous
+  user-provided line is sufficient evidence that the user has that line available.
+- For a web-discovered candidate, the exact numeric prop still
   requires independent current evidence.
 - Player identity, current team/event relationship and supporting
   performance evidence ALWAYS require independent verification.
@@ -1786,17 +1819,18 @@ ACCURACY ALWAYS COMES BEFORE PERSONALITY.
 GRACE_SCREENSHOT_MARKET_EVIDENCE_V1
 
 SCREENSHOT BOARD MODE:
-- When one or more screenshots are attached, treat the screenshots as the user's available betting board.
+- When screenshots or typed lines are supplied, treat them as PRIORITY candidates to evaluate first, not as Grace's entire universe.
 - Read ALL visible player names, teams, opponents, markets, directions, and exact lines from every attached screenshot.
-- Evaluate ONLY choices actually visible in the screenshots unless the user explicitly asks for additional outside options.
-- Do NOT introduce a different player, prop, line, alternate line, team, or market that is not visible on the supplied screenshots.
+- Evaluate the user's supplied choices first. If a supplied play is weak, actively consider verified outside alternatives Grace discovered from current public research.
+- Grace MAY recommend a different verified player, team, event, or market when it is a stronger alternative and it exists in SANITIZED VERIFIED WEB EVIDENCE.
+- Never invent an outside numeric line. A web-discovered numeric line must still be independently verified.
 - Research the exact visible players, their current matchup, current role, recent form, injuries/availability, opponent matchup, usage/opportunity, and other sport-specific predictive factors.
 - Screenshot popularity, fire icons, pick percentages, or community activity are NOT evidence of value by themselves.
 - Generic statements such as "key offensive player", "important contributor", "star player", "well documented", or "expected to contribute" are NOT sufficient reasons.
 - Every recommendation must be supported by concrete current evidence contained in VERIFIED EVIDENCE.
 - Compare the visible screenshot options against each other and rank them.
 - If the user asks for a 2-leg, return the strongest TWO independent qualifying screenshot plays.
-- If fewer than two screenshot plays are supported strongly enough, say PASS rather than forcing a 2-leg.
+- If fewer than two supplied plays qualify, continue through verified outside candidates before deciding the entire board is a PASS.
 - Prefer independent legs when possible. Warn when two props are strongly correlated.
 - Never pretend historical reputation is current evidence.
 - Never claim current-season form unless verified current-season information actually supports it.
@@ -1804,8 +1838,9 @@ SCREENSHOT BOARD MODE:
 - If a screenshot market or line is unclear, merged, duplicated, or ambiguous, do NOT recommend it.
 - Examples such as "70/84.5", "36/36.5", or "0/0.5" must be treated as unresolved unless verified evidence clearly identifies the exact line.
 - Do not recommend a play using vague reasons such as "known for", "key player", "important contributor", "dual-threat", "favorable opportunity", or "expected to contribute".
-- Every BEST 2-LEG selection must have at least TWO concrete current supporting facts from verified evidence.
-- If a screenshot option does not have enough current evidence, move it to OTHER SCREENSHOT OPTIONS or PASS.
+- Every official selection must have at least ONE concrete current predictive fact.
+- Two or more concrete current predictive facts are required for high-confidence 4-star or 5-star treatment.
+- If a supplied option does not have enough current evidence, PASS on that candidate and continue searching the verified alternatives.
 - Do not use a player's reputation as evidence.
 - Do not assign confidence above 6.9 unless multiple concrete current factors actually support the play.
 
@@ -1853,8 +1888,9 @@ ABSOLUTE VERIFICATION RULES:
 - Anything listed under verification.rejected is forbidden from the final recommendations.
 - Do not revive rejected candidates using general sports knowledge.
 - Your factual universe consists ONLY of:
-  1. USER-PROVIDED SCREENSHOT MARKET DATA for the visibly offered market/line, and
-  2. SANITIZED VERIFIED WEB EVIDENCE for event/date/status and predictive facts.
+  1. USER-PROVIDED market/line data from the original request or screenshots, and
+  2. SANITIZED VERIFIED WEB EVIDENCE for discovered alternatives, event/date/status,
+     market verification, and predictive facts.
 - If a matchup has fewer than two verified participants, it cannot be recommended.
 - Never output generic events such as "ATP Tournament", "UEFA Champions League",
   "MLB", "NFL", "NBA", "UFC", or another league/tournament name without the
@@ -1928,7 +1964,8 @@ NON-NEGOTIABLE RULES:
 
 1. Never introduce a player, team, market, line, number, matchup, injury, statistic, trend, or factual claim that is not already present in the draft or VERIFIED WEB EVIDENCE.
 
-2. An OFFICIAL recommendation may survive ONLY when it has at least TWO concrete CURRENT predictive facts from VERIFIED WEB EVIDENCE.
+2. An OFFICIAL recommendation may survive when it has at least ONE concrete CURRENT predictive fact from VERIFIED WEB EVIDENCE.
+A 4-star or 5-star recommendation requires multiple strong current predictive facts.
 
 3. Concrete evidence includes things such as:
 - current-season statistics,
@@ -1955,8 +1992,9 @@ NON-NEGOTIABLE RULES:
 - "could have a big game"
 - reputation or career history without current supporting evidence.
 
-5. If a recommendation does not have two concrete current predictive
-facts, it is NOT an official strong play.
+5. One strong concrete current predictive fact may support a cautious
+3-star official play. Multiple strong current predictive facts are required
+for 4-star or 5-star confidence.
 
 6. NEVER force two plays.
 
