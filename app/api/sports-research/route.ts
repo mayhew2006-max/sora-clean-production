@@ -3019,7 +3019,27 @@ Verify each candidate independently.
       ],
     };
 
- // -------------------------------------------------------
+ // TEMP STEP 13 VERIFICATION DEBUG
+    if (
+      userQuery.toLowerCase().includes("debug verify")
+    ) {
+      return Response.json({
+        reply:
+          "SPORTS VERIFICATION DEBUG\\n\\n" +
+          JSON.stringify(
+            {
+              screenshotItems,
+              extractedCandidates,
+              verification,
+              safeVerification,
+            },
+            null,
+            2
+          ),
+      });
+    }
+
+    // -------------------------------------------------------
     // FINAL UNIVERSAL SPORTS BRAIN
     // -------------------------------------------------------
 
