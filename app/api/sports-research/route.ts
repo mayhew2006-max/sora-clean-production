@@ -65,6 +65,7 @@ Return JSON:
 
 {
   "summary": "brief description of the board",
+  "boardMarket": "board-wide market/category if shown",
   "items": [
     {
       "sport": "",
@@ -84,6 +85,14 @@ Rules:
   spreads, moneylines, totals, props and visible lines.
 - Preserve exact visible numbers.
 - Preserve exact visible player/team names.
+- If a tab/header defines the market for the whole visible board,
+  put that market in boardMarket.
+- Example: "Pitcher Strikeouts" means boardMarket="strikeouts".
+- "K" or "Ks" beside a pitcher line means strikeouts.
+- Apply the board-wide market to each visible player card even when
+  the words are not repeated inside every card.
+- When BOTH More and Less buttons are visible, leave selection blank.
+  Grace will evaluate both directions later.
 - Do not invent an opponent.
 - Do not invent a line.
 - Do not invent odds.
@@ -125,9 +134,68 @@ Rules:
           if (raw) {
             const parsed = JSON.parse(raw);
 
-            const items = Array.isArray(parsed?.items)
-              ? parsed.items.slice(0, 40)
-              : [];
+            const boardMarket =
+              String(parsed?.boardMarket || "").trim();
+
+            function normalizeScreenshotMarket(
+              value: unknown
+            ) {
+              const rawValue =
+                String(value || "").trim();
+
+              const lower =
+                rawValue.toLowerCase();
+
+              if (
+                lower === "k" ||
+                lower === "ks" ||
+                lower.includes("pitcher strikeout") ||
+                lower === "strikeout" ||
+                lower === "strikeouts"
+              ) {
+                return "strikeouts";
+              }
+
+              if (lower.includes("total base")) {
+                return "total bases";
+              }
+
+              if (lower.includes("passing yard")) {
+                return "passing yards";
+              }
+
+              if (lower.includes("rushing yard")) {
+                return "rushing yards";
+              }
+
+              if (lower.includes("receiving yard")) {
+                return "receiving yards";
+              }
+
+              if (lower.includes("reception")) {
+                return "receptions";
+              }
+
+              if (lower === "pra") {
+                return "PRA";
+              }
+
+              return rawValue;
+            }
+
+            const items =
+              Array.isArray(parsed?.items)
+                ? parsed.items
+                    .slice(0, 40)
+                    .map((item: any) => ({
+                      ...item,
+                      market:
+                        normalizeScreenshotMarket(
+                          item?.market ||
+                          boardMarket
+                        ),
+                    }))
+                : [];
 
             screenshotItems = items;
 
