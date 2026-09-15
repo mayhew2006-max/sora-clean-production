@@ -1184,24 +1184,67 @@ ${JSON.stringify(researchResults)}
 
     if (screenshotBoardRequest && screenshotItems.length > 0) {
       const screenshotCandidates = screenshotItems
-        .map((item: any) => ({
-          source: "screenshot",
-          sport: String(item?.sport || "").trim(),
-          event: String(item?.event || "").trim(),
-          player: String(item?.player || "").trim(),
-          team: String(item?.team || "").trim(),
-          market: String(item?.market || "").trim(),
-          selection: String(item?.selection || "").trim(),
-          line: String(item?.line || "").trim(),
-          odds: String(item?.odds || "").trim(),
-        }))
+        .flatMap((item: any) => {
+          const base = {
+            source: "screenshot",
+            sport: String(item?.sport || "").trim(),
+            event: String(item?.event || "").trim(),
+            player: String(item?.player || "").trim(),
+            team: String(item?.team || "").trim(),
+            market: String(item?.market || "").trim(),
+            line: String(item?.line || "").trim(),
+            odds: String(item?.odds || "").trim(),
+          };
+
+          const rawSelection =
+            String(item?.selection || "")
+              .trim()
+              .toLowerCase();
+
+          const selection =
+            rawSelection === "more" ||
+            rawSelection === "over"
+              ? "over"
+              : rawSelection === "less" ||
+                rawSelection === "under"
+                ? "under"
+                : "";
+
+          // A sportsbook board normally shows BOTH More and Less.
+          // If the screenshot has a player prop + line but no chosen
+          // direction, Grace must evaluate both sides herself.
+          if (
+            base.player &&
+            base.market &&
+            base.line &&
+            !selection
+          ) {
+            return [
+              {
+                ...base,
+                selection: "over",
+              },
+              {
+                ...base,
+                selection: "under",
+              },
+            ];
+          }
+
+          return [
+            {
+              ...base,
+              selection,
+            },
+          ];
+        })
         .filter(
           (candidate: any) =>
             candidate.player ||
             candidate.team ||
             candidate.event
         )
-        .slice(0, 8);
+        .slice(0, 12);
 
       extractedCandidates = [
         ...screenshotCandidates,
