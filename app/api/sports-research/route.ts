@@ -245,6 +245,26 @@ Rules:
 ${screenshotContext}`
       : userQuery;
 
+    // TEMP SCREENSHOT DEBUG COMMAND
+    // Upload a screenshot and ask exactly: debug screenshot
+    if (
+      userQuery.trim().toLowerCase() === "debug screenshot"
+    ) {
+      return Response.json({
+        reply:
+          "SCREENSHOT DEBUG\n\n" +
+          JSON.stringify(
+            {
+              screenshotCount: screenshotImages.length,
+              screenshotItems,
+              screenshotContext,
+            },
+            null,
+            2
+          ),
+      });
+    }
+
     const clean = userQuery.toLowerCase();
 
     const now = new Date();
