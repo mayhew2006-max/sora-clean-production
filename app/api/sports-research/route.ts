@@ -40,6 +40,7 @@ export async function POST(req: Request) {
     // GRACE_SCREENSHOT_READ_V1
     // Read user-provided sportsbook/web screenshots before research.
     let screenshotContext = "";
+    let screenshotItems: any[] = [];
 
     if (screenshotImages.length > 0) {
       try {
@@ -134,6 +135,8 @@ Rules:
             const items = Array.isArray(parsed?.items)
               ? parsed.items.slice(0, 40)
               : [];
+
+            screenshotItems = items;
 
             const itemText = items
               .map((item: any, index: number) => {
@@ -584,6 +587,36 @@ RULES:
     } catch {}
 
     // -------------------------------------------------------
+    // SCREENSHOT CANDIDATE AUTHORITY
+    //
+    // When the user supplies a betting board, the screenshot
+    // is the candidate list. Web research verifies those
+    // candidates; it does NOT create replacement candidates.
+    // -------------------------------------------------------
+
+    if (screenshotBoardRequest && screenshotItems.length > 0) {
+      extractedCandidates = screenshotItems
+        .map((item: any) => ({
+          source: "screenshot",
+          sport: String(item?.sport || "").trim(),
+          event: String(item?.event || "").trim(),
+          player: String(item?.player || "").trim(),
+          team: String(item?.team || "").trim(),
+          market: String(item?.market || "").trim(),
+          selection: String(item?.selection || "").trim(),
+          line: String(item?.line || "").trim(),
+          odds: String(item?.odds || "").trim(),
+        }))
+        .filter(
+          (candidate: any) =>
+            candidate.player ||
+            candidate.team ||
+            candidate.event
+        )
+        .slice(0, 12);
+    }
+
+    // -------------------------------------------------------
     // INDEPENDENT TARGETED VERIFICATION SEARCH
     // -------------------------------------------------------
 
@@ -631,6 +664,12 @@ RULES:
         const sport =
           String(candidate?.sport || "").trim();
 
+        const player =
+          String(candidate?.player || "").trim();
+
+        const team =
+          String(candidate?.team || "").trim();
+
         const event =
           String(candidate?.event || "").trim();
 
@@ -643,20 +682,42 @@ RULES:
         const line =
           String(candidate?.line || "").trim();
 
-        if (!event) {
+        if (!event && !player && !team) {
           return {
             candidate,
+            identityResults: [],
             eventResults: [],
             marketResults: [],
           };
         }
 
-        const eventQuery =
-          `"${event}" ${easternDate} ` +
-          `${sport} schedule start time today official`;
+        const identitySubject =
+          player || team || event;
 
-        let marketQuery =
-          `"${event}" ${market} ${selection} ${easternDate}`;
+        // CRITICAL:
+        // Do NOT include the screenshot team in this query as
+        // assumed truth. We want independent current identity.
+        const identityQuery =
+          `"${identitySubject}" ${sport} ${easternDate} ` +
+          `current team roster transaction opponent today ` +
+          `schedule probable starter official`;
+
+        const eventQuery = event
+          ? `"${event}" ${easternDate} ${sport} ` +
+            `schedule start time today official`
+          : `"${identitySubject}" ${easternDate} ${sport} ` +
+            `opponent today schedule start time official`;
+
+        let marketQuery = [
+          player ? `"${player}"` : "",
+          team ? `"${team}"` : "",
+          event ? `"${event}"` : "",
+          market,
+          selection,
+          easternDate,
+        ]
+          .filter(Boolean)
+          .join(" ");
 
         if (line) {
           marketQuery += ` "${line}"`;
@@ -665,14 +726,19 @@ RULES:
         marketQuery +=
           ` odds line market sportsbook`;
 
-        const [eventResults, marketResults] =
-          await Promise.all([
-            targetedSearch(eventQuery),
-            targetedSearch(marketQuery),
-          ]);
+        const [
+          identityResults,
+          eventResults,
+          marketResults,
+        ] = await Promise.all([
+          targetedSearch(identityQuery),
+          targetedSearch(eventQuery),
+          targetedSearch(marketQuery),
+        ]);
 
         return {
           candidate,
+          identityResults,
           eventResults,
           marketResults,
         };
@@ -725,6 +791,13 @@ Return ONLY valid JSON:
       "event": "",
       "eventType": "head_to_head|field",
       "participants": [],
+      "player": "",
+      "screenshotTeam": "",
+      "currentTeam": "",
+      "currentOpponentOrEvent": "",
+      "identityVerified": true,
+      "eventRelationshipVerified": true,
+      "screenshotTeamMatchesCurrent": true,
       "eventVerified": true,
       "dateVerified": true,
       "pregameVerified": true,
@@ -782,6 +855,47 @@ SELECTION IDENTITY:
   must be one of the verified participants.
 - Do not allow a selection that is not part of the verified event.
 
+PLAYER IDENTITY / CURRENT TEAM — MANDATORY
+
+- When a candidate contains a player, independently verify who that
+  player is CURRENTLY playing for or competing with as of TODAY.
+- Use identityResults. Do NOT use model memory.
+- The screenshot team is a claim to CHECK, not assumed truth.
+- Transactions and trades matter. If the player changed teams,
+  use the CURRENT team, not the historical team.
+- Verify that the player actually belongs in the CURRENT event
+  being analyzed.
+- For team sports, establish the player's current team and today's
+  actual opponent.
+- For individual sports, establish the player's actual current
+  opponent/event.
+- identityVerified=true ONLY when fresh targeted evidence supports
+  the player's current identity.
+- eventRelationshipVerified=true ONLY when fresh evidence supports
+  that the player belongs in this exact current event.
+- If the screenshot supplied a team:
+  screenshotTeamMatchesCurrent=true ONLY when it agrees with the
+  independently verified current team.
+- A stale article connecting a player to an old team is NOT enough.
+- If sources conflict and the conflict cannot be resolved:
+  REJECT.
+- Every verified player prop must include a fact in this form:
+  "CURRENT IDENTITY: Player — Current Team — Current Opponent/Event"
+  using only verified current evidence.
+
+SCREENSHOT LINE AUTHORITY
+
+- When candidate.source="screenshot", an unambiguous line extracted
+  directly from the user's screenshot is the user's actual available
+  board line.
+- That screenshot line does NOT need to be duplicated on a public
+  sportsbook page.
+- Public research is still required for player identity, current event,
+  statistics, matchup evidence, injuries, availability and other facts.
+- If the screenshot line is merged, unclear, duplicated or ambiguous,
+  lineVerified=false and the play must not be recommended.
+- Never repair or guess a malformed screenshot number.
+
 PREGAME VERIFICATION
 - In PREGAME mode, the event must still be upcoming.
 - If targeted evidence says it started or finished, reject it.
@@ -798,9 +912,14 @@ MARKET VERIFICATION
 - Do NOT invent moneyline odds for that winner prediction.
 
 EXACT LINE VERIFICATION
-- Exact numbers require exact support.
-- -120, -1.5, O2, O9.5, 6.5 Ks, etc. require evidence.
-- If the market exists but exact line is not confirmed:
+- If candidate.source="screenshot", an unambiguous screenshot line
+  is accepted as the user's current board line.
+- If candidate.source is NOT "screenshot", exact numbers require
+  independent targeted support.
+- Never combine two nearby screenshot numbers.
+- Never average numbers.
+- Never infer a missing decimal.
+- If the line is unclear or ambiguous:
   lineVerified=false
   line=""
 
@@ -810,12 +929,12 @@ PLAYER PROP RULE
 - Verify the EXACT numeric prop line separately.
 - Player matchup evidence alone does NOT verify a betting line.
 - "Player Strikeouts" by itself is not enough.
-- "Max Scherzer Over 7.5 Strikeouts" requires direct evidence that
-  7.5 strikeouts is an actual current line for that specific game.
-- If exact numeric prop evidence is missing:
-  marketVerified=false
-  lineVerified=false
-  line=""
+- For a screenshot candidate, the visible unambiguous screenshot
+  line is sufficient evidence that the user has that line available.
+- For a non-screenshot candidate, the exact numeric prop still
+  requires independent current evidence.
+- Player identity, current team/event relationship and supporting
+  performance evidence ALWAYS require independent verification.
 
 FACT RULE
 - Facts must come directly from targeted evidence.
@@ -953,6 +1072,20 @@ Verify each candidate independently.
             .filter(Boolean)
         : [];
 
+      const player =
+        String(fact?.player || "").trim();
+
+      const screenshotTeam =
+        String(fact?.screenshotTeam || "").trim();
+
+      const currentTeam =
+        String(fact?.currentTeam || "").trim();
+
+      const currentOpponentOrEvent =
+        String(
+          fact?.currentOpponentOrEvent || ""
+        ).trim();
+
       const eventPass =
         fact?.eventVerified === true &&
         fact?.dateVerified === true &&
@@ -965,6 +1098,48 @@ Verify each candidate independently.
             "Failed hard event/date/pregame verification.",
         });
         continue;
+      }
+
+      // Player props cannot survive unless the current player/event
+      // identity was independently established.
+      if (player) {
+        if (
+          fact?.identityVerified !== true ||
+          fact?.eventRelationshipVerified !== true
+        ) {
+          sanitizerRejected.push({
+            claim:
+              player +
+              (event ? ` — ${event}` : ""),
+            reason:
+              "Player/current-event identity was not independently verified.",
+          });
+          continue;
+        }
+
+        if (
+          screenshotTeam &&
+          fact?.screenshotTeamMatchesCurrent !== true
+        ) {
+          sanitizerRejected.push({
+            claim:
+              `${player} — ${screenshotTeam}`,
+            reason:
+              "Screenshot team conflicts with the independently verified current team.",
+          });
+          continue;
+        }
+
+        if (
+          !currentOpponentOrEvent
+        ) {
+          sanitizerRejected.push({
+            claim: player,
+            reason:
+              "Current opponent/event was not established.",
+          });
+          continue;
+        }
       }
 
       if (
@@ -1476,6 +1651,76 @@ ${screenshotContext || "No screenshot market data supplied."}
 SANITIZED VERIFIED WEB EVIDENCE:
 ${JSON.stringify(safeVerification)}
 
+GRACE_PREMIUM_SPORTS_VOICE_V1
+
+SPORTS RESPONSE STYLE:
+
+Grace does the heavy analysis privately.
+The user gets the conclusion, not the research paper.
+
+For screenshot sports recommendations:
+
+- Be short.
+- Be confident only when evidence deserves confidence.
+- Sound like a smart friend watching the game, not a sportsbook ad.
+- Never sell the user with generic hype.
+- Never dump the research process.
+- One short reason per official pick.
+- The short reason must contain at least ONE concrete current fact.
+- Two concrete current facts are preferred for 5-star plays.
+- No "known for", "key player", "important contributor",
+  "favorable opportunity", "could have a big game", or similar filler.
+
+PREFERRED FORMAT:
+
+BEST 2
+1. Player — Market/Line — MORE or LESS ⭐⭐⭐⭐⭐ | 9.1/10
+   One short verified reason.
+
+2. Player — Market/Line — MORE or LESS ⭐⭐⭐⭐ | 8.2/10
+   One short verified reason.
+
+If only one play truly qualifies:
+
+BEST PLAY
+Player — Market/Line — MORE or LESS ⭐⭐⭐⭐⭐ | 9.1/10
+One short verified reason.
+
+Do NOT force a second leg.
+
+If nothing qualifies:
+
+PASS
+There's no fuckin way I'd force this board tonight. 😂
+
+STAR CALIBRATION:
+- 5 stars: 8.8-10.0 only
+- 4 stars: 7.8-8.7
+- 3 stars: 7.0-7.7
+- Below 7.0: LEAN or PASS, not an official strong play.
+
+Never inflate a rating just to produce a pick.
+
+PERSONALITY:
+- Grace may joke.
+- Grace may talk a little shit.
+- Grace may swear naturally when the user's tone/context supports it.
+- Never force profanity on users who do not communicate that way.
+- One personality line is enough. Do not turn the answer into a comedy routine.
+- Example tone:
+  "Skubal's a fuckin beast this year. I'm on the more. 😂"
+- But ONLY say something like that after the current facts actually
+  support the recommendation.
+
+FUN FACT:
+- Optional.
+- Maximum one sentence.
+- Must be verified CURRENT information.
+- It must actually be interesting.
+- Never use a historical reputation fact as current betting evidence.
+
+ACCURACY ALWAYS COMES BEFORE PERSONALITY.
+
 GRACE_SCREENSHOT_MARKET_EVIDENCE_V1
 
 SCREENSHOT BOARD MODE:
@@ -1664,7 +1909,28 @@ Never repair, average, combine, or guess an unclear line.
 8. Do not raise confidence.
 Confidence above 6.9 requires multiple strong current verified signals.
 
-9. Keep the answer compact.
+9. Keep the answer extremely compact.
+
+10. Do NOT expose the behind-the-scenes research process.
+
+11. For each surviving official pick:
+- one recommendation line,
+- star rating,
+- /10 confidence,
+- one short evidence sentence.
+
+12. Remove long risk paragraphs unless one specific risk materially
+changes the recommendation.
+
+13. Sound like Grace: knowledgeable friend watching the game.
+A quick joke or light profanity is allowed when the user's tone supports it.
+
+14. Never allow personality to cover weak evidence.
+Facts first. Personality second.
+
+15. If a player's current team/opponent/event relationship is not
+explicitly established in VERIFIED WEB EVIDENCE, that player prop
+must be moved to PASS.
 
 Return ONLY the corrected final sports answer.
                   `.trim(),
