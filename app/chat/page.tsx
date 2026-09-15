@@ -1753,13 +1753,48 @@ Only use business/report fields when the user specifically requests a report or 
     );
   }
 
-  function hasRecentSportsContext() {
+  function hasRecentSportsContext(currentText: string) {
+    const clean = currentText.trim().toLowerCase();
+
+    // Only use recent sports context for an actual ambiguous follow-up.
+    // Normal messages like "hey" or "tell me a joke" must never
+    // inherit sports mode just because a sportsbook image is still active.
+    const followUpPatterns = [
+      /^what about\b/,
+      /^how about\b/,
+      /^which one\b/,
+      /^which ones\b/,
+      /^this one\b/,
+      /^that one\b/,
+      /^these\b/,
+      /^those\b/,
+      /^him\b/,
+      /^her\b/,
+      /^them\b/,
+      /^rank them\b/,
+      /^compare them\b/,
+      /^best one\b/,
+      /^best two\b/,
+      /^best 2\b/,
+      /^best three\b/,
+      /^best 3\b/,
+      /^strongest one\b/,
+      /^anything else\b/,
+      /^any others?\b/,
+    ];
+
+    if (!followUpPatterns.some((pattern) => pattern.test(clean))) {
+      return false;
+    }
+
     return messagesRef.current
       .slice(-6)
       .some((message) => {
-        const text =
-          String(message?.content || "");
+        // Only the USER can establish recent sports intent.
+        // Grace's own sports response must not keep sports mode alive.
+        if (message?.role !== "user") return false;
 
+        const text = String(message?.content || "");
         if (!text) return false;
 
         return (
@@ -2212,7 +2247,7 @@ function isMarketplaceQuery(text: string) {
         isSportsScreenshotRequest(clean) ||
         shouldUseSportsAnalysis(clean) ||
         shouldUseSportsQuery(clean) ||
-        hasRecentSportsContext()
+        hasRecentSportsContext(clean)
       )
     ) {
       await runGraceSportsAnalysis(clean);
@@ -2254,7 +2289,7 @@ function isMarketplaceQuery(text: string) {
 
     if (
       shouldUseSportsQuery(clean) ||
-      hasRecentSportsContext()
+      hasRecentSportsContext(clean)
     ) {
       await runGraceSportsData(clean);
       return;
