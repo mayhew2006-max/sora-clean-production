@@ -1980,13 +1980,114 @@ ${JSON.stringify(researchResults)}
         }));
     }
 
+    async function resolveOfficialMlbName(
+      suppliedName: string
+    ) {
+      try {
+        const cleanName =
+          String(suppliedName || "").trim();
+
+        if (!cleanName) return "";
+
+        async function searchMlb(name: string) {
+          const url =
+            "https://statsapi.mlb.com/api/v1/people/search" +
+            `?names=${encodeURIComponent(name)}` +
+            "&active=true&sportIds=1";
+
+          const data =
+            await freeJson(url, 3600);
+
+          return Array.isArray(data?.people)
+            ? data.people
+            : [];
+        }
+
+        let people =
+          await searchMlb(cleanName);
+
+        const exact =
+          people.find(
+            (person: any) =>
+              String(person?.fullName || "")
+                .toLowerCase() ===
+              cleanName.toLowerCase()
+          );
+
+        if (exact?.fullName) {
+          return String(exact.fullName);
+        }
+
+        if (!people.length) {
+          const pieces =
+            cleanName.split(/\s+/);
+
+          const surname =
+            pieces.length > 1
+              ? pieces[pieces.length - 1]
+              : "";
+
+          if (surname) {
+            people =
+              await searchMlb(surname);
+
+            people =
+              people.filter(
+                (person: any) =>
+                  String(person?.lastName || "")
+                    .toLowerCase() ===
+                  surname.toLowerCase()
+              );
+          }
+        }
+
+        if (people.length === 1) {
+          return String(
+            people[0]?.fullName ||
+            cleanName
+          );
+        }
+
+        return cleanName;
+      } catch {
+        return suppliedName;
+      }
+    }
+
     const verificationPackets = await Promise.all(
       extractedCandidates.map(async (candidate: any) => {
-        const sport =
+        let sport =
           String(candidate?.sport || "").trim();
 
-        const player =
+        let player =
           String(candidate?.player || "").trim();
+
+        const candidateMarket =
+          String(candidate?.market || "")
+            .toLowerCase();
+
+        const looksLikeBaseball =
+          /\bmlb\b|baseball/i.test(sport) ||
+          /strikeout|strikeouts|total bases|rbi|home run|hits|pitcher|\bks\b/i
+            .test(candidateMarket);
+
+        if (
+          player &&
+          looksLikeBaseball
+        ) {
+          const officialName =
+            await resolveOfficialMlbName(
+              player
+            );
+
+          if (officialName) {
+            player = officialName;
+          }
+
+          if (!sport) {
+            sport = "MLB";
+          }
+        }
 
         const team =
           String(candidate?.team || "").trim();
@@ -2082,8 +2183,14 @@ ${JSON.stringify(researchResults)}
           freeTargetedSearch(performanceQuery),
         ]);
 
+        const normalizedCandidate = {
+          ...candidate,
+          sport: sport || candidate?.sport || "",
+          player: player || candidate?.player || "",
+        };
+
         return {
-          candidate,
+          candidate: normalizedCandidate,
           identityResults,
           eventResults,
           marketResults,
