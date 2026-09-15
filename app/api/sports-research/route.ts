@@ -248,7 +248,7 @@ ${screenshotContext}`
     // TEMP SCREENSHOT DEBUG COMMAND
     // Upload a screenshot and ask exactly: debug screenshot
     if (
-      userQuery.trim().toLowerCase() === "debug screenshot"
+      userQuery.trim().toLowerCase().includes("debug screenshot")
     ) {
       return Response.json({
         reply:
