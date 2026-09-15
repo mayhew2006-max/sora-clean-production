@@ -28,14 +28,7 @@ export async function POST(req: Request) {
       );
     }
 
-    if (!process.env.TAVILY_API_KEY) {
-      return Response.json(
-        { reply: "Grace sports research is missing TAVILY_API_KEY." },
-        { status: 500 }
-      );
-    }
-
-    const userQuery = String(query).trim();
+       const userQuery = String(query).trim();
 
     // GRACE_SCREENSHOT_READ_V1
     // Read user-provided sportsbook/web screenshots before research.
@@ -227,8 +220,26 @@ ${screenshotContext}`
       clean.includes("anything worth betting") ||
       clean.includes("anything look good");
 
+    const mentionsSpecificSport =
+      /\b(mlb|baseball|nfl|ncaaf|cfb|football|nba|wnba|basketball|ncaam|college basketball|nhl|hockey|soccer|mls|epl|premier league|tennis|atp|wta|ufc|mma|boxing|golf|pga|nascar|formula 1|f1)\b/
+        .test(clean);
+
+    const genericPickDiscoveryRequest =
+      !screenshotBoardRequest &&
+      !mentionsSpecificSport &&
+      (
+        /\bbest\s+(?:2|two|3|three)?\s*(?:picks?|bets?|plays?)\b/.test(clean) ||
+        clean.includes("find me some picks") ||
+        clean.includes("find me picks") ||
+        clean.includes("find me a pick") ||
+        clean.includes("what should i bet") ||
+        clean.includes("what should we bet") ||
+        clean.includes("give me some picks")
+      );
+
     const crossSportRequest =
       explicitCrossSportRequest ||
+      genericPickDiscoveryRequest ||
       (!screenshotBoardRequest && generalBoardScanRequest);
 
     const dailyReportRequest =
@@ -408,42 +419,472 @@ Do not invent a line.
     // PUBLIC WEB RESEARCH
     // -------------------------------------------------------
 
-    async function tavilySearch(searchQuery: string) {
+    // -------------------------------------------------------
+    // FREE SPORTS INTERNET
+    // ESPN public JSON endpoints — no Tavily, no search key.
+    // -------------------------------------------------------
+
+    const espnDate = easternDate.replace(/-/g, "");
+
+    async function freeJson(
+      url: string,
+      revalidateSeconds = 60
+    ) {
       try {
-        const res = await fetch(
-          "https://api.tavily.com/search",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              api_key: process.env.TAVILY_API_KEY,
-              query: searchQuery,
-              search_depth: "advanced",
-              max_results:
-                crossSportRequest || dailyReportRequest ? 6 : 8,
-              include_answer: false,
-              include_raw_content: false,
-            }),
-            cache: "no-store",
-          }
+        const res = await fetch(url, {
+          headers: {
+            Accept: "application/json",
+          },
+          next: {
+            revalidate: revalidateSeconds,
+          },
+        });
+
+        if (!res.ok) {
+          return null;
+        }
+
+        return await res.json();
+      } catch {
+        return null;
+      }
+    }
+
+    function targetSpecsForQuery(searchQuery: string) {
+      const q = searchQuery.toLowerCase();
+
+      const targets: Array<{
+        sport: string;
+        league: string;
+        label: string;
+      }> = [];
+
+      const add = (
+        sport: string,
+        league: string,
+        label: string
+      ) => {
+        if (
+          !targets.some(
+            (t) =>
+              t.sport === sport &&
+              t.league === league
+          )
+        ) {
+          targets.push({
+            sport,
+            league,
+            label,
+          });
+        }
+      };
+
+      if (
+        q.includes("mlb") ||
+        q.includes("baseball")
+      ) {
+        add("baseball", "mlb", "MLB");
+      }
+
+      if (
+        q.includes("nfl") ||
+        (
+          q.includes("football") &&
+          !q.includes("college football") &&
+          !q.includes("ncaaf") &&
+          !q.includes("cfb")
+        )
+      ) {
+        add("football", "nfl", "NFL");
+      }
+
+      if (
+        q.includes("college football") ||
+        q.includes("ncaaf") ||
+        q.includes("cfb")
+      ) {
+        add(
+          "football",
+          "college-football",
+          "College Football"
         );
+      }
 
-        if (!res.ok) return [];
+      if (
+        q.includes("nba") ||
+        (
+          q.includes("basketball") &&
+          !q.includes("wnba") &&
+          !q.includes("college basketball")
+        )
+      ) {
+        add("basketball", "nba", "NBA");
+      }
 
-        const data = await res.json();
+      if (q.includes("wnba")) {
+        add("basketball", "wnba", "WNBA");
+      }
 
-        return Array.isArray(data?.results)
-          ? data.results
+      if (
+        q.includes("college basketball") ||
+        q.includes("ncaam") ||
+        q.includes("march madness")
+      ) {
+        add(
+          "basketball",
+          "mens-college-basketball",
+          "College Basketball"
+        );
+      }
+
+      if (
+        q.includes("nhl") ||
+        q.includes("hockey")
+      ) {
+        add("hockey", "nhl", "NHL");
+      }
+
+      if (
+        q.includes("tennis") ||
+        q.includes("atp")
+      ) {
+        add("tennis", "atp", "ATP");
+      }
+
+      if (
+        q.includes("tennis") ||
+        q.includes("wta")
+      ) {
+        add("tennis", "wta", "WTA");
+      }
+
+      if (
+        q.includes("ufc") ||
+        q.includes("mma")
+      ) {
+        add("mma", "ufc", "UFC");
+      }
+
+      if (
+        q.includes("formula 1") ||
+        q.includes("f1")
+      ) {
+        add("racing", "f1", "Formula 1");
+      }
+
+      if (q.includes("nascar")) {
+        add(
+          "racing",
+          "nascar-premier",
+          "NASCAR"
+        );
+      }
+
+      if (
+        q.includes("golf") ||
+        q.includes("pga")
+      ) {
+        add("golf", "pga", "PGA");
+      }
+
+      if (q.includes("lpga")) {
+        add("golf", "lpga", "LPGA");
+      }
+
+      if (
+        q.includes("soccer") ||
+        q.includes("premier league") ||
+        q.includes("epl")
+      ) {
+        add("soccer", "eng.1", "Premier League");
+      }
+
+      if (
+        q.includes("soccer") ||
+        q.includes("mls")
+      ) {
+        add("soccer", "usa.1", "MLS");
+      }
+
+      if (
+        q.includes("soccer") ||
+        q.includes("champions league") ||
+        q.includes("ucl")
+      ) {
+        add(
+          "soccer",
+          "uefa.champions",
+          "Champions League"
+        );
+      }
+
+      if (q.includes("soccer")) {
+        add("soccer", "esp.1", "La Liga");
+        add("soccer", "ger.1", "Bundesliga");
+        add("soccer", "ita.1", "Serie A");
+      }
+
+      // Generic "find me the best picks" request.
+      // Search a broad current board.
+      if (
+        targets.length === 0 &&
+        (crossSportRequest || dailyReportRequest)
+      ) {
+        add("baseball", "mlb", "MLB");
+        add("football", "nfl", "NFL");
+        add(
+          "football",
+          "college-football",
+          "College Football"
+        );
+        add("basketball", "nba", "NBA");
+        add("basketball", "wnba", "WNBA");
+        add("hockey", "nhl", "NHL");
+        add("tennis", "atp", "ATP");
+        add("tennis", "wta", "WTA");
+        add("soccer", "usa.1", "MLS");
+        add("mma", "ufc", "UFC");
+      }
+
+      return targets;
+    }
+
+    async function scoreboardResults(
+      sport: string,
+      league: string,
+      label: string
+    ) {
+      const scoreboardUrl =
+        `https://site.api.espn.com/apis/site/v2/sports/` +
+        `${sport}/${league}/scoreboard?dates=${espnDate}`;
+
+      const data =
+        await freeJson(scoreboardUrl, 45);
+
+      const events =
+        Array.isArray(data?.events)
+          ? data.events
           : [];
+
+      return events
+        .slice(0, 16)
+        .map((event: any) => {
+          const competition =
+            Array.isArray(event?.competitions)
+              ? event.competitions[0]
+              : null;
+
+          const competitors =
+            Array.isArray(competition?.competitors)
+              ? competition.competitors.map(
+                  (competitor: any) => ({
+                    name:
+                      competitor?.team?.displayName ||
+                      competitor?.athlete?.displayName ||
+                      "",
+                    abbreviation:
+                      competitor?.team?.abbreviation ||
+                      "",
+                    homeAway:
+                      competitor?.homeAway || "",
+                    score:
+                      competitor?.score || "",
+                    records:
+                      Array.isArray(competitor?.records)
+                        ? competitor.records
+                            .map(
+                              (record: any) =>
+                                record?.summary
+                            )
+                            .filter(Boolean)
+                        : [],
+                  })
+                )
+              : [];
+
+          const odds =
+            Array.isArray(competition?.odds)
+              ? competition.odds
+                  .slice(0, 2)
+                  .map((odd: any) => ({
+                    details:
+                      odd?.details || "",
+                    overUnder:
+                      odd?.overUnder ?? null,
+                    spread:
+                      odd?.spread ?? null,
+                    provider:
+                      odd?.provider?.name || "",
+                    homeMoneyline:
+                      odd?.homeTeamOdds
+                        ?.moneyLine ?? null,
+                    awayMoneyline:
+                      odd?.awayTeamOdds
+                        ?.moneyLine ?? null,
+                  }))
+              : [];
+
+          const eventUrl =
+            Array.isArray(event?.links) &&
+            event.links[0]?.href
+              ? event.links[0].href
+              : scoreboardUrl;
+
+          return {
+            title:
+              `${label}: ` +
+              String(
+                event?.name ||
+                event?.shortName ||
+                "Current event"
+              ),
+            url: String(eventUrl),
+            content: JSON.stringify({
+              source: "ESPN current scoreboard",
+              league: label,
+              eventId: event?.id || "",
+              event:
+                event?.name ||
+                event?.shortName ||
+                "",
+              date: event?.date || "",
+              status:
+                event?.status?.type?.description ||
+                event?.status?.type?.state ||
+                "",
+              competitors,
+              odds,
+            }),
+            score: 1,
+          };
+        });
+    }
+
+    async function espnSearchResults(
+      searchQuery: string
+    ) {
+      try {
+        const url =
+          "https://site.web.api.espn.com/apis/search/v2" +
+          `?query=${encodeURIComponent(searchQuery)}` +
+          "&limit=8";
+
+        const data = await freeJson(url, 300);
+
+        const groups =
+          Array.isArray(data?.results)
+            ? data.results
+            : [];
+
+        const out: any[] = [];
+
+        for (const group of groups) {
+          const contents =
+            Array.isArray(group?.contents)
+              ? group.contents
+              : [];
+
+          for (const item of contents.slice(0, 8)) {
+            const player =
+              item?.type === "player"
+                ? {
+                    id: String(item?.id || ""),
+                    name:
+                      String(item?.displayName || ""),
+                    sport:
+                      String(item?.sport || ""),
+                    league:
+                      String(
+                        item?.defaultLeagueSlug || ""
+                      ),
+                  }
+                : null;
+
+            out.push({
+              title:
+                String(
+                  item?.displayName ||
+                  item?.headline ||
+                  item?.description ||
+                  "ESPN result"
+                ).slice(0, 220),
+              url:
+                String(item?.link?.web || url),
+              content: [
+                item?.type
+                  ? `TYPE: ${item.type}`
+                  : "",
+                item?.displayName
+                  ? `NAME: ${item.displayName}`
+                  : "",
+                item?.subtitle
+                  ? `TEAM/EVENT: ${item.subtitle}`
+                  : "",
+                item?.description
+                  ? `DESCRIPTION: ${item.description}`
+                  : "",
+                player
+                  ? `PLAYER_ID: ${player.id}; SPORT: ${player.sport}; LEAGUE: ${player.league}`
+                  : "",
+              ]
+                .filter(Boolean)
+                .join(" | "),
+              score: 0.75,
+              espnPlayer: player,
+            });
+          }
+        }
+
+        return out.slice(0, 12);
       } catch {
         return [];
       }
     }
 
+    async function freeSportsSearch(
+      searchQuery: string
+    ) {
+      const targets =
+        targetSpecsForQuery(searchQuery);
+
+      const scoreboardSets =
+        await Promise.all(
+          targets.map((target) =>
+            scoreboardResults(
+              target.sport,
+              target.league,
+              target.label
+            )
+          )
+        );
+
+      const searchResults =
+        await espnSearchResults(searchQuery);
+
+      const merged = [
+        ...scoreboardSets.flat(),
+        ...searchResults,
+      ];
+
+      const seenFree = new Set<string>();
+
+      return merged
+        .filter((item: any) => {
+          const key =
+            `${item?.title || ""}|${item?.url || ""}`;
+
+          if (seenFree.has(key)) {
+            return false;
+          }
+
+          seenFree.add(key);
+          return true;
+        })
+        .slice(0, 20);
+    }
+
     const searchSets = await Promise.all(
-      searchQueries.map(tavilySearch)
+      searchQueries.map(freeSportsSearch)
     );
 
     const seen = new Set<string>();
@@ -522,7 +963,10 @@ Do not invent a line.
           model:
             process.env.OPENAI_MODEL || "gpt-4o-mini",
           temperature: 0,
-          max_tokens: 1200,
+          max_tokens: 1800,
+          response_format: {
+            type: "json_object",
+          },
           messages: [
             {
               role: "system",
@@ -555,6 +999,26 @@ RULES:
 - A number explicitly supplied by the user may be copied exactly into line.
 - Never invent a user line that was not supplied.
 - Then extract additional useful candidates from PUBLIC RESEARCH with source="web".
+
+FREE SPORTS DATA CANDIDATE RULES:
+- ESPN scoreboard data containing a real current matchup IS enough to create
+  candidates for later statistical analysis.
+- Do NOT wait for an article to explicitly call something a betting pick.
+- For a verified head-to-head event, you may create simple winner candidates
+  using the exact participant names found in the current scoreboard.
+- Use market="winner" for those candidates.
+- If you cannot yet determine which participant is stronger, include BOTH
+  participants as separate candidates. The later verification/ranking stages
+  will decide which side deserves a recommendation.
+- Current team records, status, matchup and available scoreboard odds may help
+  form the candidate pool, but they do not by themselves guarantee a winner.
+- For generic requests such as "best 2 picks tonight", "find me picks", or
+  "any sport", NEVER return an empty candidate list merely because no betting
+  article supplied a ready-made pick.
+- Build a useful candidate pool from the real upcoming events Grace found,
+  then let the deeper research and ranking stages do the heavy lifting.
+- Prefer events that have NOT started.
+- Candidate generation is NOT the final recommendation.
 - A specific requested player does NOT prevent Grace from finding better alternatives.
 - If the requested candidate looks weak, still include useful outside candidates so
   the later ranking stage can recommend something better.
@@ -589,16 +1053,18 @@ ${JSON.stringify(researchResults)}
       await candidateExtractorRes.json();
 
     let extractedCandidates: any[] = [];
+    let candidateExtractorRaw = "";
+    let candidateExtractorError = "";
 
     try {
-      const rawCandidates =
+      candidateExtractorRaw =
         candidateExtractorData?.choices?.[0]?.message?.content
           ?.replace(/```json/gi, "")
           .replace(/```/g, "")
-          .trim();
+          .trim() || "";
 
       const parsedCandidates =
-        JSON.parse(rawCandidates);
+        JSON.parse(candidateExtractorRaw);
 
       if (Array.isArray(parsedCandidates?.candidates)) {
         extractedCandidates =
@@ -612,7 +1078,10 @@ ${JSON.stringify(researchResults)}
                   : "web",
             }));
       }
-    } catch {}
+    } catch (error: any) {
+      candidateExtractorError =
+        error?.message || "Candidate JSON parse failed";
+    }
 
     // -------------------------------------------------------
     // USER / SCREENSHOT CANDIDATE PRIORITY
@@ -653,43 +1122,195 @@ ${JSON.stringify(researchResults)}
     // INDEPENDENT TARGETED VERIFICATION SEARCH
     // -------------------------------------------------------
 
-    async function targetedSearch(searchQuery: string) {
-      try {
-        const res = await fetch(
-          "https://api.tavily.com/search",
+    const athleteFreeCache =
+      new Map<string, Promise<any[]>>();
+
+    async function freeAthleteDetails(
+      player: {
+        id: string;
+        name: string;
+        sport: string;
+        league: string;
+      },
+      includeStats: boolean
+    ) {
+      const cacheKey =
+        `${player.sport}|${player.league}|${player.id}|${includeStats}`;
+
+      if (athleteFreeCache.has(cacheKey)) {
+        return athleteFreeCache.get(cacheKey)!;
+      }
+
+      const promise = (async () => {
+        if (
+          !player.id ||
+          !player.sport ||
+          !player.league
+        ) {
+          return [];
+        }
+
+        const base =
+          "https://site.web.api.espn.com/apis/common/v3/sports/" +
+          `${encodeURIComponent(player.sport)}/` +
+          `${encodeURIComponent(player.league)}/athletes/` +
+          `${encodeURIComponent(player.id)}`;
+
+        const urls = [
           {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
+            label: "Athlete overview",
+            url: `${base}/overview`,
+          },
+        ];
+
+        if (includeStats) {
+          urls.push(
+            {
+              label: "Current athlete stats",
+              url: `${base}/stats`,
             },
-            body: JSON.stringify({
-              api_key: process.env.TAVILY_API_KEY,
-              query: searchQuery,
-              search_depth: "advanced",
-              max_results: 5,
-              include_answer: false,
-              include_raw_content: false,
-            }),
-            cache: "no-store",
-          }
+            {
+              label: "Athlete game log",
+              url: `${base}/gamelog`,
+            }
+          );
+        }
+
+        const responses =
+          await Promise.all(
+            urls.map(async (entry) => ({
+              ...entry,
+              data:
+                await freeJson(
+                  entry.url,
+                  includeStats ? 300 : 120
+                ),
+            }))
+          );
+
+        return responses
+          .filter((entry) => entry.data)
+          .map((entry) => ({
+            title:
+              `${player.name} — ${entry.label}`,
+            url: entry.url,
+            content:
+              JSON.stringify(entry.data)
+                .slice(0, 5500),
+            score: 1,
+          }));
+      })();
+
+      athleteFreeCache.set(cacheKey, promise);
+      return promise;
+    }
+
+    async function freeTargetedSearch(
+      searchQuery: string
+    ) {
+      const quoted =
+        searchQuery.match(/"([^"]+)"/);
+
+      const focusedQuery =
+        quoted?.[1]?.trim() ||
+        searchQuery;
+
+      const [
+        searchHits,
+        scoreboardSets,
+      ] = await Promise.all([
+        espnSearchResults(focusedQuery),
+        Promise.all(
+          targetSpecsForQuery(searchQuery)
+            .map((target) =>
+              scoreboardResults(
+                target.sport,
+                target.league,
+                target.label
+              )
+            )
+        ),
+      ]);
+
+      const lower =
+        searchQuery.toLowerCase();
+
+      const wantsPerformance =
+        lower.includes("statistics") ||
+        lower.includes("season average") ||
+        lower.includes("game log") ||
+        lower.includes("last 5") ||
+        lower.includes("splits") ||
+        lower.includes("usage") ||
+        lower.includes("workload") ||
+        lower.includes("matchup tendencies");
+
+      const wantsIdentity =
+        lower.includes("current team") ||
+        lower.includes("roster") ||
+        lower.includes("transaction") ||
+        lower.includes("opponent today");
+
+      const playerHit =
+        searchHits.find(
+          (hit: any) =>
+            hit?.espnPlayer?.id &&
+            hit?.espnPlayer?.sport &&
+            hit?.espnPlayer?.league
         );
 
-        if (!res.ok) return [];
+      let athleteDetails: any[] = [];
 
-        const data = await res.json();
-
-        return Array.isArray(data?.results)
-          ? data.results.map((r: any) => ({
-              title: String(r?.title || "").slice(0, 220),
-              url: String(r?.url || ""),
-              summary: String(r?.content || "").slice(0, 900),
-              score: r?.score ?? null,
-              sourceWeight: classifySource(String(r?.url || "")),
-            }))
-          : [];
-      } catch {
-        return [];
+      if (
+        playerHit?.espnPlayer &&
+        (wantsPerformance || wantsIdentity)
+      ) {
+        athleteDetails =
+          await freeAthleteDetails(
+            playerHit.espnPlayer,
+            wantsPerformance
+          );
       }
+
+      const combined = [
+        ...scoreboardSets.flat(),
+        ...searchHits,
+        ...athleteDetails,
+      ];
+
+      const seenTargeted =
+        new Set<string>();
+
+      return combined
+        .filter((result: any) => {
+          const key =
+            `${result?.title || ""}|${result?.url || ""}`;
+
+          if (seenTargeted.has(key)) {
+            return false;
+          }
+
+          seenTargeted.add(key);
+          return true;
+        })
+        .slice(0, 14)
+        .map((result: any) => ({
+          title:
+            String(result?.title || "")
+              .slice(0, 220),
+          url:
+            String(result?.url || ""),
+          summary:
+            String(
+              result?.content || ""
+            ).slice(0, 5500),
+          score:
+            result?.score ?? null,
+          sourceWeight:
+            classifySource(
+              String(result?.url || "")
+            ),
+        }));
     }
 
     const verificationPackets = await Promise.all(
@@ -788,10 +1409,10 @@ ${JSON.stringify(researchResults)}
           marketResults,
           performanceResults,
         ] = await Promise.all([
-          targetedSearch(identityQuery),
-          targetedSearch(eventQuery),
-          targetedSearch(marketQuery),
-          targetedSearch(performanceQuery),
+          freeTargetedSearch(identityQuery),
+          freeTargetedSearch(eventQuery),
+          freeTargetedSearch(marketQuery),
+          freeTargetedSearch(performanceQuery),
         ]);
 
         return {
@@ -803,6 +1424,34 @@ ${JSON.stringify(researchResults)}
         };
       })
     );
+
+    // -------------------------------------------------------
+    // COMPACT VERIFICATION PACKETS
+    //
+    // ESPN can return a lot of useful JSON. The verifier does
+    // not need the whole damn internet repeated for every
+    // candidate. Keep only the strongest compact evidence.
+    // -------------------------------------------------------
+
+    function compactEvidence(results: any[]) {
+      return (Array.isArray(results) ? results : [])
+        .slice(0, 2)
+        .map((result: any) => ({
+          title: String(result?.title || "").slice(0, 180),
+          url: String(result?.url || "").slice(0, 500),
+          summary: String(result?.summary || "").slice(0, 700),
+          sourceWeight: result?.sourceWeight || "secondary",
+        }));
+    }
+
+    const compactVerificationPackets =
+      verificationPackets.map((packet: any) => ({
+        candidate: packet?.candidate || {},
+        identityResults: compactEvidence(packet?.identityResults),
+        eventResults: compactEvidence(packet?.eventResults),
+        marketResults: compactEvidence(packet?.marketResults),
+        performanceResults: compactEvidence(packet?.performanceResults),
+      }));
 
     // -------------------------------------------------------
     // HARD VERIFICATION GATE
@@ -818,10 +1467,9 @@ ${JSON.stringify(researchResults)}
             "Bearer " + process.env.OPENAI_API_KEY,
         },
         body: JSON.stringify({
-          model:
-            process.env.OPENAI_MODEL || "gpt-4o-mini",
+          model: "gpt-4o-mini",
           temperature: 0,
-          max_tokens: 1800,
+          max_tokens: 1400,
           messages: [
             {
               role: "system",
@@ -1017,6 +1665,18 @@ FACT RULE
 
 PERFORMANCE EVIDENCE RULE
 - performanceResults contain the predictive/statistical research.
+- ESPN scoreboard evidence may contain current team records inside
+  competitor records. USE those records when present.
+- For winner/moneyline candidates, compare the current records of BOTH
+  participants when those records are present in evidence.
+- A useful fact may be written like:
+  "CURRENT RECORDS: Tampa Bay Rays 82-67; Athletics 61-88"
+  but ONLY when those exact records appear in the supplied evidence.
+- Home/away status may be used when explicitly present in current scoreboard evidence.
+- CURRENT IDENTITY by itself is NOT predictive evidence.
+- If the only fact established is CURRENT IDENTITY, confidence MUST be low
+  and the candidate must NOT receive a 4-star or 5-star recommendation.
+
 - For player props, actively look for concrete facts relevant to the market:
   current-season average,
   current-season total/rate,
@@ -1056,7 +1716,7 @@ ORIGINAL REQUEST:
 ${userQuery}
 
 TARGETED VERIFICATION PACKETS:
-${JSON.stringify(verificationPackets)}
+${JSON.stringify(compactVerificationPackets)}
 
 Verify each candidate independently.
               `.trim(),
@@ -1069,7 +1729,7 @@ Verify each candidate independently.
     const verifierData =
       await verifierRes.json();
 
-    let verification: any = {
+       let verification: any = {
       verifiedFacts: [],
       rejected: [],
     };
@@ -1816,6 +2476,18 @@ FUN FACT:
 
 ACCURACY ALWAYS COMES BEFORE PERSONALITY.
 
+STRICT EVIDENCE RULE:
+- Every factual reason in the final answer MUST be directly supported by
+  facts[] inside SANITIZED VERIFIED WEB EVIDENCE.
+- Do NOT use model memory or general sports knowledge to fill gaps.
+- Do NOT call a team "struggling", "strong", "inconsistent", "better",
+  "hot", "cold", or similar unless verified evidence contains current
+  statistics supporting that description.
+- CURRENT IDENTITY is verification, NOT a predictive reason.
+- If no predictive statistical fact survives verification, do not manufacture one.
+- Confidence must reflect the amount and quality of actual verified evidence.
+
+
 GRACE_SCREENSHOT_MARKET_EVIDENCE_V1
 
 SCREENSHOT BOARD MODE:
@@ -1915,6 +2587,23 @@ If a requested market line is unavailable, do not invent it.
 
 If there is no meaningful edge:
 PASS.
+
+OUTPUT RATING FORMAT:
+- Every official recommendation MUST display BOTH stars and /10 confidence.
+- 5 stars: 8.8-10.0 only
+- 4 stars: 7.8-8.7
+- 3 stars: 7.0-7.7
+- Below 7.0: LEAN or PASS.
+- Never give 4 or 5 stars when the evidence contains fewer than two
+  concrete current predictive facts.
+
+For two qualifying plays, prefer:
+
+BEST 2
+1. Team/Player — Pick ⭐⭐⭐⭐ | 8.2/10
+   One verified statistical reason.
+2. Team/Player — Pick ⭐⭐⭐ | 7.5/10
+   One verified statistical reason.
 
 Answer as Grace.
               `.trim(),
@@ -2119,7 +2808,7 @@ ${JSON.stringify(safeVerification)}
       event: eventLabel,
       researchCount: researchResults.length,
       extractedCandidateCount: extractedCandidates.length,
-      verifiedEventCount: sanitizedVerifiedFacts.length,
+                verifiedEventCount: sanitizedVerifiedFacts.length,
       rejectedCount: safeVerification.rejected.length,
     });
   } catch (error: any) {
