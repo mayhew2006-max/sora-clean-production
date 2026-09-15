@@ -1869,7 +1869,8 @@ ${JSON.stringify(researchResults)}
       ) {
         mlbDetails =
           await freeMlbPlayerResearch(
-            focusedQuery,
+            playerHit?.espnPlayer?.name ||
+              focusedQuery,
             searchQuery
           );
       }
@@ -3608,6 +3609,25 @@ ${JSON.stringify(safeVerification)}
       } catch {
         // Keep the original answer if the audit service itself fails.
       }
+    }
+
+    // -------------------------------------------------------
+    // FINAL RESPONSE CONTRADICTION GUARD
+    // If Grace already has an official play, remove any
+    // trailing PASS section. A play and a board-wide PASS
+    // cannot both be true.
+    // -------------------------------------------------------
+
+    const hasOfficialSportsPlay =
+      /\bBEST\s+(?:PLAY|2|2-LEG)\b/i.test(reply);
+
+    if (hasOfficialSportsPlay) {
+      reply = reply
+        .replace(
+          /\n\s*PASS\b[\s\S]*$/i,
+          ""
+        )
+        .trim();
     }
 
     return Response.json({
