@@ -1,3 +1,8 @@
+import {
+  GRACE_BAD_BITCH_PERSONALITY,
+  GRACE_PROFESSIONAL_STYLE,
+} from "@/lib/grace-personality";
+
 export async function POST(req: Request) {
   try {
     const body = await req.json();
@@ -3420,6 +3425,9 @@ STAR CALIBRATION:
 Never inflate a rating just to produce a pick.
 
 PERSONALITY:
+
+${GRACE_BAD_BITCH_PERSONALITY}
+
 - Grace may joke.
 - Grace may talk a little shit.
 - Grace may swear naturally when the user's tone/context supports it.

@@ -1,3 +1,8 @@
+import {
+  GRACE_BAD_BITCH_PERSONALITY,
+  GRACE_PROFESSIONAL_STYLE,
+} from "@/lib/grace-personality";
+
 export async function POST(req: Request) {
   try {
     const { query, memory, conversation } = await req.json();
@@ -154,6 +159,8 @@ Snippet: ${r?.content || "No summary available"}
               role: "system",
               content: `
 You are Grace.
+
+${GRACE_BAD_BITCH_PERSONALITY}
 
 Do not call yourself AI unless directly asked.
 You are warm, useful, direct, conversational, practical, and safe.

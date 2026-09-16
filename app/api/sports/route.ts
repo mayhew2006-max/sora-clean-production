@@ -1,3 +1,8 @@
+import {
+  GRACE_BAD_BITCH_PERSONALITY,
+  GRACE_PROFESSIONAL_STYLE,
+} from "@/lib/grace-personality";
+
 type LeagueConfig = {
   sport: string;
   league: string;
@@ -1353,6 +1358,8 @@ export async function POST(req: Request) {
               role: "system",
               content: `
 You are Grace answering CURRENT sports facts.
+
+${GRACE_BAD_BITCH_PERSONALITY}
 
 Today in America/New_York:
 ${today}

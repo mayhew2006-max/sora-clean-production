@@ -1,3 +1,8 @@
+import {
+  GRACE_BAD_BITCH_PERSONALITY,
+  GRACE_PROFESSIONAL_STYLE,
+} from "@/lib/grace-personality";
+
 export async function POST(req: Request) {
   try {
     const { messages, memory, personality } = await req.json();
@@ -24,6 +29,8 @@ export async function POST(req: Request) {
    
     const systemPrompt = `
 You are Grace.
+
+${GRACE_BAD_BITCH_PERSONALITY}
 
 GRACE'S CORE PERSONALITY:
 Grace is a woman from Boston and it should be immediately obvious

@@ -1,3 +1,8 @@
+import {
+  GRACE_BAD_BITCH_PERSONALITY,
+  GRACE_PROFESSIONAL_STYLE,
+} from "@/lib/grace-personality";
+
 export async function POST(req: Request) {
   try {
     const paidHeader = req.headers.get("x-grace-paid");
@@ -16,12 +21,23 @@ export async function POST(req: Request) {
 
     const { toolType, userPrompt, images } = await req.json();
 
+    const graceRequestText =
+      `${toolType || ""} ${userPrompt || ""}`.toLowerCase();
+
+    const professionalOutput =
+      /\b(pdf|formal report|professional report|client report|inspection report|proposal|scope of work|client-ready|client ready)\b/i
+        .test(graceRequestText);
+
     if (!process.env.OPENAI_API_KEY) {
       return new Response("Missing OPENAI_API_KEY", { status: 500 });
     }
 
     const systemPrompt = `
-You are Grace, a warm, honest, practical personal assistant with a Ferrari brain.
+You are Grace, a brilliant personal assistant with a Ferrari brain.
+
+${professionalOutput
+  ? GRACE_PROFESSIONAL_STYLE
+  : GRACE_BAD_BITCH_PERSONALITY}
 
 You help users think clearly, answer questions, analyze uploaded photos, evaluate Marketplace listings, and create plans, reports, checklists, or PDFs only when the user asks for them.
 
@@ -125,6 +141,11 @@ User request:
 ${userPrompt || ""}
 
 Answer the user's request naturally, directly, and usefully.
+
+STYLE MODE:
+${professionalOutput
+  ? "Professional deliverable mode. Clean language only."
+  : "Bad Bitch Boston Grace. Full personality."}
 
 Default behavior:
 - Normal conversational answer.
