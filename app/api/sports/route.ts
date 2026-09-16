@@ -657,9 +657,42 @@ export async function POST(req: Request) {
         ? activeGameContext.league
         : null;
 
-    if (suppliedGame && suppliedLeague) {
-      selected = suppliedLeague;
-      discoveredGame = suppliedGame;
+    // -------------------------------------------------------
+    // STEP 14 — GAME SWITCHING
+    //
+    // The newest user message gets first shot at naming a NEW game.
+    // Example:
+    // active game = Giants/Cardinals
+    // user = "What's happening in the Blue Jays game?"
+    //
+    // That must switch Grace to Toronto instead of blindly keeping
+    // the previous game locked.
+    // -------------------------------------------------------
+
+    const explicitGameDiscovery =
+      await discoverLiveGameAcrossLeagues(
+        userQuery,
+        "",
+        today
+      );
+
+    if (explicitGameDiscovery?.game) {
+      selected =
+        explicitGameDiscovery.league;
+
+      discoveredGame =
+        explicitGameDiscovery.game;
+    } else if (
+      suppliedGame &&
+      suppliedLeague
+    ) {
+      // No new team/game was named.
+      // Stay on the game we're already watching.
+      selected =
+        suppliedLeague;
+
+      discoveredGame =
+        suppliedGame;
     } else {
       const wantsLiveGame =
         /game|score|what happened|what just happened|what's happening|whats happening|update me|inning|quarter|period|who's up|whos up|how many|whole game|full game|live stats|game stats/i
