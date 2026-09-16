@@ -1,6 +1,6 @@
 export async function POST(req: Request) {
   try {
-    const { messages, memory, personality } = await req.json();
+    const { messages, memory } = await req.json();
 
     const safeMessages = Array.isArray(messages)
       ? messages
@@ -18,9 +18,7 @@ export async function POST(req: Request) {
       : [];
     const hasMemory =
       typeof memory === "string" && memory.trim().length > 0;
-    const hasPersonality =
-      typeof personality === "string" && personality.trim().length > 0;
-
+   
     const systemPrompt = `
 You are Grace.
 

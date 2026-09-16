@@ -2361,7 +2361,6 @@ function isMarketplaceQuery(text: string) {
         body: JSON.stringify({
           messages: nextMessages.slice(-8),
           memory: memoryRef.current.slice(-1500),
-          personality: graceSystemPrompt(),
         }),
       });
 
