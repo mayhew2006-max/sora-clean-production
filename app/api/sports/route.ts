@@ -554,7 +554,12 @@ async function discoverLiveGameAcrossLeagues(
 
 export async function POST(req: Request) {
   try {
-    const { query, context } = await req.json();
+    const {
+      query,
+      context,
+      activeGameContext,
+      useActiveGameContext,
+    } = await req.json();
 
     if (!query || !String(query).trim()) {
       return Response.json(
@@ -630,24 +635,51 @@ export async function POST(req: Request) {
 
     let discoveredGame: any = null;
 
-    const wantsLiveGame =
-      /game|score|what happened|what just happened|what's happening|whats happening|update me|inning|quarter|period|who's up|whos up|how many/i
-        .test(routingClean);
+    // -------------------------------------------------------
+    // STEP 14 — ACTIVE GAME SESSION
+    //
+    // Once Grace identifies a live game, follow-up questions
+    // should NEVER require rediscovering that game from words.
+    //
+    // This is universal across MLB/NFL/NBA/WNBA/CFB/NHL/SOCCER.
+    // -------------------------------------------------------
 
-    if (wantsLiveGame) {
-      const discovery =
-        await discoverLiveGameAcrossLeagues(
-          userQuery,
-          contextText,
-          today
-        );
+    const suppliedGame =
+      useActiveGameContext &&
+      activeGameContext?.game
+        ? activeGameContext.game
+        : null;
 
-      if (discovery?.game) {
-        selected =
-          discovery.league;
+    const suppliedLeague =
+      useActiveGameContext &&
+      activeGameContext?.league?.sport &&
+      activeGameContext?.league?.league
+        ? activeGameContext.league
+        : null;
 
-        discoveredGame =
-          discovery.game;
+    if (suppliedGame && suppliedLeague) {
+      selected = suppliedLeague;
+      discoveredGame = suppliedGame;
+    } else {
+      const wantsLiveGame =
+        /game|score|what happened|what just happened|what's happening|whats happening|update me|inning|quarter|period|who's up|whos up|how many|whole game|full game|live stats|game stats/i
+          .test(routingClean);
+
+      if (wantsLiveGame) {
+        const discovery =
+          await discoverLiveGameAcrossLeagues(
+            userQuery,
+            contextText,
+            today
+          );
+
+        if (discovery?.game) {
+          selected =
+            discovery.league;
+
+          discoveredGame =
+            discovery.game;
+        }
       }
     }
 
@@ -938,11 +970,11 @@ export async function POST(req: Request) {
     // -------------------------------------------------------
 
     const activeGame =
+      discoveredGame ||
       pickActiveGame(
         todaysGames,
         routingText
       ) ||
-      discoveredGame ||
       null;
 
     let liveSummary: any = null;
@@ -1662,7 +1694,15 @@ Output only Grace's rewritten response.
       league: selected.label,
       games: todaysGames,
       activeGame,
-      live: Boolean(liveSummary),
+      activeLeague: {
+        sport: selected.sport,
+        league: selected.league,
+        label: selected.label,
+      },
+      live: Boolean(
+        liveSummary ||
+        mlbLiveFeed
+      ),
       source: "free-current-data",
     });
   } catch (error: any) {

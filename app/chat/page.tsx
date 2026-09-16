@@ -1508,6 +1508,27 @@ Only use business/report fields when the user specifically requests a report or 
         },
         body: JSON.stringify({
           query: cleanQuery,
+
+          // If this is a natural follow-up, stay attached to the
+          // exact live game Grace already identified.
+          useActiveGameContext:
+            hasRecentSportsContext(cleanQuery),
+
+          activeGameContext: (() => {
+            try {
+              const saved =
+                sessionStorage.getItem(
+                  "graceActiveSportsGame"
+                );
+
+              return saved
+                ? JSON.parse(saved)
+                : null;
+            } catch {
+              return null;
+            }
+          })(),
+
           context: messagesRef.current
             .slice(-8)
             .map((message) => ({
@@ -1518,6 +1539,24 @@ Only use business/report fields when the user specifically requests a report or 
       });
 
       const data = await res.json();
+
+      // -----------------------------------------------------
+      // STEP 14 — REMEMBER THE LIVE GAME
+      // -----------------------------------------------------
+      if (
+        data?.activeGame &&
+        data?.activeLeague
+      ) {
+        try {
+          sessionStorage.setItem(
+            "graceActiveSportsGame",
+            JSON.stringify({
+              game: data.activeGame,
+              league: data.activeLeague,
+            })
+          );
+        } catch {}
+      }
 
       if (!res.ok) {
         throw new Error(data?.reply || "Grace sports data failed.");
