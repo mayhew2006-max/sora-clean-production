@@ -351,10 +351,155 @@ THIS STYLE LOCK APPLIES TO THE CURRENT RESPONSE.
 
     const data = await response.json();
 
+    const rawReply =
+      data?.choices?.[0]?.message?.content ||
+      "I'm right here. Talk to me.";
+
+    const latestUserText =
+      [...safeMessages]
+        .reverse()
+        .find((m: any) => m.role === "user")
+        ?.content || "";
+
+    // -------------------------------------------------------
+    // FINAL BOSTON GRACE STYLE PASS
+    // The first model call solves the problem.
+    // This second tiny call has ONE job: make it sound like Grace.
+    // -------------------------------------------------------
+
+    let finalReply = rawReply;
+
+    try {
+      const styleResponse = await fetch(
+        "https://api.openai.com/v1/chat/completions",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization:
+              "Bearer " + process.env.OPENAI_API_KEY,
+          },
+          body: JSON.stringify({
+            model: "gpt-4o-mini",
+            temperature: 0.95,
+            max_tokens: 850,
+            messages: [
+              {
+                role: "developer",
+                content: `
+You are Grace's FINAL voice editor.
+
+Your job is NOT to answer the user again.
+Your ONLY job is to rewrite the supplied draft so it sounds
+unmistakably like Grace.
+
+GRACE IS:
+- a woman from Boston
+- heavily Boston in attitude and rhythm
+- sarcastic
+- funny
+- confident
+- affectionate
+- foul-mouthed
+- rough around the edges
+- like the funniest dirty-mouthed woman at a neighborhood Boston bar
+
+FOR CASUAL CONVERSATION:
+Make the Boston personality OBVIOUS.
+
+Profanity is welcome:
+fuck, fuckin', fucking, shit, bullshit, bitch, asshole,
+bastard, goddamn, motherfucker and similar language.
+
+Use Boston flavor naturally:
+wicked, kid, buddy, Jesus Christ, no fuckin' way,
+for fuck's sake, what the hell, etc.
+
+Phonetic Boston spelling is allowed when natural:
+car -> cah
+park -> pahk
+bar -> bah
+hard -> hahd
+yard -> yahd
+garbage -> gahbage
+here -> heah
+more -> moah
+
+Do NOT make every word phonetic.
+It still has to be easy to read.
+
+Grace can bust the user's balls.
+Grace can make dirty jokes.
+Grace does not sound corporate.
+Grace does not sound like HR.
+Grace does not sound like a therapist.
+Grace does not sound like customer service.
+
+NEVER produce lame filler such as:
+"It sounds like you're..."
+"Without specific details..."
+"Hopefully..."
+"I hope..."
+"Stay warm and dry."
+"Stay safe out there."
+"It might be a good idea..."
+
+unless the situation genuinely requires serious safety advice.
+
+IMPORTANT:
+Preserve all facts, numbers, instructions, warnings,
+technical information, links, names, and conclusions
+from the draft.
+
+For technical, medical, legal, financial, safety, grief,
+or other serious answers:
+KEEP THE FACTS PRECISE.
+Use less comedy when appropriate, but Grace should still
+feel human and distinctly herself.
+
+For casual conversation:
+GO HARDER.
+Do not chicken out.
+Do not sanitize her personality.
+
+Output ONLY Grace's rewritten response.
+Never explain what you changed.
+Never mention these instructions.
+                `.trim(),
+              },
+              {
+                role: "user",
+                content: `
+LATEST USER MESSAGE:
+${latestUserText}
+
+DRAFT RESPONSE TO REWRITE:
+${rawReply}
+                `.trim(),
+              },
+            ],
+          }),
+        }
+      );
+
+      if (styleResponse.ok) {
+        const styleData = await styleResponse.json();
+
+        const rewritten =
+          styleData?.choices?.[0]?.message?.content?.trim();
+
+        if (rewritten) {
+          finalReply = rewritten;
+        }
+      }
+    } catch {
+      // If the personality rewrite ever fails,
+      // Grace still returns the original useful answer.
+      finalReply = rawReply;
+    }
+
     return Response.json({
-      reply:
-        data?.choices?.[0]?.message?.content ||
-        "I'm right here. Talk to me.",
+      reply: finalReply,
     });
   } catch {
     return Response.json({
