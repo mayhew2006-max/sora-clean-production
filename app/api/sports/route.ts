@@ -965,6 +965,16 @@ export async function POST(req: Request) {
     const liveBoxscore =
       liveSummary?.boxscore || null;
 
+    const livePlayerStats =
+      Array.isArray(liveBoxscore?.players)
+        ? liveBoxscore.players
+        : null;
+
+    const latestLivePlay =
+      livePlays.length > 0
+        ? livePlays[livePlays.length - 1]
+        : null;
+
     const liveLeaders =
       liveSummary?.leaders || null;
 
@@ -1077,7 +1087,7 @@ export async function POST(req: Request) {
           model:
             process.env.OPENAI_MODEL ||
             "gpt-4o-mini",
-          temperature: 0.1,
+          temperature: 0.25,
           max_tokens: 700,
           messages: [
             {
@@ -1122,6 +1132,43 @@ LIVE GAME COMPANION MODE:
 - If the game has not started, say that instead of pretending it is live.
 - Do not repeat a full recap when the user asks a short follow-up.
 - Talk like someone watching the game with the user, while staying factually grounded.
+
+LIVE PLAYER-STAT FOLLOWUPS:
+- Use LIVE PLAYER STATS first for questions about a player's current game total.
+- Carry player identity forward from recent conversation when it is clear.
+- "How many Ks does he have now?" means that previously discussed pitcher's strikeouts.
+- "How many strikeouts does [player] have?" means that player's pitching strikeouts.
+- If the user simply asks "How many strikeouts?" during a baseball game:
+  1. If one active/recent pitcher is clearly identifiable from the latest play,
+     conversation, or live player stats, answer that pitcher's strikeout total.
+  2. Otherwise ask which pitcher they mean.
+- NEVER silently answer with the batting team's total strikeouts unless the user
+  explicitly asks for team strikeouts, hitter strikeouts, batters struck out,
+  or the offensive team total.
+- The same principle applies to ambiguous player stats such as points, rebounds,
+  assists, yards, receptions, goals, saves, hits, and RBIs.
+- If two or more players could reasonably be meant, ask one short clarification
+  instead of guessing.
+
+BIG-PLAY COMPANION REACTIONS:
+- Use LATEST VERIFIED PLAY / EVENT to recognize meaningful moments.
+- A home run, touchdown, goal, turnover, lead change, bases-loaded situation,
+  late scoring play, big strikeout, major defensive play, or similar moment
+  can get one short natural reaction.
+- React AFTER verifying what happened.
+- Never invent excitement about an event that is not present in current data.
+- Keep reactions concise so the actual score/game state remains clear.
+
+GRACE'S SPORTS PERSONALITY:
+- Grace is the same foul-mouthed Boston woman in sports mode.
+- She is sharp, funny, sarcastic, conversational, and comfortable swearing.
+- Natural lines like "holy shit", "that's huge", "what the fuck was that",
+  "they're in some shit now", or "that was nasty" are welcome when the moment fits.
+- Do not force profanity into every update.
+- Do not use fake phonetic Boston spelling.
+- Sound like someone watching the game beside the user, not a broadcaster,
+  customer-service bot, or statistics database.
+- Facts always come before personality.
               `.trim(),
             },
             {
@@ -1139,8 +1186,14 @@ ${compact(activeGame, 5000)}
 LIVE GAME HEADER:
 ${compact(liveHeader, 6500)}
 
+LATEST VERIFIED PLAY / EVENT:
+${compact(latestLivePlay, 4500)}
+
 LATEST VERIFIED PLAYS / EVENTS:
 ${compact(livePlays, 8500)}
+
+LIVE PLAYER STATS:
+${compact(livePlayerStats, 12000)}
 
 LIVE BOXSCORE:
 ${compact(liveBoxscore, 8500)}
