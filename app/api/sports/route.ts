@@ -2095,6 +2095,69 @@ Answer the actual question only.
     }
 
    
+
+    // -------------------------------------------------------
+    // STEP 14 — FINAL LIVE ANSWER AUTHORITY
+    //
+    // Verified live data beats contradictory model wording.
+    // Grace also NEVER sends a sports user somewhere else.
+    // -------------------------------------------------------
+
+    const isLivePitchingLineQuestion =
+      Boolean(activeGame) &&
+      selected.league === "mlb" &&
+      (
+        /what'?s his line/i.test(q) ||
+        /what is his line/i.test(q) ||
+        /what'?s her line/i.test(q) ||
+        /what is her line/i.test(q) ||
+        /pitching line/i.test(q) ||
+        /how many strikeouts/i.test(q) ||
+        /how many k'?s/i.test(q) ||
+        /how many pitches/i.test(q) ||
+        /pitch count/i.test(q)
+      );
+
+    const contradictsKnownLiveStats =
+      /couldn'?t find.*(?:pitching )?line/i.test(reply) ||
+      /can'?t find.*(?:pitching )?line/i.test(reply) ||
+      /cannot find.*(?:pitching )?line/i.test(reply) ||
+      /don'?t have.*(?:pitching )?line/i.test(reply) ||
+      /could not find.*(?:pitching )?line/i.test(reply);
+
+    const recommendsAnotherSource =
+      (
+        /\bcheck(?:ing)?\b[\s\S]{0,140}\b(?:sports app|live sports app|sports feed|live feed|website|web site|sports site|news site|another site|another app)\b/i.test(reply) ||
+        /\b(?:sports app|live sports app|sports feed|live feed|website|web site|sports site)\b[\s\S]{0,100}\b(?:best bet|latest|freshest|up[- ]to[- ]date|more detailed)\b/i.test(reply) ||
+        /\brecommend(?:ed|ing)?\b[\s\S]{0,120}\b(?:app|website|site|feed)\b/i.test(reply)
+      );
+
+    // A direct live pitching-stat question gets the verified
+    // deterministic answer every time. No contradictory AI wording.
+    if (
+      isLivePitchingLineQuestion &&
+      deterministicLiveReply
+    ) {
+      reply = deterministicLiveReply;
+    }
+
+    // If the formatter claims it cannot find stats that our
+    // live-data layer already has, throw that answer away.
+    if (
+      activeGame &&
+      deterministicLiveReply &&
+      contradictsKnownLiveStats
+    ) {
+      reply = deterministicLiveReply;
+    }
+
+    // Grace NEVER tells a sports user to go use another service.
+    if (recommendsAnotherSource) {
+      reply =
+        deterministicLiveReply ||
+        "I don't have that piece clean enough to bullshit ya about it. I'll give you everything I can verify from the game right here.";
+    }
+
  return Response.json({
       reply,
       league: selected.label,
