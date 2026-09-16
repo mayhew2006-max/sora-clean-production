@@ -398,6 +398,160 @@ function pickActiveGame(
   return bestScore > 0 ? best : null;
 }
 
+
+const LIVE_GAME_DISCOVERY_KEYS = [
+  "mlb",
+  "nfl",
+  "ncaaf",
+  "nba",
+  "wnba",
+  "ncaam",
+  "nhl",
+  "mls",
+  "epl",
+  "ucl",
+] as const;
+
+async function discoverLiveGameAcrossLeagues(
+  currentQuery: string,
+  recentContext: string,
+  today: string
+) {
+  const dateKey = today.replace(/-/g, "");
+
+  const results = await Promise.all(
+    LIVE_GAME_DISCOVERY_KEYS.map(
+      async (key) => {
+        const league = LEAGUES[key];
+
+        const url =
+          `https://site.api.espn.com/apis/site/v2/sports/` +
+          `${league.sport}/${league.league}/scoreboard?dates=${dateKey}&limit=100`;
+
+        const board = await fetchJson(url, 0);
+
+        const events =
+          Array.isArray(board?.events)
+            ? board.events
+            : [];
+
+        let bestGame: any = null;
+        let bestScore = 0;
+
+        for (const event of events) {
+          const competition =
+            event?.competitions?.[0];
+
+          const competitors =
+            competition?.competitors || [];
+
+          const home =
+            competitors.find(
+              (c: any) =>
+                c?.homeAway === "home"
+            );
+
+          const away =
+            competitors.find(
+              (c: any) =>
+                c?.homeAway === "away"
+            );
+
+          const game = {
+            id: event?.id || "",
+            date: event?.date || "",
+            name: event?.name || "",
+            shortName:
+              event?.shortName || "",
+
+            status:
+              competition?.status?.type
+                ?.detail ||
+              competition?.status?.type
+                ?.description ||
+              "",
+
+            state:
+              competition?.status?.type
+                ?.state ||
+              event?.status?.type?.state ||
+              "",
+
+            home:
+              home?.team?.displayName ||
+              "",
+            homeName:
+              home?.team?.name || "",
+            homeAbbreviation:
+              home?.team?.abbreviation ||
+              "",
+            homeScore:
+              home?.score || "",
+
+            away:
+              away?.team?.displayName ||
+              "",
+            awayName:
+              away?.team?.name || "",
+            awayAbbreviation:
+              away?.team?.abbreviation ||
+              "",
+            awayScore:
+              away?.score || "",
+          };
+
+          // Current question is much more important
+          // than older conversation context.
+          let score =
+            gameMatchScore(
+              game,
+              currentQuery
+            ) * 5;
+
+          score +=
+            gameMatchScore(
+              game,
+              recentContext
+            );
+
+          // If two teams share a name like "Giants",
+          // favor the one that's actually live.
+          if (game.state === "in") {
+            score += 12;
+          }
+
+          if (score > bestScore) {
+            bestScore = score;
+            bestGame = game;
+          }
+        }
+
+        return {
+          league,
+          game: bestGame,
+          score: bestScore,
+        };
+      }
+    )
+  );
+
+  results.sort(
+    (a, b) => b.score - a.score
+  );
+
+  const best = results[0];
+
+  if (
+    !best ||
+    !best.game ||
+    best.score <= 0
+  ) {
+    return null;
+  }
+
+  return best;
+}
+
 export async function POST(req: Request) {
   try {
     const { query, context } = await req.json();
@@ -474,6 +628,29 @@ export async function POST(req: Request) {
     let selected =
       detectLeagueFromText(routingClean);
 
+    let discoveredGame: any = null;
+
+    const wantsLiveGame =
+      /game|score|what happened|what just happened|what's happening|whats happening|update me|inning|quarter|period|who's up|whos up|how many/i
+        .test(routingClean);
+
+    if (wantsLiveGame) {
+      const discovery =
+        await discoverLiveGameAcrossLeagues(
+          userQuery,
+          contextText,
+          today
+        );
+
+      if (discovery?.game) {
+        selected =
+          discovery.league;
+
+        discoveredGame =
+          discovery.game;
+      }
+    }
+
     // -------------------------------------------------------
     // FREE ESPN ATHLETE SEARCH
     // -------------------------------------------------------
@@ -502,14 +679,20 @@ export async function POST(req: Request) {
         subject
       );
 
-    if (searchData) {
+    if (
+      !discoveredGame &&
+      searchData
+    ) {
       selected = inferLeagueFromBlob(
         compact(searchData, 9000),
         selected
       );
     }
 
-    if (athleteItem) {
+    if (
+      !discoveredGame &&
+      athleteItem
+    ) {
       selected = inferLeagueFromBlob(
         compact(athleteItem, 7000),
         selected
@@ -758,7 +941,9 @@ export async function POST(req: Request) {
       pickActiveGame(
         todaysGames,
         routingText
-      );
+      ) ||
+      discoveredGame ||
+      null;
 
     let liveSummary: any = null;
 
