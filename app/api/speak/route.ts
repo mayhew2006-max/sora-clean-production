@@ -1,62 +1,6 @@
-function bostonizeForSpeech(input: string) {
-  let text = String(input || "");
-
-  const replacements: Array<[RegExp, string]> = [
-    [/\bcars\b/gi, "cahs"],
-    [/\bcar\b/gi, "cah"],
-
-    [/\bparking\b/gi, "pahkin'"],
-    [/\bparked\b/gi, "pahked"],
-    [/\bpark\b/gi, "pahk"],
-
-    [/\bbars\b/gi, "bahs"],
-    [/\bbar\b/gi, "bah"],
-
-    [/\bharder\b/gi, "hahdah"],
-    [/\bhard\b/gi, "hahd"],
-
-    [/\byards\b/gi, "yahds"],
-    [/\byard\b/gi, "yahd"],
-
-    [/\bstarted\b/gi, "stahted"],
-    [/\bstarting\b/gi, "stahtin'"],
-    [/\bstart\b/gi, "staht"],
-
-    [/\bsmart\b/gi, "smaht"],
-    [/\bparty\b/gi, "pahty"],
-    [/\bfar\b/gi, "fah"],
-    [/\bstar\b/gi, "stah"],
-
-    [/\bmarket\b/gi, "mahket"],
-    [/\bgarbage\b/gi, "gahbage"],
-
-    [/\bhere\b/gi, "heah"],
-    [/\bthere\b/gi, "theah"],
-    [/\bwhere\b/gi, "wheah"],
-    [/\bmore\b/gi, "moah"],
-    [/\bfour\b/gi, "foah"],
-    [/\bdoor\b/gi, "doah"],
-
-    [/\bbastard\b/gi, "bahstahd"],
-
-    [/\bmotherfucking\b/gi, "muthafuckin'"],
-    [/\bmotherfucker\b/gi, "muthafuckah"],
-    [/\bfucking\b/gi, "fuckin'"],
-    [/\bfucker\b/gi, "fuckah"],
-  ];
-
-  for (const [pattern, replacement] of replacements) {
-    text = text.replace(pattern, replacement);
-  }
-
-  return text;
-}
-
 export async function POST(req: Request) {
   try {
     const { text } = await req.json();
-
-    const spokenText = bostonizeForSpeech(text);
 
     const response = await fetch(
       "https://api.openai.com/v1/audio/speech",
@@ -68,35 +12,46 @@ export async function POST(req: Request) {
         },
         body: JSON.stringify({
           model: "gpt-4o-mini-tts",
-          voice: "marin",
-          input: spokenText,
+          voice: "sage",
+          input: String(text || ""),
           instructions: `
-Speak as a foul-mouthed woman from Boston with a strong,
-obvious Eastern New England accent.
+Speak as a woman from South Boston, Massachusetts.
 
-Keep the Boston accent strong for the entire response.
+VOICE:
+- Strong authentic South Boston / Eastern New England accent.
+- Lifelong-local sound, not someone pretending to be from Boston.
+- Confident, sarcastic, quick-witted and funny.
+- Slightly rough, slightly raspy neighborhood-bar energy.
+- Fast, relaxed conversational rhythm.
+- Strong Boston vowel character and natural non-rhotic R sounds.
+- Keep the regional accent noticeable throughout the entire response.
+- Do not drift back into generic American speech.
 
-Sound casual, fast, sarcastic, confident and funny.
-Think neighborhood Boston bar, not customer service.
+PERSONALITY:
+- Foul-mouthed and completely comfortable with profanity.
+- Deliver fuck, fucking, shit, bullshit, asshole, bitch,
+  motherfucker and similar words naturally when they appear.
+- Dirty jokes and ball-busting should sound confident and funny.
+- Warm underneath the attitude.
+- Never sound corporate, robotic, overly polished or like customer service.
 
-Drop R sounds naturally.
-Lean into the Boston vowel sounds already written phonetically
-in the supplied speech text.
-
-Profanity should sound natural, confident and completely
-unembarrassed. Never sanitize fuck, shit, bitch, asshole,
-motherfucker or similar language when it appears.
-
-Do not sound polished, corporate, robotic or overly cheerful.
-Do not turn it into a cartoon impression.
-She should sound like Boston is genuinely where she is from.
+IMPORTANT:
+- Speak the supplied text naturally.
+- Do NOT deliberately mispronounce words.
+- Do NOT artificially turn car into "cah", park into "pahk", etc.
+- The Boston character should come from the actual VOICE and delivery,
+  not fake phonetic spelling.
+- Do not make the accent a cartoon parody.
           `.trim(),
-          format: "mp3",
+          response_format: "mp3",
+          speed: 1.03,
         }),
       }
     );
 
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error("Grace TTS failed:", response.status, errorText);
       throw new Error("Voice generation failed");
     }
 
@@ -105,9 +60,11 @@ She should sound like Boston is genuinely where she is from.
     return new Response(audioBuffer, {
       headers: {
         "Content-Type": "audio/mpeg",
+        "Cache-Control": "no-store",
       },
     });
-  } catch (e) {
+  } catch (error) {
+    console.error("Grace voice error:", error);
     return new Response("Voice failed", { status: 500 });
   }
 }
