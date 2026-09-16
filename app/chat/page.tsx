@@ -174,6 +174,11 @@ export default function GraceChat() {
   const messagesRef = useRef<Message[]>(messages);
   const memoryRef = useRef("");
   const loadingRef = useRef(false);
+
+  // STEP 14:
+  // The exact live game Grace is currently watching with the user.
+  // This is the primary source of truth between follow-up messages.
+  const activeSportsGameRef = useRef<any>(null);
   const recognitionRef = useRef<any>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
  const speakingRunRef = useRef(0);
@@ -181,6 +186,20 @@ export default function GraceChat() {
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const historySyncedCountRef = useRef(0);
+
+  useEffect(() => {
+    try {
+      const saved =
+        sessionStorage.getItem(
+          "graceActiveSportsGame"
+        );
+
+      if (saved) {
+        activeSportsGameRef.current =
+          JSON.parse(saved);
+      }
+    } catch {}
+  }, []);
 
   function urlBase64ToUint8Array(base64String: string) {
     const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -1509,25 +1528,19 @@ Only use business/report fields when the user specifically requests a report or 
         body: JSON.stringify({
           query: cleanQuery,
 
-          // If this is a natural follow-up, stay attached to the
-          // exact live game Grace already identified.
+          // STEP 14:
+          // Generic follow-ups go directly back to the exact game
+          // Grace already identified. No rediscovery from English.
           useActiveGameContext:
-            hasRecentSportsContext(cleanQuery),
+            Boolean(
+              activeSportsGameRef.current
+            ) &&
+            isLiveGameFollowUp(
+              cleanQuery
+            ),
 
-          activeGameContext: (() => {
-            try {
-              const saved =
-                sessionStorage.getItem(
-                  "graceActiveSportsGame"
-                );
-
-              return saved
-                ? JSON.parse(saved)
-                : null;
-            } catch {
-              return null;
-            }
-          })(),
+          activeGameContext:
+            activeSportsGameRef.current,
 
           context: messagesRef.current
             .slice(-8)
@@ -1547,13 +1560,22 @@ Only use business/report fields when the user specifically requests a report or 
         data?.activeGame &&
         data?.activeLeague
       ) {
+        const activeGameState = {
+          game: data.activeGame,
+          league: data.activeLeague,
+        };
+
+        // Primary live pointer.
+        activeSportsGameRef.current =
+          activeGameState;
+
+        // Backup only, so a browser refresh can restore it later.
         try {
           sessionStorage.setItem(
             "graceActiveSportsGame",
-            JSON.stringify({
-              game: data.activeGame,
-              league: data.activeLeague,
-            })
+            JSON.stringify(
+              activeGameState
+            )
           );
         } catch {}
       }
@@ -1750,6 +1772,96 @@ Only use business/report fields when the user specifically requests a report or 
     );
   }
 
+
+
+ function isLiveGameFollowUp(text: string) {
+   const clean =
+     text.trim().toLowerCase();
+
+   const patterns = [
+     /^what happened\b/,
+     /^what just happened\b/,
+     /^what happened now\b/,
+     /^what's happening\b/,
+     /^whats happening\b/,
+     /^update me\b/,
+     /^give me an update\b/,
+
+     /^give me the whole game\b/,
+     /^give me the whole damn game\b/,
+     /^give me the full game\b/,
+     /^give me everything\b/,
+     /^give me all the stats\b/,
+     /^give me the stats\b/,
+     /^whole game\b/,
+     /^full game\b/,
+     /^game stats\b/,
+     /^live stats\b/,
+
+     /^what's the score\b/,
+     /^whats the score\b/,
+     /^score now\b/,
+
+     /^who's pitching\b/,
+     /^whos pitching\b/,
+     /^who is pitching\b/,
+     /^who's batting\b/,
+     /^whos batting\b/,
+     /^who is batting\b/,
+     /^who's up\b/,
+     /^whos up\b/,
+
+     /^what's his line\b/,
+     /^whats his line\b/,
+     /^what is his line\b/,
+     /^what's her line\b/,
+     /^whats her line\b/,
+     /^what is her line\b/,
+     /^his line\b/,
+     /^her line\b/,
+
+     /^how many strikeouts\b/,
+     /^how many k'?s\b/,
+     /^how many pitches\b/,
+     /^pitch count\b/,
+     /^how many outs\b/,
+     /^who's on base\b/,
+     /^whos on base\b/,
+
+     /^what inning\b/,
+     /^what quarter\b/,
+     /^what period\b/,
+     /^how much time\b/,
+
+     /^who has possession\b/,
+     /^what down\b/,
+     /^down and distance\b/,
+     /^how many yards\b/,
+
+     /^who's leading\b/,
+     /^whos leading\b/,
+     /^who scored\b/,
+     /^who just scored\b/,
+     /^how many points\b/,
+     /^how many rebounds\b/,
+     /^how many assists\b/,
+     /^how many goals\b/,
+     /^how many saves\b/,
+     /^how many shots\b/,
+
+     /^what's he got\b/,
+     /^whats he got\b/,
+     /^what does he have\b/,
+     /^how's he doing\b/,
+     /^hows he doing\b/,
+     /^is he still in\b/,
+     /^is she still in\b/,
+   ];
+
+   return patterns.some(
+     (pattern) => pattern.test(clean)
+   );
+ }
 
  function shouldUseSportsQuery(text: string) {
     const clean = text.trim().toLowerCase();
