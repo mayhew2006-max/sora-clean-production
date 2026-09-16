@@ -1462,6 +1462,13 @@ Natural profanity is welcome when it fits.
 Do not turn useful game information into generic polite filler.
 Do not recommend another sports app when live data exists.
 
+If ACTIVE GAME exists:
+- NEVER tell the user to go somewhere else for the game.
+- NEVER say you cannot recap a live game.
+- Give the live snapshot you actually have.
+- If one stat is missing, say only that stat is missing and keep going.
+- Grace stays at the damn bar with the user and keeps following the game.
+
 
 FULL LIVE GAME BOARD:
 When ACTIVE GAME is present, Grace should maintain awareness of the
@@ -1483,7 +1490,17 @@ when ACTIVE GAME and current live data are already supplied.
 "Give me the whole game", "give me the full game", "give me everything",
 "give me all the stats", and similar wording mean:
 
-GIVE A COMPLETE CURRENT GAME SNAPSHOT FROM ALL VERIFIED DATA AVAILABLE NOW.
+GIVE A COMPLETE CURRENT LIVE GAME SNAPSHOT FROM ALL VERIFIED DATA AVAILABLE NOW.
+
+IMPORTANT:
+If the game is still in progress, NEVER call this a "recap".
+A recap is for a finished game.
+
+For a live game, call it:
+- live snapshot
+- full game update
+- whole-game update
+- current game state
 
 It does NOT mean the user is demanding a transcript of every play since
 the game started.
@@ -1954,7 +1971,7 @@ Answer the actual question only.
         ) {
           deterministicLiveReply =
             pitcherName
-              ? `${pitcherName} is pitching right now.${
+              ? `Alright, ${pitcherName}'s got the damn ball right now.${
                   pitcherLine
                     ? ` His line: ${pitcherLine}.`
                     : ""
@@ -1971,7 +1988,7 @@ Answer the actual question only.
         ) {
           deterministicLiveReply =
             pitcherName && pitcherLine
-              ? `${pitcherName}: ${pitcherLine}. ${gameState}.`
+              ? `Alright, here's ${pitcherName}'s damn line: ${pitcherLine}. ${gameState}.`
               : pitcherName
                 ? `${pitcherName} is pitching, but his complete live pitching line isn't populated yet. ${gameState}.`
                 : `The current pitching line isn't identified yet. ${gameState}.`;
@@ -1996,7 +2013,7 @@ Answer the actual question only.
 
         else {
           const pieces = [
-            `Alright, here's the damn game: ${gameState}.`,
+            `Alright, here's the whole damn game right now: ${gameState}.`,
             rhe,
             pitcherName
               ? `On the mound: ${pitcherName}${pitcherLine ? ` — ${pitcherLine}` : ""}.`
@@ -2060,8 +2077,13 @@ Answer the actual question only.
       (
         /check.*sports app/i.test(reply) ||
         /check.*website/i.test(reply) ||
+        /sports news website/i.test(reply) ||
+        /best bet/i.test(reply) ||
         /couldn'?t find.*live/i.test(reply) ||
+        /couldn'?t find.*recap/i.test(reply) ||
+        /couldn'?t find.*full recap/i.test(reply) ||
         /cannot find.*live/i.test(reply) ||
+        /cannot find.*recap/i.test(reply) ||
         /can't verify/i.test(reply) ||
         /cannot verify/i.test(reply) ||
         /not able to find/i.test(reply) ||
