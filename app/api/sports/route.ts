@@ -514,9 +514,17 @@ async function discoverLiveGameAcrossLeagues(
               recentContext
             );
 
-          // If two teams share a name like "Giants",
-          // favor the one that's actually live.
-          if (game.state === "in") {
+          // Only use live status as a TIE-BREAKER after the
+          // user's words or recent context actually matched this game.
+          //
+          // Without this guard, generic follow-ups like:
+          // "give me the whole game"
+          // could randomly select ANY live game and replace the
+          // active game Grace was already watching.
+          if (
+            score > 0 &&
+            game.state === "in"
+          ) {
             score += 12;
           }
 
