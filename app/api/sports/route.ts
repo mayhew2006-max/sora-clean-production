@@ -991,6 +991,192 @@ export async function POST(req: Request) {
         : null;
 
     // -------------------------------------------------------
+    // STEP 14 — OFFICIAL MLB LIVE GAME DETAIL
+    // ESPN is good for cross-sport discovery/play-by-play.
+    // MLB live feed gives us deeper baseball game state,
+    // including current matchup and complete boxscore data.
+    // -------------------------------------------------------
+
+    let mlbLiveFeed: any = null;
+    let mlbLiveData: any = null;
+    let mlbLinescore: any = null;
+    let mlbCurrentPlay: any = null;
+    let mlbCurrentPitcher: any = null;
+    let mlbCurrentBatter: any = null;
+    let mlbCurrentPitcherStats: any = null;
+    let mlbCurrentBatterStats: any = null;
+    let mlbLiveBoxscore: any = null;
+    let mlbTeamStats: any = null;
+    let mlbGamePk = "";
+
+    if (
+      selected.league === "mlb" &&
+      activeGame
+    ) {
+      const officialSchedule =
+        await fetchJson(
+          `https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${today}&hydrate=team`,
+          0
+        );
+
+      const officialGames =
+        Array.isArray(officialSchedule?.dates)
+          ? officialSchedule.dates.flatMap(
+              (date: any) =>
+                Array.isArray(date?.games)
+                  ? date.games
+                  : []
+            )
+          : [];
+
+      const targetHome =
+        normalizeGameText(
+          activeGame?.home ||
+          activeGame?.homeName ||
+          ""
+        );
+
+      const targetAway =
+        normalizeGameText(
+          activeGame?.away ||
+          activeGame?.awayName ||
+          ""
+        );
+
+      const nameMatches = (
+        one: string,
+        two: string
+      ) => {
+        const a = normalizeGameText(one);
+        const b = normalizeGameText(two);
+
+        if (!a || !b) return false;
+
+        if (
+          a === b ||
+          a.includes(b) ||
+          b.includes(a)
+        ) return true;
+
+        const aLast =
+          a.split(" ").filter(Boolean).pop();
+
+        const bLast =
+          b.split(" ").filter(Boolean).pop();
+
+        return Boolean(
+          aLast &&
+          bLast &&
+          aLast === bLast
+        );
+      };
+
+      let officialGame: any = null;
+
+      for (const game of officialGames) {
+        const homeName =
+          String(
+            game?.teams?.home?.team?.name ||
+            ""
+          );
+
+        const awayName =
+          String(
+            game?.teams?.away?.team?.name ||
+            ""
+          );
+
+        if (
+          nameMatches(targetHome, homeName) &&
+          nameMatches(targetAway, awayName)
+        ) {
+          officialGame = game;
+          break;
+        }
+      }
+
+      if (officialGame?.gamePk) {
+        mlbGamePk =
+          String(officialGame.gamePk);
+
+        mlbLiveFeed =
+          await fetchJson(
+            `https://statsapi.mlb.com/api/v1.1/game/${mlbGamePk}/feed/live`,
+            0
+          );
+
+        mlbLiveData =
+          mlbLiveFeed?.liveData ||
+          null;
+
+        mlbLinescore =
+          mlbLiveData?.linescore ||
+          null;
+
+        mlbCurrentPlay =
+          mlbLiveData?.plays?.currentPlay ||
+          null;
+
+        mlbLiveBoxscore =
+          mlbLiveData?.boxscore ||
+          null;
+
+        mlbCurrentPitcher =
+          mlbCurrentPlay?.matchup?.pitcher ||
+          null;
+
+        mlbCurrentBatter =
+          mlbCurrentPlay?.matchup?.batter ||
+          null;
+
+        const pitcherId =
+          mlbCurrentPitcher?.id;
+
+        const batterId =
+          mlbCurrentBatter?.id;
+
+        if (
+          pitcherId &&
+          mlbLiveBoxscore
+        ) {
+          mlbCurrentPitcherStats =
+            mlbLiveBoxscore?.teams?.home
+              ?.players?.[`ID${pitcherId}`]
+              ?.stats?.pitching ||
+            mlbLiveBoxscore?.teams?.away
+              ?.players?.[`ID${pitcherId}`]
+              ?.stats?.pitching ||
+            null;
+        }
+
+        if (
+          batterId &&
+          mlbLiveBoxscore
+        ) {
+          mlbCurrentBatterStats =
+            mlbLiveBoxscore?.teams?.home
+              ?.players?.[`ID${batterId}`]
+              ?.stats?.batting ||
+            mlbLiveBoxscore?.teams?.away
+              ?.players?.[`ID${batterId}`]
+              ?.stats?.batting ||
+            null;
+        }
+
+        mlbTeamStats = {
+          away:
+            mlbLiveBoxscore?.teams?.away
+              ?.teamStats ||
+            null,
+          home:
+            mlbLiveBoxscore?.teams?.home
+              ?.teamStats ||
+            null,
+        };
+      }
+    }
+
+    // -------------------------------------------------------
     // DETERMINISTIC MLB IDENTITY ANSWER
     // Do not let a language model override current MLB identity.
     // -------------------------------------------------------
@@ -1088,7 +1274,7 @@ export async function POST(req: Request) {
             process.env.OPENAI_MODEL ||
             "gpt-4o-mini",
           temperature: 0.25,
-          max_tokens: 700,
+          max_tokens: 1200,
           messages: [
             {
               role: "system",
@@ -1111,9 +1297,12 @@ ABSOLUTE RULES:
 - Never invent a statistic.
 - Never substitute an old team or old matchup.
 - Current transaction/team information overrides historical information.
-- Be brief.
 - Sound like Grace, not a database.
-- One or two short sentences is normally enough.
+- For ordinary sports lookups that are NOT about an active game,
+  stay brief.
+- For an ACTIVE LIVE GAME, DO NOT reduce the answer to one or two
+  sentences. The user wants to feel like Grace is sitting beside them
+  watching the whole damn game.
 - Do not mention APIs, feeds, ESPN, MLB Stats API, providers,
   websites, search engines, or research mechanics.
 
@@ -1169,6 +1358,97 @@ GRACE'S SPORTS PERSONALITY:
 - Sound like someone watching the game beside the user, not a broadcaster,
   customer-service bot, or statistics database.
 - Facts always come before personality.
+
+FULL LIVE GAME BOARD:
+When ACTIVE GAME is present, Grace should maintain awareness of the
+ENTIRE GAME, not only the specific player mentioned by the user.
+
+For a broad request such as:
+- what's happening
+- update me
+- what's going on
+- give me the game
+- what just happened
+
+give a useful whole-game snapshot containing as much VERIFIED
+information as currently available:
+
+1. SCORE + GAME STATE
+   - score
+   - inning/quarter/period/half
+   - clock if applicable
+   - outs/down-distance/possession/base situation when available
+
+2. WHO IS ACTIVE RIGHT NOW
+   - pitcher + batter for baseball
+   - possession/QB/ball carrier context for football
+   - key on-court/on-ice context when supplied
+
+3. TEAM GAME TOTALS
+   - baseball: runs, hits, errors when available
+   - football: major team totals when available
+   - basketball: shooting/rebounding/turnover totals when available
+   - hockey/soccer: shots, saves, possession or other supplied totals
+
+4. KEY PLAYER STATS — BOTH TEAMS
+   Do not focus only on whoever the user last mentioned.
+   Surface the most relevant verified performers for BOTH sides.
+
+5. RECENT ACTION
+   Summarize the newest meaningful plays/events.
+   Do not dump a giant raw play-by-play list.
+
+6. GAME FLOW
+   Mention lead changes, rallies, pitching changes, scoring runs,
+   turnovers, momentum swings, or other meaningful verified context.
+
+For a narrow follow-up like:
+"How many strikeouts does he have?"
+
+Answer that question FIRST, but then give a compact game snapshot so
+the user still knows what is happening around that player.
+
+MLB PRIORITY:
+- OFFICIAL MLB LIVE DATA outranks generic game data whenever supplied.
+- CURRENT MLB PITCHER and CURRENT MLB BATTER are authoritative when present.
+- Use CURRENT MLB PITCHER STATS for his live pitching line.
+- Use CURRENT MLB BATTER STATS for his live batting line.
+- Use MLB LINESCORE for inning, outs, runners and R/H/E.
+- Use MLB LIVE BOXSCORE to identify key performers and pitching changes.
+- Never say the current pitcher cannot be found when CURRENT MLB PITCHER
+  is supplied.
+
+BOSTON BAR COMPANION:
+Grace should feel like a foul-mouthed Boston bartender watching the
+game right beside the user.
+
+Think:
+- neighborhood Boston bar
+- game on the TV
+- bartender knows sports
+- sarcastic
+- funny
+- opinionated about the moment
+- swears naturally
+- busts balls
+- reacts when something big happens
+
+Examples of ENERGY, not facts to copy:
+"Holy shit, now we're cookin'."
+"That was fuckin' filthy."
+"They're in some shit here — two on, one out."
+"Jesus Christ, he got away with that one."
+"That's a huge fuckin' out."
+
+IMPORTANT:
+- Do NOT fake Boston pronunciation in text.
+- Do not write cah, pahk, bah, etc.
+- Sage handles the actual accent.
+- Keep normal readable spelling.
+- Do not force profanity into every sentence.
+- Do not turn every update into a comedy routine.
+- Never allow personality to alter a score, stat, player, inning,
+  clock, event or other factual detail.
               `.trim(),
             },
             {
@@ -1203,6 +1483,36 @@ ${compact(liveLeaders, 4500)}
 
 LIVE DRIVE / POSSESSION:
 ${compact(liveDrives, 4500)}
+
+FULL LIVE GAME DETAIL:
+${compact(liveSummary, 18000)}
+
+OFFICIAL MLB GAME ID:
+${mlbGamePk || "None"}
+
+OFFICIAL MLB LINESCORE:
+${compact(mlbLinescore, 8000)}
+
+CURRENT MLB PLAY:
+${compact(mlbCurrentPlay, 8000)}
+
+CURRENT MLB PITCHER:
+${compact(mlbCurrentPitcher, 3000)}
+
+CURRENT MLB PITCHER STATS:
+${compact(mlbCurrentPitcherStats, 5000)}
+
+CURRENT MLB BATTER:
+${compact(mlbCurrentBatter, 3000)}
+
+CURRENT MLB BATTER STATS:
+${compact(mlbCurrentBatterStats, 5000)}
+
+MLB TEAM GAME STATS:
+${compact(mlbTeamStats, 8000)}
+
+MLB LIVE BOXSCORE:
+${compact(mlbLiveBoxscore, 18000)}
 
 ATHLETE SEARCH:
 ${compact(athleteItem || searchData, 6500)}
@@ -1245,10 +1555,107 @@ Answer the actual question only.
     const aiData =
       await aiRes.json();
 
-    const reply =
+    let reply =
       aiData?.choices?.[0]?.message
         ?.content?.trim() ||
       "I can't verify that cleanly from the current sports data, so I'm not going to guess.";
+
+    if (
+      activeGame &&
+      reply
+    ) {
+      try {
+        const styleRes = await fetch(
+          "https://api.openai.com/v1/chat/completions",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization:
+                "Bearer " +
+                process.env.OPENAI_API_KEY,
+            },
+            body: JSON.stringify({
+              model:
+                process.env.OPENAI_MODEL ||
+                "gpt-4o-mini",
+              temperature: 0.85,
+              max_tokens: 1200,
+              messages: [
+                {
+                  role: "system",
+                  content: `
+Rewrite the supplied LIVE SPORTS response in Grace's voice.
+
+Grace is a foul-mouthed Boston bartender watching the game beside
+the user in a neighborhood bar.
+
+She is:
+- funny
+- sarcastic
+- quick
+- sports-aware
+- naturally profane
+- excited when the game deserves it
+- blunt when something sucks
+
+This is NOT a broadcaster.
+This is NOT customer service.
+This is NOT a sports database.
+
+IMPORTANT FACT RULE:
+Preserve EVERY factual detail from the draft exactly:
+- score
+- inning
+- quarter
+- clock
+- outs
+- runners
+- down/distance
+- player names
+- statistics
+- plays
+- injuries
+- substitutions
+- pitching changes
+- all numbers
+
+DO NOT invent, modify, exaggerate, remove, or replace factual data.
+
+Do NOT use fake phonetic Boston spelling.
+Use normal readable English.
+The TTS voice supplies the actual accent.
+
+Natural swearing and bar-style reactions are welcome where they fit.
+
+Output only Grace's rewritten response.
+                  `.trim(),
+                },
+                {
+                  role: "user",
+                  content: reply,
+                },
+              ],
+            }),
+          }
+        );
+
+        if (styleRes.ok) {
+          const styleData =
+            await styleRes.json();
+
+          const styled =
+            styleData?.choices?.[0]
+              ?.message?.content?.trim();
+
+          if (styled) {
+            reply = styled;
+          }
+        }
+      } catch {
+        // Keep the verified factual response if style pass fails.
+      }
+    }
 
     return Response.json({
       reply,
