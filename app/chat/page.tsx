@@ -1508,6 +1508,12 @@ Only use business/report fields when the user specifically requests a report or 
         },
         body: JSON.stringify({
           query: cleanQuery,
+          context: messagesRef.current
+            .slice(-8)
+            .map((message) => ({
+              role: message.role,
+              content: message.content,
+            })),
         }),
       });
 
@@ -1762,6 +1768,14 @@ Only use business/report fields when the user specifically requests a report or 
       "who won",
       "who plays",
       "who is playing",
+      "live score",
+      "live game",
+      "game update",
+      "play by play",
+      "what's happening in",
+      "whats happening in",
+      "what happened in",
+      "what just happened in",
       "starting pitcher",
       "starting quarterback",
       "playoff seed",
@@ -1819,6 +1833,28 @@ Only use business/report fields when the user specifically requests a report or 
       /^strongest one\b/,
       /^anything else\b/,
       /^any others?\b/,
+      /^what happened\b/,
+      /^what just happened\b/,
+      /^what's happening\b/,
+      /^whats happening\b/,
+      /^update me\b/,
+      /^give me an update\b/,
+      /^what's the score\b/,
+      /^whats the score\b/,
+      /^score now\b/,
+      /^what inning\b/,
+      /^what quarter\b/,
+      /^how much time\b/,
+      /^who's up\b/,
+      /^whos up\b/,
+      /^who has the ball\b/,
+      /^is he still\b/,
+      /^is she still\b/,
+      /^how many\b/,
+      /^what did he\b/,
+      /^what did she\b/,
+      /^did he\b/,
+      /^did she\b/,
     ];
 
     if (!followUpPatterns.some((pattern) => pattern.test(clean))) {

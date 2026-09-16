@@ -209,11 +209,16 @@ async function fetchJson(
   seconds = 300
 ): Promise<any | null> {
   try {
-    const res = await fetch(url, {
-      next: {
-        revalidate: seconds,
-      },
-    });
+    const res =
+      seconds <= 0
+        ? await fetch(url, {
+            cache: "no-store",
+          })
+        : await fetch(url, {
+            next: {
+              revalidate: seconds,
+            },
+          });
 
     if (!res.ok) return null;
 
@@ -318,9 +323,84 @@ function pickBestSearchObject(
   return best;
 }
 
+
+function normalizeGameText(value: string) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function gameMatchScore(
+  game: any,
+  context: string
+) {
+  const haystack =
+    ` ${normalizeGameText(context)} `;
+
+  const aliases = [
+    game?.home,
+    game?.homeName,
+    game?.homeAbbreviation,
+    game?.away,
+    game?.awayName,
+    game?.awayAbbreviation,
+    game?.name,
+    game?.shortName,
+  ]
+    .map((value) =>
+      normalizeGameText(String(value || ""))
+    )
+    .filter(Boolean);
+
+  let score = 0;
+
+  for (const alias of aliases) {
+    if (
+      alias.length >= 3 &&
+      haystack.includes(` ${alias} `)
+    ) {
+      score += 15;
+    }
+
+    const pieces = alias
+      .split(" ")
+      .filter((piece) => piece.length >= 4);
+
+    for (const piece of pieces) {
+      if (haystack.includes(` ${piece} `)) {
+        score += 4;
+      }
+    }
+  }
+
+  return score;
+}
+
+function pickActiveGame(
+  games: any[],
+  context: string
+) {
+  let best: any = null;
+  let bestScore = 0;
+
+  for (const game of games) {
+    const score =
+      gameMatchScore(game, context);
+
+    if (score > bestScore) {
+      best = game;
+      bestScore = score;
+    }
+  }
+
+  return bestScore > 0 ? best : null;
+}
+
 export async function POST(req: Request) {
   try {
-    const { query } = await req.json();
+    const { query, context } = await req.json();
 
     if (!query || !String(query).trim()) {
       return Response.json(
@@ -344,12 +424,55 @@ export async function POST(req: Request) {
 
     const userQuery = String(query).trim();
     const clean = userQuery.toLowerCase();
+
+    const recentContext = Array.isArray(context)
+      ? context
+          .filter(
+            (message: any) =>
+              message &&
+              typeof message.content === "string"
+          )
+          .slice(-8)
+      : [];
+
+    const contextText = recentContext
+      .map(
+        (message: any) =>
+          `${message.role || "user"}: ${message.content}`
+      )
+      .join("\n");
+
+    const routingText =
+      `${contextText}\nuser: ${userQuery}`;
+
+    const routingClean =
+      routingText.toLowerCase();
+
+    const previousUser =
+      [...recentContext]
+        .reverse()
+        .find(
+          (message: any) =>
+            message.role === "user"
+        );
+
+    const ambiguousFollowUp =
+      /^(what happened|what just happened|what's happening|whats happening|update me|give me an update|how many|is he still|is she still|who's up|whos up|what inning|what quarter|how much time|what's the score|whats the score|score now)/i
+        .test(userQuery);
+
+    const subjectSource =
+      ambiguousFollowUp &&
+      previousUser?.content
+        ? String(previousUser.content)
+        : userQuery;
+
     const today = easternDate();
     const season = today.slice(0, 4);
-    const subject = extractSubject(userQuery);
+    const subject =
+      extractSubject(subjectSource);
 
     let selected =
-      detectLeagueFromText(clean);
+      detectLeagueFromText(routingClean);
 
     // -------------------------------------------------------
     // FREE ESPN ATHLETE SEARCH
@@ -379,14 +502,16 @@ export async function POST(req: Request) {
         subject
       );
 
+    if (searchData) {
+      selected = inferLeagueFromBlob(
+        compact(searchData, 9000),
+        selected
+      );
+    }
+
     if (athleteItem) {
       selected = inferLeagueFromBlob(
         compact(athleteItem, 7000),
-        selected
-      );
-    } else if (searchData) {
-      selected = inferLeagueFromBlob(
-        compact(searchData, 9000),
         selected
       );
     }
@@ -519,7 +644,7 @@ export async function POST(req: Request) {
     const scoreboard =
       await fetchJson(
         scoreboardUrl,
-        60
+        0
       );
 
     const wantsStandings =
@@ -586,9 +711,15 @@ export async function POST(req: Request) {
                 competition?.status?.type
                   ?.description ||
                 "",
+              shortName:
+                event?.shortName || "",
               home:
                 home?.team?.displayName ||
                 "",
+              homeName:
+                home?.team?.name || "",
+              homeAbbreviation:
+                home?.team?.abbreviation || "",
               homeId:
                 home?.team?.id || "",
               homeScore:
@@ -596,10 +727,16 @@ export async function POST(req: Request) {
               away:
                 away?.team?.displayName ||
                 "",
+              awayName:
+                away?.team?.name || "",
+              awayAbbreviation:
+                away?.team?.abbreviation || "",
               awayId:
                 away?.team?.id || "",
               awayScore:
                 away?.score || "",
+              situation:
+                competition?.situation || null,
             };
           }
         )
@@ -610,6 +747,53 @@ export async function POST(req: Request) {
         (game: any) =>
           game.easternDate === today
       );
+
+    // -------------------------------------------------------
+    // STEP 14 — LIVE GAME COMPANION
+    // Match the conversation to today's game and pull a fresh
+    // game summary every time the user asks for an update.
+    // -------------------------------------------------------
+
+    const activeGame =
+      pickActiveGame(
+        todaysGames,
+        routingText
+      );
+
+    let liveSummary: any = null;
+
+    if (activeGame?.id) {
+      liveSummary = await fetchJson(
+        `https://site.api.espn.com/apis/site/v2/sports/${selected.sport}/${selected.league}/summary?event=${activeGame.id}`,
+        0
+      );
+    }
+
+    const liveHeader =
+      liveSummary?.header || null;
+
+    const livePlays =
+      Array.isArray(liveSummary?.plays)
+        ? liveSummary.plays.slice(-15)
+        : [];
+
+    const liveBoxscore =
+      liveSummary?.boxscore || null;
+
+    const liveLeaders =
+      liveSummary?.leaders || null;
+
+    const liveDrives =
+      liveSummary?.drives
+        ? {
+            current:
+              liveSummary.drives.current ||
+              null,
+            previous:
+              liveSummary.drives.previous ||
+              null,
+          }
+        : null;
 
     // -------------------------------------------------------
     // DETERMINISTIC MLB IDENTITY ANSWER
@@ -709,7 +893,7 @@ export async function POST(req: Request) {
             process.env.OPENAI_MODEL ||
             "gpt-4o-mini",
           temperature: 0.1,
-          max_tokens: 500,
+          max_tokens: 700,
           messages: [
             {
               role: "system",
@@ -737,6 +921,22 @@ ABSOLUTE RULES:
 - One or two short sentences is normally enough.
 - Do not mention APIs, feeds, ESPN, MLB Stats API, providers,
   websites, search engines, or research mechanics.
+
+LIVE GAME COMPANION MODE:
+- If ACTIVE GAME is supplied, treat it as the game the user is following.
+- Every request is a fresh snapshot of the game right now.
+- Never pretend data is continuously streaming between user messages.
+- For "update me" or "what's happening", give score and exact game state first.
+- For "what happened" or "what just happened", use the newest verified play/event.
+- For baseball, include inning/half, outs, runners/base situation when supplied.
+- For football, include quarter, clock, possession/down/distance when supplied.
+- For basketball/hockey/soccer, include period/half and clock when supplied.
+- If asked about a player's live stat, use LIVE BOXSCORE or LIVE LEADERS only.
+- If the requested live stat is not in the supplied data, say you cannot verify it yet.
+- If the game is final, say it is final.
+- If the game has not started, say that instead of pretending it is live.
+- Do not repeat a full recap when the user asks a short follow-up.
+- Talk like someone watching the game with the user, while staying factually grounded.
               `.trim(),
             },
             {
@@ -744,6 +944,27 @@ ABSOLUTE RULES:
               content: `
 QUESTION:
 ${userQuery}
+
+RECENT SPORTS CONVERSATION:
+${contextText || "None"}
+
+ACTIVE GAME:
+${compact(activeGame, 5000)}
+
+LIVE GAME HEADER:
+${compact(liveHeader, 6500)}
+
+LATEST VERIFIED PLAYS / EVENTS:
+${compact(livePlays, 8500)}
+
+LIVE BOXSCORE:
+${compact(liveBoxscore, 8500)}
+
+LIVE LEADERS:
+${compact(liveLeaders, 4500)}
+
+LIVE DRIVE / POSSESSION:
+${compact(liveDrives, 4500)}
 
 ATHLETE SEARCH:
 ${compact(athleteItem || searchData, 6500)}
@@ -795,6 +1016,8 @@ Answer the actual question only.
       reply,
       league: selected.label,
       games: todaysGames,
+      activeGame,
+      live: Boolean(liveSummary),
       source: "free-current-data",
     });
   } catch (error: any) {
