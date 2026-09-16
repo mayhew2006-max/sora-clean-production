@@ -1305,7 +1305,7 @@ export async function POST(req: Request) {
           model:
             process.env.OPENAI_MODEL ||
             "gpt-4o-mini",
-          temperature: 0.25,
+          temperature: 0.65,
           max_tokens: 1600,
           messages: [
             {
@@ -1407,6 +1407,20 @@ GRACE'S SPORTS PERSONALITY:
 - Sound like someone watching the game beside the user, not a broadcaster,
   customer-service bot, or statistics database.
 - Facts always come before personality.
+
+FINAL LIVE-SPORTS VOICE:
+When ACTIVE GAME exists, the final answer MUST sound like Grace:
+a foul-mouthed, funny, sarcastic Boston bartender watching the game
+beside the user.
+
+Keep normal readable spelling.
+Do not fake the accent in text.
+Sage handles the spoken Boston accent.
+
+Natural profanity is welcome when it fits.
+Do not turn useful game information into generic polite filler.
+Do not recommend another sports app when live data exists.
+
 
 FULL LIVE GAME BOARD:
 When ACTIVE GAME is present, Grace should maintain awareness of the
@@ -1704,133 +1718,321 @@ Answer the actual question only.
     const aiData =
       await aiRes.json();
 
-    let reply =
-      aiData?.choices?.[0]?.message
-        ?.content?.trim() ||
-      "I can't verify that cleanly from the current sports data, so I'm not going to guess.";
+    if (!aiRes.ok) {
+      console.error(
+        "Grace sports formatter failed:",
+        aiRes.status,
+        aiData?.error || aiData
+      );
+    }
 
-    if (
-      activeGame &&
-      reply
-    ) {
-      try {
-        const styleRes = await fetch(
-          "https://api.openai.com/v1/chat/completions",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization:
-                "Bearer " +
-                process.env.OPENAI_API_KEY,
-            },
-            body: JSON.stringify({
-              model:
-                process.env.OPENAI_MODEL ||
-                "gpt-4o-mini",
-              temperature: 0.85,
-              max_tokens: 1600,
-              messages: [
-                {
-                  role: "system",
-                  content: `
-Rewrite the supplied LIVE SPORTS response in Grace's voice.
+    // -------------------------------------------------------
+    // STEP 14 — DETERMINISTIC LIVE-GAME SAFETY NET
+    //
+    // Live facts should NEVER depend on the language model
+    // successfully formatting them.
+    // -------------------------------------------------------
 
-Grace is a foul-mouthed Boston bartender watching the game beside
-the user in a neighborhood bar.
+    const q =
+      userQuery.toLowerCase();
 
-She is:
-- funny
-- sarcastic
-- quick
-- sports-aware
-- naturally profane
-- excited when the game deserves it
-- blunt when something sucks
+    let deterministicLiveReply = "";
 
-This is NOT a broadcaster.
-This is NOT customer service.
-This is NOT a sports database.
+    if (activeGame) {
+      const awayName =
+        activeGame?.away ||
+        activeGame?.awayName ||
+        "Away";
 
-This is specifically a Boston neighborhood bartender watching the
-game on TV with the user.
+      const homeName =
+        activeGame?.home ||
+        activeGame?.homeName ||
+        "Home";
 
-NEVER:
-- tell the user to check another sports app or website when the draft
-  already contains live game information
-- replace useful statistics with jokes
-- forget a player identified in the immediately preceding conversation
-- use British/Australian expressions such as "bloody hell" or "mate"
-- use "jabroni"
-- ask the user to provide information that exists in the draft
+      const awayScore =
+        String(activeGame?.awayScore ?? "");
 
-The rewritten response must remain at least as informative as the draft.
+      const homeScore =
+        String(activeGame?.homeScore ?? "");
 
-IMPORTANT FACT RULE:
-Preserve EVERY factual detail from the draft exactly:
-- score
-- inning
-- quarter
-- clock
-- outs
-- runners
-- down/distance
-- player names
-- statistics
-- plays
-- injuries
-- substitutions
-- pitching changes
-- all numbers
+      const status =
+        String(activeGame?.status || "");
 
-DO NOT invent, modify, exaggerate, remove, or replace factual data.
+      const scoreText =
+        awayScore !== "" &&
+        homeScore !== ""
+          ? `${awayName} ${awayScore}, ${homeName} ${homeScore}`
+          : `${awayName} vs. ${homeName}`;
 
-Do NOT remove useful sports information from the draft.
-Do NOT replace an answer with meta chatter such as:
-"don't leave me hanging",
-"throw me a bone",
-"I don't know what's going on",
-or similar nonsense.
+      const latestText =
+        String(
+          mlbCurrentPlay?.result?.description ||
+          latestLivePlay?.text ||
+          latestLivePlay?.description ||
+          ""
+        ).trim();
 
-If the draft contains a player, stat, score, game state or live event,
-Grace MUST preserve and answer with it.
+      // =====================================================
+      // MLB — DEEP LIVE FALLBACK
+      // =====================================================
 
-Do NOT use fake phonetic Boston spelling.
-Use normal readable English.
-The TTS voice supplies the actual accent.
+      if (selected.league === "mlb") {
+        const pitcherName =
+          String(
+            mlbCurrentPitcher?.fullName ||
+            mlbCurrentPitcher?.name ||
+            ""
+          ).trim();
 
-Natural swearing and bar-style reactions are welcome where they fit.
+        const batterName =
+          String(
+            mlbCurrentBatter?.fullName ||
+            mlbCurrentBatter?.name ||
+            ""
+          ).trim();
 
-Output only Grace's rewritten response.
-                  `.trim(),
-                },
-                {
-                  role: "user",
-                  content: reply,
-                },
-              ],
-            }),
-          }
-        );
+        const ps =
+          mlbCurrentPitcherStats || {};
 
-        if (styleRes.ok) {
-          const styleData =
-            await styleRes.json();
+        const pitcherParts = [];
 
-          const styled =
-            styleData?.choices?.[0]
-              ?.message?.content?.trim();
+        if (ps?.inningsPitched != null)
+          pitcherParts.push(
+            `${ps.inningsPitched} IP`
+          );
 
-          if (styled) {
-            reply = styled;
-          }
+        if (ps?.hits != null)
+          pitcherParts.push(
+            `${ps.hits} H`
+          );
+
+        if (ps?.runs != null)
+          pitcherParts.push(
+            `${ps.runs} R`
+          );
+
+        if (ps?.earnedRuns != null)
+          pitcherParts.push(
+            `${ps.earnedRuns} ER`
+          );
+
+        if (ps?.baseOnBalls != null)
+          pitcherParts.push(
+            `${ps.baseOnBalls} BB`
+          );
+
+        if (ps?.strikeOuts != null)
+          pitcherParts.push(
+            `${ps.strikeOuts} K`
+          );
+
+        if (ps?.pitchesThrown != null)
+          pitcherParts.push(
+            `${ps.pitchesThrown} pitches`
+          );
+
+        if (ps?.strikes != null)
+          pitcherParts.push(
+            `${ps.strikes} strikes`
+          );
+
+        const pitcherLine =
+          pitcherParts.join(", ");
+
+        const inning =
+          mlbLinescore?.currentInning;
+
+        const half =
+          String(
+            mlbLinescore?.inningHalf ||
+            mlbLinescore?.isTopInning
+              ? "top"
+              : ""
+          );
+
+        const inningState =
+          inning
+            ? `${mlbLinescore?.inningHalf || ""} ${inning}`.trim()
+            : status;
+
+        const outs =
+          mlbLinescore?.outs;
+
+        const offense =
+          mlbLinescore?.offense || {};
+
+        const runners = [];
+
+        if (offense?.first)
+          runners.push("first");
+
+        if (offense?.second)
+          runners.push("second");
+
+        if (offense?.third)
+          runners.push("third");
+
+        const runnerText =
+          runners.length
+            ? `Runners on ${runners.join(" and ")}.`
+            : "Bases empty.";
+
+        const awayLine =
+          mlbLinescore?.teams?.away ||
+          {};
+
+        const homeLine =
+          mlbLinescore?.teams?.home ||
+          {};
+
+        const rhe =
+          (
+            awayLine?.runs != null ||
+            homeLine?.runs != null
+          )
+            ? `${awayName}: ${awayLine?.runs ?? awayScore} R, ${awayLine?.hits ?? "?"} H, ${awayLine?.errors ?? "?"} E. ` +
+              `${homeName}: ${homeLine?.runs ?? homeScore} R, ${homeLine?.hits ?? "?"} H, ${homeLine?.errors ?? "?"} E.`
+            : "";
+
+        const gameState = [
+          scoreText,
+          inningState,
+          outs != null
+            ? `${outs} out${outs === 1 ? "" : "s"}`
+            : "",
+        ]
+          .filter(Boolean)
+          .join(" — ");
+
+        // -----------------------------
+        // WHO'S PITCHING
+        // -----------------------------
+
+        if (
+          /who'?s pitching|who is pitching/.test(q)
+        ) {
+          deterministicLiveReply =
+            pitcherName
+              ? `${pitcherName} is pitching right now.${
+                  pitcherLine
+                    ? ` His line: ${pitcherLine}.`
+                    : ""
+                } ${gameState}.`
+              : `I have ${gameState}, but the current pitcher isn't identified in the live data yet.`;
         }
-      } catch {
-        // Keep the verified factual response if style pass fails.
+
+        // -----------------------------
+        // HIS LINE / PITCHING LINE
+        // -----------------------------
+
+        else if (
+          /his line|pitching line|how.*pitcher|how.*he doing|how many k|strikeouts|pitch count/.test(q)
+        ) {
+          deterministicLiveReply =
+            pitcherName && pitcherLine
+              ? `${pitcherName}: ${pitcherLine}. ${gameState}.`
+              : pitcherName
+                ? `${pitcherName} is pitching, but his complete live pitching line isn't populated yet. ${gameState}.`
+                : `The current pitching line isn't identified yet. ${gameState}.`;
+        }
+
+        // -----------------------------
+        // WHAT JUST HAPPENED
+        // -----------------------------
+
+        else if (
+          /what just happened|what happened|what happened now/.test(q)
+        ) {
+          deterministicLiveReply =
+            latestText
+              ? `${latestText} ${gameState}.`
+              : `${gameState}. ${runnerText}`;
+        }
+
+        // -----------------------------
+        // WHOLE DAMN GAME
+        // -----------------------------
+
+        else {
+          const pieces = [
+            `Alright, here's the damn game: ${gameState}.`,
+            rhe,
+            pitcherName
+              ? `On the mound: ${pitcherName}${pitcherLine ? ` — ${pitcherLine}` : ""}.`
+              : "",
+            batterName
+              ? `At the plate: ${batterName}.`
+              : "",
+            outs != null
+              ? `${outs} out${outs === 1 ? "" : "s"}. ${runnerText}`
+              : runnerText,
+            latestText
+              ? `Latest: ${latestText}`
+              : "",
+          ]
+            .filter(Boolean)
+            .join(" ");
+
+          deterministicLiveReply =
+            pieces.trim();
+        }
+      }
+
+      // =====================================================
+      // ALL OTHER LIVE SPORTS
+      // =====================================================
+
+      else {
+        const latest =
+          String(
+            latestLivePlay?.text ||
+            latestLivePlay?.description ||
+            ""
+          ).trim();
+
+        const pieces = [
+          `Alright, here's the damn game: ${scoreText}${status ? ` — ${status}` : ""}.`,
+          latest
+            ? `Latest: ${latest}`
+            : "",
+        ];
+
+        deterministicLiveReply =
+          pieces
+            .filter(Boolean)
+            .join(" ");
       }
     }
 
-    return Response.json({
+    let reply =
+      aiData?.choices?.[0]?.message
+        ?.content?.trim() ||
+      deterministicLiveReply ||
+      "I can't verify that cleanly from the current sports data, so I'm not going to guess.";
+
+    // If the model gives us one of the useless refusal-style answers
+    // despite having a verified active game, replace it with the
+    // deterministic live response.
+    if (
+      activeGame &&
+      deterministicLiveReply &&
+      (
+        /check.*sports app/i.test(reply) ||
+        /check.*website/i.test(reply) ||
+        /couldn'?t find.*live/i.test(reply) ||
+        /cannot find.*live/i.test(reply) ||
+        /can't verify/i.test(reply) ||
+        /cannot verify/i.test(reply) ||
+        /not able to find/i.test(reply) ||
+        /not going to guess/i.test(reply)
+      )
+    ) {
+      reply =
+        deterministicLiveReply;
+    }
+
+   
+ return Response.json({
       reply,
       league: selected.label,
       games: todaysGames,
