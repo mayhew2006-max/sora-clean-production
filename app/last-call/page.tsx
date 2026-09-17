@@ -154,18 +154,24 @@ export default function LastCallPage() {
         <div className="absolute left-0 right-0 top-28 h-px bg-[#75452b]/60" />
         <div className="absolute left-0 right-0 top-44 h-px bg-[#75452b]/40" />
 
-        {/* FAKE BAR SHELVES */}
-        <div className="absolute left-5 right-5 top-32 flex justify-around opacity-60 text-2xl">
-          <span>🍾</span>
-          <span>🍷</span>
-          <span>🥃</span>
-          <span>🍾</span>
-          <span>🥂</span>
-          <span>🥃</span>
-          <span>🍷</span>
+        {/* BAR SHELVES */}
+        <div className="absolute left-5 right-5 top-32 opacity-70">
+          <div className="h-[2px] bg-[#8a5738]" />
+
+          <div className="flex h-16 items-end justify-around px-3">
+            <div className="h-11 w-4 rounded-t-md bg-[#5f3f28] border border-[#b27c53]/40" />
+            <div className="h-14 w-5 rounded-t-md bg-[#3b241a] border border-[#b27c53]/40" />
+            <div className="h-9 w-5 rounded-t-md bg-[#78422b] border border-[#b27c53]/40" />
+            <div className="h-16 w-4 rounded-t-md bg-[#45291d] border border-[#b27c53]/40" />
+            <div className="h-12 w-6 rounded-t-md bg-[#6d4931] border border-[#b27c53]/40" />
+            <div className="h-10 w-4 rounded-t-md bg-[#392219] border border-[#b27c53]/40" />
+            <div className="h-15 w-5 rounded-t-md bg-[#744a30] border border-[#b27c53]/40" />
+          </div>
+
+          <div className="h-[3px] bg-gradient-to-r from-[#4a2819] via-[#a2643c] to-[#4a2819] shadow-lg" />
         </div>
 
-        <div className="relative z-10 px-4 pb-28 pt-5">
+        <div className="relative z-10 px-4 pb-44 pt-5">
 
           {/* HEADER */}
           <div className="flex items-start justify-between">
@@ -206,7 +212,7 @@ export default function LastCallPage() {
           {/* GRACE BAR SCENE */}
           <div className="relative mt-4 overflow-hidden rounded-[28px] border border-[#835234] bg-black/35 shadow-2xl">
 
-            <div className="relative h-[340px] overflow-hidden">
+            <div className="relative h-[395px] overflow-hidden">
 
               <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_30%,rgba(239,157,90,0.22),transparent_38%),linear-gradient(to_bottom,rgba(64,33,20,0.25),rgba(10,5,4,0.94))]" />
 
@@ -224,24 +230,29 @@ export default function LastCallPage() {
                 Welcome Here
               </div>
 
-              {/* GRACE */}
-              <div className="absolute bottom-12 left-1/2 w-[235px] -translate-x-1/2">
-                <div className="overflow-hidden rounded-t-[110px] border-x-4 border-t-4 border-[#c48657] bg-[#2a1710] shadow-[0_0_45px_rgba(219,134,73,0.25)]">
+              {/* GRACE BEHIND THE BAR */}
+              <div className="absolute bottom-8 left-1/2 w-[285px] -translate-x-1/2">
+                <div className="relative overflow-hidden rounded-t-[145px] bg-[#24130d] shadow-[0_0_70px_rgba(220,132,71,0.25)]">
+                  <div className="absolute inset-0 z-10 bg-gradient-to-b from-transparent via-transparent to-[#24130d]/80 pointer-events-none" />
+
                   <img
                     src="/grace-avatar.png"
                     alt="Grace"
-                    className="h-[235px] w-full object-cover object-top"
+                    className="h-[285px] w-full object-cover object-top scale-[1.03]"
                   />
-                </div>
-
-                <div className="bg-[#351b12] py-2 text-center text-sm font-black uppercase tracking-[0.25em] text-[#f1c6a3]">
-                  Grace
                 </div>
               </div>
 
               {/* BAR COUNTER */}
-              <div className="absolute bottom-0 left-0 right-0 h-16 border-t-4 border-[#8b5a37] bg-gradient-to-b from-[#4e2c1c] to-[#24130d] shadow-[0_-10px_30px_rgba(0,0,0,0.6)]">
-                <div className="absolute inset-x-0 top-2 h-1 bg-[#9f6942]/60" />
+              <div className="absolute bottom-0 left-0 right-0 z-20 h-20 border-t-4 border-[#a06a43] bg-gradient-to-b from-[#5b351f] via-[#3d2115] to-[#1b0d08] shadow-[0_-18px_35px_rgba(0,0,0,0.72)]">
+                <div className="absolute inset-x-0 top-2 h-[3px] bg-[#bc7a4c]/50" />
+
+                <div className="absolute left-6 top-4 h-8 w-8 rounded-full border border-white/10 bg-[#d39a5c]/20" />
+                <div className="absolute right-7 top-5 h-9 w-7 rounded-b-lg border border-white/10 bg-[#d39a5c]/15" />
+
+                <div className="absolute bottom-2 left-0 right-0 text-center text-[10px] font-black uppercase tracking-[0.35em] text-[#cf9e79]">
+                  Grace's Bar
+                </div>
               </div>
             </div>
 
@@ -258,7 +269,7 @@ export default function LastCallPage() {
           </div>
 
           {/* CUSTOMER */}
-          <div className="mt-4 rounded-3xl border border-white/10 bg-black/45 p-4 shadow-xl">
+          <div className="mt-4 rounded-3xl border border-[#744a31] bg-gradient-to-b from-[#24140e] to-black/70 p-4 shadow-xl">
             <div className="flex items-center gap-3">
 
               <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border-2 border-[#c18a61] bg-[#3b251a] text-xl font-black">
@@ -375,7 +386,7 @@ export default function LastCallPage() {
         </div>
 
         {/* FIXED GAME HUD */}
-        <div className="fixed bottom-0 left-1/2 z-30 flex w-full max-w-md -translate-x-1/2 items-end justify-between border-t border-[#68452e] bg-[#0d0806]/95 px-4 pb-3 pt-2 backdrop-blur">
+        <div className="fixed bottom-0 left-1/2 z-30 flex w-full max-w-md -translate-x-1/2 items-end justify-between border-t border-[#68452e] bg-[#0d0806]/95 px-4 pb-5 pt-3 backdrop-blur-xl shadow-[0_-15px_40px_rgba(0,0,0,0.75)]">
 
           <div className="w-12 text-center text-[9px] uppercase text-[#c8a58e]">
             📍
