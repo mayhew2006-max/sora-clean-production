@@ -1160,17 +1160,10 @@ export default function GraceChat() {
         selected.map((file) => compressImage(file))
       );
 
-      // Keep up to 4 active screenshots/photos.
-      // New uploads add to the current batch instead of replacing it.
-      const existingImages =
-        imagesRef.current.length
-          ? imagesRef.current
-          : images;
-
-      const activeImages = [
-        ...existingImages,
-        ...converted,
-      ].slice(-4);
+      // A new upload becomes Grace's new active visual context.
+      // Multiple images selected together are still kept as one batch.
+      const activeImages =
+        converted.slice(-4);
 
       imagesRef.current = activeImages;
       setImages(activeImages);
@@ -2306,6 +2299,10 @@ function isMarketplaceQuery(text: string) {
       "tell me what you notice",
       "look at this",
       "look at that",
+      "is this",
+      "does this",
+      "would this",
+      "can this",
       "what is this",
       "what's this",
       "what is that",
@@ -2531,8 +2528,7 @@ function isMarketplaceQuery(text: string) {
       (
         isSportsScreenshotRequest(clean) ||
         shouldUseSportsAnalysis(clean) ||
-        shouldUseSportsQuery(clean) ||
-        hasRecentSportsContext(clean)
+        shouldUseSportsQuery(clean)
       )
     ) {
       await runGraceSportsAnalysis(clean);
@@ -2929,48 +2925,28 @@ function isMarketplaceQuery(text: string) {
   }
 
   function runDealCheck(customPrompt?: string) {
-    const attachedImages = imagesRef.current.length ? imagesRef.current : images;
+    const attachedImages =
+      imagesRef.current.length
+        ? imagesRef.current
+        : images;
 
-    const prompt = `
-Deal Check Mode.
+    const actualUserRequest =
+      (
+        customPrompt ||
+        input ||
+        (
+          attachedImages.length > 0
+            ? "Is this a good deal?"
+            : "Help me evaluate this deal."
+        )
+      ).trim();
 
-The user wants to know if something looks like a good deal.
-
-Use any attached marketplace screenshot/photo and the user's text.
-
-User request:
-${customPrompt || input || "Analyze this listing/photo and tell me if it looks like a good deal."}
-
-Give the answer in this structure:
-
-1. Quick Verdict:
-Good deal / Fair deal / Risky deal / Bad deal / Not enough information.
-
-2. What I can see:
-Describe the visible item, condition, listing details, price if visible, and anything important in the photo.
-
-3. Estimated fair value:
-Give a practical estimated fair price range if possible.
-If you cannot verify current market pricing from the photo alone, say so clearly and recommend using Grace Web Search for current comps.
-
-4. Red flags:
-List visible concerns, missing information, suspicious details, condition issues, or things that need verification.
-
-5. Questions to ask the seller:
-Give specific questions the buyer should ask.
-
-6. Negotiation advice:
-Suggest a reasonable offer, a max price, and a walk-away point if enough information exists.
-
-7. Next move:
-Tell the user what to do before buying.
-
-Be practical, direct, and useful.
-Do not pretend certainty.
-Do not say you cannot see the photo if images are attached.
-`.trim();
-
-    runGraceTool(prompt, "Deal Check");
+    // Only the REAL user request appears in chat.
+    // Deal Check instructions stay hidden inside /api/tools.
+    runGraceTool(
+      actualUserRequest,
+      "Deal Check"
+    );
   }
 
  const quickActions = [
