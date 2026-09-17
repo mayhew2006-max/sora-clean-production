@@ -1936,9 +1936,17 @@ Only use business/report fields when the user specifically requests a report or 
     ];
 
     if (
-      sportsWords.some((word) =>
-        clean.includes(word)
-      )
+      sportsWords.some((word) => {
+        const escaped = word.replace(
+          /[.*+?^${}()|[\]\\]/g,
+          "\\$&"
+        );
+
+        return new RegExp(
+          `(^|[^a-z0-9])${escaped}(?=$|[^a-z0-9])`,
+          "i"
+        ).test(clean);
+      })
     ) {
       return true;
     }
