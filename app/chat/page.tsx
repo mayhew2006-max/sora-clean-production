@@ -1136,9 +1136,19 @@ export default function GraceChat() {
       "do not reuse",
     ];
 
-    return sportsWords.some((word) =>
-      clean.includes(word)
-    );
+    return sportsWords.some((word) => {
+      // Match real sports words/phrases only.
+      // Example: "pra" must match "PRA",
+      // not the letters inside "sprayer".
+      const escaped = word
+        .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+        .replace(/\\ /g, "\\s+");
+
+      return new RegExp(
+        `(^|\\W)${escaped}(?=$|\\W)`,
+        "i"
+      ).test(clean);
+    });
   }
 
  async function handleImages(files: FileList | null) {
