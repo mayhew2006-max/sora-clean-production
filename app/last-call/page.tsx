@@ -236,7 +236,7 @@ export default function LastCallPage() {
                   <div className="absolute inset-0 z-10 bg-gradient-to-b from-transparent via-transparent to-[#24130d]/80 pointer-events-none" />
 
                   <img
-                    src="/grace-avatar.png"
+                    src="/last-call-bar.png"
                     alt="Grace"
                     className="h-[285px] w-full object-cover object-top scale-[1.03]"
                   />
