@@ -4,8 +4,6 @@ import { createClient } from "@supabase/supabase-js";
 
 export const dynamic = "force-dynamic";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "");
-
 function getSupabaseAdmin() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL || "",
@@ -26,6 +24,17 @@ export async function POST(req: NextRequest) {
         { status: 401 }
       );
     }
+
+    const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+
+    if (!stripeSecretKey) {
+      return NextResponse.json(
+        { error: "Checkout is not configured in this environment." },
+        { status: 503 }
+      );
+    }
+
+    const stripe = new Stripe(stripeSecretKey);
 
     const supabaseAdmin = getSupabaseAdmin();
 
