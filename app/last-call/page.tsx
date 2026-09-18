@@ -5,7 +5,6 @@ import { useState } from "react";
 const encounters = [
   {
     customer: "Tony",
-    initials: "T",
     mood: "Recently homeless. Again.",
     problem:
       "Grace, my wife kicked me out again. She says I spend too much time here.",
@@ -14,21 +13,19 @@ const encounters = [
   },
   {
     customer: "Mikey",
-    initials: "M",
-    mood: "Definitely about to buy something stupid.",
+    mood: "About to make another terrible financial decision.",
     problem:
       "Some guy outside says he'll sell me his truck for $2,000 cash tonight.",
     grace:
-      "Two grand and he needs the money tonight? Oh good. Nothing suspicious about that shit at all.",
+      "Two grand cash tonight? Oh yeah, nothing suspicious about that shit whatsoever.",
   },
   {
     customer: "Deb",
-    initials: "D",
-    mood: "One text away from another disaster.",
+    mood: "One text away from disaster.",
     problem:
-      "My ex just texted me at midnight asking if I'm awake.",
+      "My ex just texted me asking if I'm awake.",
     grace:
-      "Nope. Absolutely the fuck not. Put the phone down before we add another disaster to tonight's tab.",
+      "Nope. Put the goddamn phone down, Deb. We've already got enough bad decisions in this building.",
   },
 ];
 
@@ -38,264 +35,348 @@ export default function LastCallPage() {
   const [reputation, setReputation] = useState(42);
   const [actions, setActions] = useState(50);
 
-  const [gameMessage, setGameMessage] = useState(
-    "Doors are open. Try not to burn the place down."
-  );
-
   const [playerInput, setPlayerInput] = useState("");
   const [playerLine, setPlayerLine] = useState("");
 
+  const [graceReply, setGraceReply] = useState(
+    encounters[0].grace
+  );
+
+  const [customerMood, setCustomerMood] = useState(
+    encounters[0].mood
+  );
+
+  const [gameMessage, setGameMessage] = useState(
+    "Doors are open. Let's see what kinda bullshit walks in tonight."
+  );
+
+  const [thinking, setThinking] = useState(false);
+  const [voiceOn, setVoiceOn] = useState(true);
+
   const encounter = encounters[encounterIndex];
 
-  function spendAction() {
+  async function speakGrace(text: string) {
+    if (!voiceOn || !text.trim()) return;
+
+    try {
+      const res = await fetch("/api/speak", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ text }),
+      });
+
+      if (!res.ok) return;
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+
+      audio.onended = () => {
+        URL.revokeObjectURL(url);
+      };
+
+      await audio.play();
+    } catch {
+      console.log("Last Call voice playback failed");
+    }
+  }
+
+  function useAction() {
     if (actions <= 0) {
-      setGameMessage(
-        "You're outta Grace actions, boss. Apparently even my sparkling personality has operating costs. 😂"
-      );
+      const reply =
+        "That's it, boss. You're outta Grace actions for tonight.";
+
+      setGraceReply(reply);
+      speakGrace(reply);
       return false;
     }
 
-    setActions((value) => value - 1);
+    setActions((v) => v - 1);
     return true;
   }
 
-  function takeAction(type: string) {
-    if (!spendAction()) return;
+  function quickAction(
+    type: "roast" | "drink" | "advice" | "listen"
+  ) {
+    if (!useAction()) return;
 
     setPlayerLine("");
 
+    let reply = "";
+    let result = "";
+
     if (type === "roast") {
-      setReputation((value) => value + 2);
-      setGameMessage(
-        `${encounter.customer} looks offended. Grace looks absolutely delighted. Reputation +2.`
-      );
+      reply =
+        `Jesus Christ, ${encounter.customer}, I've seen smarter decisions written on bathroom walls.`;
+      setReputation((v) => v + 2);
+      result = "Reputation +2";
     }
 
     if (type === "drink") {
-      setCash((value) => value + 8);
-      setGameMessage(
-        `${encounter.customer} buys another round. Cash +$8. Problem solved? No. Profitable? Absolutely.`
-      );
+      reply =
+        "Now you're thinkin'. Problems don't disappear, but eight bucks is eight bucks.";
+      setCash((v) => v + 8);
+      result = "Cash +$8";
     }
 
     if (type === "advice") {
-      setReputation((value) => value + 1);
-      setGameMessage(
-        `Against all odds, Grace gives ${encounter.customer} responsible advice. Reputation +1.`
-      );
+      reply =
+        `Alright ${encounter.customer}, here's a wild idea: maybe don't make the exact same dumbass decision again.`;
+      setReputation((v) => v + 1);
+      result = "Reputation +1";
     }
 
     if (type === "listen") {
-      setGameMessage(
-        `You let ${encounter.customer} keep talking. Grace gives you the exact look of a woman questioning your leadership.`
-      );
+      reply =
+        "Fine. Keep talkin'. I already regret agreeing to this.";
+      result = "Grace hears them out.";
     }
+
+    setGraceReply(reply);
+    setGameMessage(result);
+    speakGrace(reply);
   }
 
-  function talkToGrace() {
+  async function talkToGrace() {
     const line = playerInput.trim();
-    if (!line) return;
-    if (!spendAction()) return;
+
+    if (!line || thinking) return;
+    if (!useAction()) return;
 
     setPlayerLine(line);
     setPlayerInput("");
+    setThinking(true);
+    setGraceReply("Hold on, I'm thinkin'...");
 
-    const lower = line.toLowerCase();
+    try {
+      const res = await fetch("/api/last-call", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          playerText: line,
+          customer: encounter.customer,
+          problem: encounter.problem,
+          mood: customerMood,
+          previousGraceReply: graceReply,
+          cash,
+          reputation,
+        }),
+      });
 
-    if (lower.includes("throw") || lower.includes("kick him out")) {
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(
+          data?.error || "Grace hit a glitch."
+        );
+      }
+
+      const reply =
+        String(data?.reply || "").trim() ||
+        "Jesus Christ, my brain just took the night off.";
+
+      const cashDelta = Number(data?.cashDelta) || 0;
+      const repDelta = Number(data?.repDelta) || 0;
+
+      setGraceReply(reply);
+
+      if (data?.mood) {
+        setCustomerMood(String(data.mood));
+      }
+
+      if (cashDelta !== 0) {
+        setCash((v) => Math.max(0, v + cashDelta));
+      }
+
+      if (repDelta !== 0) {
+        setReputation((v) =>
+          Math.max(0, v + repDelta)
+        );
+      }
+
+      const effects = [];
+
+      if (cashDelta > 0) {
+        effects.push(`Cash +$${cashDelta}`);
+      }
+
+      if (cashDelta < 0) {
+        effects.push(`Cash -$${Math.abs(cashDelta)}`);
+      }
+
+      if (repDelta > 0) {
+        effects.push(`Reputation +${repDelta}`);
+      }
+
+      if (repDelta < 0) {
+        effects.push(
+          `Reputation -${Math.abs(repDelta)}`
+        );
+      }
+
       setGameMessage(
-        `Grace: "Jesus Christ. I was gonna charge ${encounter.customer} double, but apparently we're doing felonies tonight."`
+        effects.length
+          ? effects.join(" • ")
+          : "The conversation continues."
       );
-      return;
-    }
 
-    if (
-      lower.includes("drink") ||
-      lower.includes("beer") ||
-      lower.includes("shot")
-    ) {
-      setCash((value) => value + 8);
+      speakGrace(reply);
+    } catch (error: any) {
+      const reply =
+        "Ah, fuck. Something glitched. Say that again.";
+
+      setGraceReply(reply);
       setGameMessage(
-        `Grace: "Now you're thinkin'. Bad decisions pay the electric bill." Cash +$8.`
+        error?.message || "Grace hit a glitch."
       );
-      return;
+    } finally {
+      setThinking(false);
     }
-
-    if (
-      lower.includes("help") ||
-      lower.includes("advice") ||
-      lower.includes("talk")
-    ) {
-      setReputation((value) => value + 1);
-      setGameMessage(
-        `Grace: "Look at you bein' emotionally responsible and shit. I'm almost proud." Reputation +1.`
-      );
-      return;
-    }
-
-    setGameMessage(
-      `Grace: "Alright, boss. '${line}' is apparently the plan. This oughta be a fuckin' adventure."`
-    );
   }
 
   function nextCustomer() {
-    setEncounterIndex((value) => (value + 1) % encounters.length);
+    const next =
+      (encounterIndex + 1) % encounters.length;
+
+    setEncounterIndex(next);
+    setCustomerMood(encounters[next].mood);
+    setGraceReply(encounters[next].grace);
     setPlayerLine("");
-    setGameMessage("The door opens. Here comes another goddamn problem.");
+    setPlayerInput("");
+    setGameMessage(
+      "The door opens. Here comes another goddamn problem."
+    );
   }
 
   return (
-    <main className="min-h-[100dvh] bg-[#090706] text-[#fff7ed] overflow-x-hidden">
-      <div className="relative mx-auto min-h-[100dvh] max-w-md overflow-hidden bg-[#170d09] shadow-2xl">
+    <main
+      className="bg-[#070910] text-white"
+      style={{
+        height: "100dvh",
+        overflowY: "scroll",
+        overflowX: "hidden",
+      }}
+    >
+      <div className="mx-auto w-full max-w-md min-h-full bg-[#0b0d15]">
 
-        {/* BAR ATMOSPHERE */}
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_15%,rgba(215,123,58,0.26),transparent_32%),radial-gradient(circle_at_10%_45%,rgba(146,38,33,0.24),transparent_32%),linear-gradient(to_bottom,#25140d_0%,#120a07_62%,#050303_100%)]" />
-
-        <div className="absolute left-0 right-0 top-28 h-px bg-[#75452b]/60" />
-        <div className="absolute left-0 right-0 top-44 h-px bg-[#75452b]/40" />
-
-        {/* BAR SHELVES */}
-        <div className="absolute left-5 right-5 top-32 opacity-70">
-          <div className="h-[2px] bg-[#8a5738]" />
-
-          <div className="flex h-16 items-end justify-around px-3">
-            <div className="h-11 w-4 rounded-t-md bg-[#5f3f28] border border-[#b27c53]/40" />
-            <div className="h-14 w-5 rounded-t-md bg-[#3b241a] border border-[#b27c53]/40" />
-            <div className="h-9 w-5 rounded-t-md bg-[#78422b] border border-[#b27c53]/40" />
-            <div className="h-16 w-4 rounded-t-md bg-[#45291d] border border-[#b27c53]/40" />
-            <div className="h-12 w-6 rounded-t-md bg-[#6d4931] border border-[#b27c53]/40" />
-            <div className="h-10 w-4 rounded-t-md bg-[#392219] border border-[#b27c53]/40" />
-            <div className="h-15 w-5 rounded-t-md bg-[#744a30] border border-[#b27c53]/40" />
-          </div>
-
-          <div className="h-[3px] bg-gradient-to-r from-[#4a2819] via-[#a2643c] to-[#4a2819] shadow-lg" />
-        </div>
-
-        <div className="relative z-10 px-4 pb-44 pt-5">
-
-          {/* HEADER */}
+        {/* HEADER */}
+        <header className="px-5 pt-6 pb-4">
           <div className="flex items-start justify-between">
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.35em] text-[#c89a73]">
-                Volume One
-              </p>
 
-              <h1 className="text-4xl font-black italic leading-none tracking-tight">
+            <div>
+              <div className="text-[10px] uppercase tracking-[0.4em] text-[#9296a2]">
+                Volume One
+              </div>
+
+              <h1 className="mt-1 text-4xl font-black italic leading-none">
                 LAST CALL
               </h1>
 
-              <div className="text-xl font-black text-[#e05d55]">
+              <div className="mt-1 text-xl font-black text-[#df5c62]">
                 with Grace
               </div>
             </div>
 
-            <div className="space-y-1 text-right text-sm font-black">
-              <div className="rounded-full bg-black/55 px-3 py-1">
-                💵 ${cash}
-              </div>
-
-              <div className="rounded-full bg-black/55 px-3 py-1">
-                👑 REP {reputation}
-              </div>
+            <div className="space-y-2 text-right font-black">
+              <div>💵 ${cash}</div>
+              <div>👑 REP {reputation}</div>
             </div>
           </div>
 
-          {/* NIGHT STATUS */}
-          <div className="mt-5 flex items-center justify-between text-xs font-bold uppercase tracking-widest text-[#d8b495]">
-            <span>Saturday • 9:17 PM</span>
+          <div className="mt-5 flex items-center justify-between rounded-xl border border-white/10 px-3 py-3">
+            <span className="text-xs font-black tracking-wider">
+              SATURDAY • 9:17 PM
+            </span>
 
-            <span className="rounded-full border border-[#866046] bg-black/45 px-3 py-1">
-              🍺 Bar Open
+            <span className="rounded-full border border-green-800 px-3 py-1 text-xs font-black">
+              🍺 BAR OPEN
             </span>
           </div>
+        </header>
 
-          {/* GRACE BAR SCENE */}
-          <div className="relative mt-4 overflow-hidden rounded-[28px] border border-[#835234] bg-black/35 shadow-2xl">
+        {/* BAR SCENE */}
+        <section className="relative overflow-hidden border-y border-white/10">
 
-            <div className="relative h-[395px] overflow-hidden">
+          <img
+            src="/last-call-bar.png"
+            alt="Grace behind the bar"
+            className="h-[330px] w-full object-cover object-center"
+          />
 
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_30%,rgba(239,157,90,0.22),transparent_38%),linear-gradient(to_bottom,rgba(64,33,20,0.25),rgba(10,5,4,0.94))]" />
-
-              <div className="absolute left-4 top-5 rounded-xl border border-[#845331]/60 bg-black/45 px-3 py-2 text-[10px] uppercase tracking-widest text-[#d0aa8e]">
-                Boston, MA
-                <br />
-                Same People.
-                <br />
-                Different Problems.
-              </div>
-
-              <div className="absolute right-4 top-6 rotate-2 rounded-lg border border-[#68452f] bg-[#21120c]/90 px-3 py-2 text-center text-[10px] font-bold uppercase tracking-wider text-[#d9b08d]">
-                Bad Decisions
-                <br />
-                Welcome Here
-              </div>
-
-              {/* GRACE BEHIND THE BAR */}
-              <div className="absolute bottom-8 left-1/2 w-[285px] -translate-x-1/2">
-                <div className="relative overflow-hidden rounded-t-[145px] bg-[#24130d] shadow-[0_0_70px_rgba(220,132,71,0.25)]">
-                  <div className="absolute inset-0 z-10 bg-gradient-to-b from-transparent via-transparent to-[#24130d]/80 pointer-events-none" />
-
-                  <img
-                    src="/last-call-bar.png"
-                    alt="Grace"
-                    className="h-[285px] w-full object-cover object-top scale-[1.03]"
-                  />
-                </div>
-              </div>
-
-              {/* BAR COUNTER */}
-              <div className="absolute bottom-0 left-0 right-0 z-20 h-20 border-t-4 border-[#a06a43] bg-gradient-to-b from-[#5b351f] via-[#3d2115] to-[#1b0d08] shadow-[0_-18px_35px_rgba(0,0,0,0.72)]">
-                <div className="absolute inset-x-0 top-2 h-[3px] bg-[#bc7a4c]/50" />
-
-                <div className="absolute left-6 top-4 h-8 w-8 rounded-full border border-white/10 bg-[#d39a5c]/20" />
-                <div className="absolute right-7 top-5 h-9 w-7 rounded-b-lg border border-white/10 bg-[#d39a5c]/15" />
-
-                <div className="absolute bottom-2 left-0 right-0 text-center text-[10px] font-black uppercase tracking-[0.35em] text-[#cf9e79]">
-                  Grace's Bar
-                </div>
-              </div>
-            </div>
-
-            {/* GRACE DIALOG */}
-            <div className="border-t border-[#75472e] bg-[#170d09]/95 p-4">
-              <div className="text-[10px] font-black uppercase tracking-[0.25em] text-[#e28c61]">
-                Grace
-              </div>
-
-              <div className="mt-1 text-[17px] font-semibold leading-relaxed">
-                “{encounter.grace}”
-              </div>
-            </div>
+          <div className="absolute left-3 top-3 rounded-xl bg-black/75 px-3 py-2 text-[10px] font-bold uppercase tracking-wider">
+            Boston, MA
+            <br />
+            Same people.
+            <br />
+            Different problems.
           </div>
 
-          {/* CUSTOMER */}
-          <div className="mt-4 rounded-3xl border border-[#744a31] bg-gradient-to-b from-[#24140e] to-black/70 p-4 shadow-xl">
-            <div className="flex items-center gap-3">
+          <div className="absolute right-3 top-3 rounded-xl bg-black/75 px-3 py-2 text-[10px] font-bold uppercase tracking-wider">
+            Bad decisions
+            <br />
+            welcome here.
+          </div>
+        </section>
 
-              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border-2 border-[#c18a61] bg-[#3b251a] text-xl font-black">
-                {encounter.initials}
-              </div>
+        {/* GRACE */}
+        <section className="border-b border-white/10 bg-[#171018] px-5 py-4">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-black uppercase tracking-[0.25em] text-[#e66b6f]">
+              Grace
+            </span>
 
+            <button
+              onClick={() =>
+                setVoiceOn((v) => !v)
+              }
+              className="rounded-full border border-white/10 px-3 py-1 text-xs"
+            >
+              {voiceOn
+                ? "🔊 Sage On"
+                : "🔇 Sage Off"}
+            </button>
+          </div>
+
+          <p className="mt-2 text-[17px] font-semibold leading-7">
+            “{graceReply}”
+          </p>
+        </section>
+
+        {/* CUSTOMER */}
+        <section className="px-5 pt-5">
+          <div className="rounded-3xl border border-white/10 bg-[#13151d] p-4">
+
+            <div className="flex items-start justify-between">
               <div>
                 <div className="font-black uppercase tracking-wider">
                   {encounter.customer}
                 </div>
 
-                <div className="text-xs text-[#bfa28e]">
-                  {encounter.mood}
+                <div className="mt-1 text-xs text-[#a6a8b0]">
+                  {customerMood}
                 </div>
               </div>
+
+              <button
+                onClick={nextCustomer}
+                className="rounded-full border border-white/10 px-3 py-2 text-xs font-black"
+              >
+                NEXT →
+              </button>
             </div>
 
-            <div className="mt-3 text-lg font-semibold leading-relaxed">
+            <p className="mt-4 text-lg font-semibold leading-7">
               “{encounter.problem}”
-            </div>
+            </p>
           </div>
 
-          {/* PLAYER LINE */}
           {playerLine && (
-            <div className="mt-3 rounded-2xl border border-[#52749b]/50 bg-[#172637] p-3">
-              <div className="text-[10px] font-black uppercase tracking-widest text-[#92b8dc]">
+            <div className="mt-3 rounded-2xl border border-[#39567a] bg-[#101b29] p-4">
+              <div className="text-[10px] font-black uppercase tracking-widest text-[#83b1e3]">
                 You
               </div>
 
@@ -304,126 +385,144 @@ export default function LastCallPage() {
               </div>
             </div>
           )}
+        </section>
 
-          {/* CHOICES */}
-          <div className="mt-4 grid grid-cols-2 gap-3">
-            <button
-              onClick={() => takeAction("roast")}
-              className="min-h-[78px] rounded-2xl border border-[#a7483f] bg-gradient-to-b from-[#6f2d28] to-[#3b1715] px-3 font-black shadow-lg active:scale-[0.98]"
-            >
-              🥊
-              <br />
-              Bust Their Balls
-            </button>
+        {/* QUICK ACTIONS */}
+        <section className="grid grid-cols-2 gap-3 px-5 pt-4">
 
-            <button
-              onClick={() => takeAction("drink")}
-              className="min-h-[78px] rounded-2xl border border-[#5c8e63] bg-gradient-to-b from-[#375d3d] to-[#1d3321] px-3 font-black shadow-lg active:scale-[0.98]"
-            >
-              🍺
-              <br />
-              Pour a Drink
-            </button>
+          <button
+            disabled={thinking}
+            onClick={() =>
+              quickAction("roast")
+            }
+            className="rounded-2xl border border-[#96484b] bg-[#4b2226] py-4 font-black"
+          >
+            🥊
+            <br />
+            BUST THEIR BALLS
+          </button>
 
-            <button
-              onClick={() => takeAction("advice")}
-              className="min-h-[78px] rounded-2xl border border-[#79528e] bg-gradient-to-b from-[#50365f] to-[#2a1b33] px-3 font-black shadow-lg active:scale-[0.98]"
-            >
-              💬
-              <br />
-              Give Advice
-            </button>
+          <button
+            disabled={thinking}
+            onClick={() =>
+              quickAction("drink")
+            }
+            className="rounded-2xl border border-[#477a58] bg-[#203e2a] py-4 font-black"
+          >
+            🍺
+            <br />
+            POUR A DRINK
+          </button>
 
-            <button
-              onClick={() => takeAction("listen")}
-              className="min-h-[78px] rounded-2xl border border-[#9e7945] bg-gradient-to-b from-[#674c28] to-[#362714] px-3 font-black shadow-lg active:scale-[0.98]"
-            >
-              👂
-              <br />
-              Hear Them Out
-            </button>
-          </div>
+          <button
+            disabled={thinking}
+            onClick={() =>
+              quickAction("advice")
+            }
+            className="rounded-2xl border border-[#664b85] bg-[#302342] py-4 font-black"
+          >
+            💬
+            <br />
+            GIVE ADVICE
+          </button>
 
-          {/* FREE TEXT */}
-          <div className="mt-4 rounded-3xl border border-[#73503a] bg-black/55 p-3">
-            <div className="mb-2 text-xs font-bold uppercase tracking-widest text-[#caa78f]">
-              Or tell Grace what you wanna do
+          <button
+            disabled={thinking}
+            onClick={() =>
+              quickAction("listen")
+            }
+            className="rounded-2xl border border-[#8c683e] bg-[#44331d] py-4 font-black"
+          >
+            👂
+            <br />
+            HEAR THEM OUT
+          </button>
+
+        </section>
+
+        {/* REAL FREE TEXT */}
+        <section className="px-5 pt-4">
+          <div className="rounded-3xl border border-white/10 bg-[#11131b] p-4">
+
+            <div className="text-xs font-black uppercase tracking-wider text-[#aaaeb8]">
+              Tell Grace what you wanna do
             </div>
 
-            <div className="flex gap-2">
+            <div className="mt-3 flex gap-2">
+
               <input
                 value={playerInput}
-                onChange={(event) => setPlayerInput(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
+                disabled={thinking}
+                onChange={(e) =>
+                  setPlayerInput(e.target.value)
+                }
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
                     talkToGrace();
                   }
                 }}
-                placeholder="Tell Grace anything..."
-                className="min-w-0 flex-1 rounded-2xl border border-white/10 bg-[#261711] px-4 py-3 text-sm outline-none placeholder:text-[#907568]"
+                placeholder="Say anything..."
+                className="min-w-0 flex-1 rounded-xl border border-white/10 bg-[#1a1d27] px-4 py-3 outline-none"
               />
 
               <button
+                disabled={thinking}
                 onClick={talkToGrace}
-                className="rounded-2xl bg-[#d86b4d] px-4 font-black text-white active:scale-[0.98]"
+                className="rounded-xl bg-[#df615f] px-4 font-black disabled:opacity-50"
               >
-                SAY IT
+                {thinking ? "..." : "SAY IT"}
               </button>
+
             </div>
           </div>
 
-          {/* RESULT */}
-          <div className="mt-4 min-h-[84px] rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-sm leading-relaxed text-[#e8d7ca]">
+          <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm">
             {gameMessage}
           </div>
+        </section>
 
-          <button
-            onClick={nextCustomer}
-            className="mt-4 w-full rounded-2xl border border-[#ca8a5c] bg-[#2a1710] py-4 font-black uppercase tracking-widest active:scale-[0.99]"
-          >
-            Next Customer →
-          </button>
-        </div>
+        {/* ACTION COUNTER */}
+        <section className="px-5 py-8">
+          <div className="mx-auto flex h-24 w-24 flex-col items-center justify-center rounded-full border-4 border-[#efcfad] bg-[#0a0c13]">
+            <span className="text-4xl font-black">
+              {actions}
+            </span>
 
-        {/* FIXED GAME HUD */}
-        <div className="fixed bottom-0 left-1/2 z-30 flex w-full max-w-md -translate-x-1/2 items-end justify-between border-t border-[#68452e] bg-[#0d0806]/95 px-4 pb-5 pt-3 backdrop-blur-xl shadow-[0_-15px_40px_rgba(0,0,0,0.75)]">
+            <span className="text-[9px] font-black uppercase">
+              Actions
+            </span>
+          </div>
+        </section>
 
-          <div className="w-12 text-center text-[9px] uppercase text-[#c8a58e]">
-            📍
+        {/* BOTTOM NAV - IN THE PAGE FLOW, NOT FIXED */}
+        <nav className="grid grid-cols-4 border-t border-white/10 bg-[#080a10] px-3 py-5 text-center text-[10px] font-black uppercase">
+
+          <div>
+            🍸
             <br />
             Bar
           </div>
 
-          <div className="w-12 text-center text-[9px] uppercase text-[#c8a58e]">
+          <div>
             👥
             <br />
             Regulars
           </div>
 
-          <div className="-mt-8">
-            <div className="flex h-[78px] w-[78px] flex-col items-center justify-center rounded-full border-4 border-[#d08b52] bg-[#17100b] shadow-[0_0_22px_rgba(208,139,82,0.25)]">
-              <div className="text-3xl font-black">
-                {actions}
-              </div>
-
-              <div className="text-[8px] font-black uppercase tracking-wider text-[#d2a985]">
-                Actions
-              </div>
-            </div>
-          </div>
-
-          <div className="w-12 text-center text-[9px] uppercase text-[#c8a58e]">
+          <div>
             🔧
             <br />
             Upgrade
           </div>
 
-          <div className="w-12 text-center text-[9px] uppercase text-[#c8a58e]">
+          <div>
             📖
             <br />
             Journal
           </div>
-        </div>
+
+        </nav>
+
       </div>
     </main>
   );
