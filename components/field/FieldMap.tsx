@@ -146,50 +146,66 @@ export default function FieldMap({
 
   function locateMe() {
     if (!navigator.geolocation) {
-      setLocationStatus("GPS is not available on this device.");
+      setLocationStatus("Location is not available on this device.");
       return;
     }
 
     setLocationStatus("Finding your location...");
 
-    navigator.geolocation.getCurrentPosition(
-      (result) => {
-        const next: [number, number] = [
-          result.coords.latitude,
-          result.coords.longitude,
-        ];
+    const found = (result: GeolocationPosition) => {
+      const next: [number, number] = [
+        result.coords.latitude,
+        result.coords.longitude,
+      ];
 
-        setPosition(next);
+      setPosition(next);
+
+      setLocationStatus(
+        `Location found • accuracy about ${Math.round(
+          result.coords.accuracy
+        )} m`
+      );
+    };
+
+    const failed = (error: GeolocationPositionError) => {
+      console.error("Grace Field location failed:", error);
+
+      if (error.code === 1) {
         setLocationStatus(
-          `GPS location found • accuracy about ${Math.round(
-            result.coords.accuracy
-          )} m`
+          "Location permission is blocked. Allow location for Grace or this website, then try again."
         );
-      },
-      (error) => {
-        console.error("Grace Field GPS error:", error);
+      } else {
+        setLocationStatus(
+          "Your phone could not provide a location. Check app/browser location permission and Google Location Accuracy."
+        );
+      }
+    };
 
+    navigator.geolocation.getCurrentPosition(
+      found,
+      (error) => {
         if (error.code === 1) {
-          setLocationStatus(
-            "Location permission is blocked. Allow location for Grace, then tap Locate Me again."
-          );
-        } else if (error.code === 2) {
-          setLocationStatus(
-            "Phone location is unavailable. Make sure Location is turned on, then try again."
-          );
-        } else if (error.code === 3) {
-          setLocationStatus(
-            "GPS timed out. Try again where your phone has a clearer GPS signal."
-          );
-        } else {
-          setLocationStatus(
-            "Location unavailable. Check Grace location permission and try again."
-          );
+          failed(error);
+          return;
         }
+
+        setLocationStatus(
+          "GPS unavailable — trying phone/network location..."
+        );
+
+        navigator.geolocation.getCurrentPosition(
+          found,
+          failed,
+          {
+            enableHighAccuracy: false,
+            timeout: 30000,
+            maximumAge: 120000,
+          }
+        );
       },
       {
         enableHighAccuracy: true,
-        timeout: 30000,
+        timeout: 12000,
         maximumAge: 0,
       }
     );
