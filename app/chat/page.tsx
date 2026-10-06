@@ -3478,6 +3478,19 @@ function isMarketplaceQuery(text: string) {
         </button>
 
         <button
+          type="button"
+          onClick={() => {
+            window.location.href = "/field";
+          }}
+          disabled={locked || loading || toolLoading}
+          aria-label="Open Grace Field"
+          title="Grace Field"
+          className="bg-white border border-[#efb99f] text-[#6f3b2a] px-4 py-3 rounded-2xl text-xl leading-none font-black disabled:opacity-40 shadow-sm"
+        >
+          🌲
+        </button>
+
+        <button
           onClick={tapToTalk}
           disabled={locked || loading || toolLoading}
           className="bg-[#f3a683] text-white px-4 py-3 rounded-2xl font-black disabled:opacity-40 shadow-sm"
