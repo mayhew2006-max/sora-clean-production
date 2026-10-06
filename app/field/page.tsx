@@ -36,6 +36,25 @@ export default function GraceField() {
           margin: "0 auto",
         }}
       >
+        <button
+          type="button"
+          onClick={() => {
+            window.location.href = "/chat";
+          }}
+          style={{
+            marginBottom: 18,
+            padding: "10px 16px",
+            borderRadius: 999,
+            border: "1px solid #58635b",
+            background: "#1b251f",
+            color: "white",
+            fontWeight: 800,
+            cursor: "pointer",
+          }}
+        >
+          ← Grace
+        </button>
+
         <div
           style={{
             fontSize: 13,

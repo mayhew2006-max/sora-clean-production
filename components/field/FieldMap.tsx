@@ -160,17 +160,37 @@ export default function FieldMap({
         ];
 
         setPosition(next);
-        setLocationStatus("GPS location found.");
-      },
-      () => {
         setLocationStatus(
-          "Location unavailable. Check location permission."
+          `GPS location found • accuracy about ${Math.round(
+            result.coords.accuracy
+          )} m`
         );
+      },
+      (error) => {
+        console.error("Grace Field GPS error:", error);
+
+        if (error.code === 1) {
+          setLocationStatus(
+            "Location permission is blocked. Allow location for Grace, then tap Locate Me again."
+          );
+        } else if (error.code === 2) {
+          setLocationStatus(
+            "Phone location is unavailable. Make sure Location is turned on, then try again."
+          );
+        } else if (error.code === 3) {
+          setLocationStatus(
+            "GPS timed out. Try again where your phone has a clearer GPS signal."
+          );
+        } else {
+          setLocationStatus(
+            "Location unavailable. Check Grace location permission and try again."
+          );
+        }
       },
       {
         enableHighAccuracy: true,
-        timeout: 15000,
-        maximumAge: 10000,
+        timeout: 30000,
+        maximumAge: 0,
       }
     );
   }
