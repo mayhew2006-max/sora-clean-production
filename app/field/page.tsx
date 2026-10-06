@@ -1,9 +1,24 @@
 "use client";
 
 import { useState } from "react";
+import dynamic from "next/dynamic";
+import type { FieldMode } from "@/components/field/FieldMap";
+
+const FieldMap = dynamic(
+  () => import("@/components/field/FieldMap"),
+  {
+    ssr: false,
+    loading: () => (
+      <div style={{ padding: 30 }}>
+        Loading Grace Field...
+      </div>
+    ),
+  }
+);
 
 export default function GraceField() {
-  const [mode, setMode] = useState<"hunt" | "fish">("hunt");
+  const [mode, setMode] =
+    useState<FieldMode>("hunt");
 
   return (
     <main
@@ -11,25 +26,49 @@ export default function GraceField() {
         minHeight: "100vh",
         background: "#111814",
         color: "white",
-        padding: "24px",
+        padding: 18,
         fontFamily: "Arial, sans-serif",
       }}
     >
-      <div style={{ maxWidth: 700, margin: "0 auto" }}>
-        <div style={{ fontSize: 14, opacity: 0.7 }}>GRACE</div>
+      <div
+        style={{
+          maxWidth: 900,
+          margin: "0 auto",
+        }}
+      >
+        <div
+          style={{
+            fontSize: 13,
+            opacity: 0.65,
+            letterSpacing: 2,
+          }}
+        >
+          GRACE
+        </div>
 
-        <h1 style={{ margin: "6px 0" }}>Field</h1>
+        <h1
+          style={{
+            margin: "4px 0",
+            fontSize: 34,
+          }}
+        >
+          Field
+        </h1>
 
-        <p style={{ opacity: 0.8, marginTop: 0 }}>
-          Hunting & Fishing Companion
+        <p
+          style={{
+            opacity: 0.75,
+            marginTop: 0,
+          }}
+        >
+          Your hunting & fishing companion.
         </p>
 
         <div
           style={{
             display: "flex",
             gap: 10,
-            marginTop: 24,
-            marginBottom: 24,
+            margin: "20px 0",
           }}
         >
           <button
@@ -38,8 +77,11 @@ export default function GraceField() {
               flex: 1,
               padding: 14,
               borderRadius: 12,
-              border: "1px solid #777",
-              fontWeight: 700,
+              border:
+                mode === "hunt"
+                  ? "2px solid #f4d27a"
+                  : "1px solid #58635b",
+              fontWeight: 800,
               cursor: "pointer",
             }}
           >
@@ -52,8 +94,11 @@ export default function GraceField() {
               flex: 1,
               padding: 14,
               borderRadius: 12,
-              border: "1px solid #777",
-              fontWeight: 700,
+              border:
+                mode === "fish"
+                  ? "2px solid #f4d27a"
+                  : "1px solid #58635b",
+              fontWeight: 800,
               cursor: "pointer",
             }}
           >
@@ -61,36 +106,7 @@ export default function GraceField() {
           </button>
         </div>
 
-        <section
-          style={{
-            border: "1px solid #39443d",
-            borderRadius: 16,
-            padding: 20,
-            background: "#18211b",
-          }}
-        >
-          <h2 style={{ marginTop: 0 }}>
-            {mode === "hunt" ? "Hunting Mode" : "Fishing Mode"}
-          </h2>
-
-          <p style={{ opacity: 0.8 }}>
-            Field map coming online.
-          </p>
-
-          <div
-            style={{
-              height: 300,
-              borderRadius: 14,
-              background: "#26352b",
-              display: "grid",
-              placeItems: "center",
-              marginTop: 18,
-              fontSize: 18,
-            }}
-          >
-            📍 Live Map
-          </div>
-        </section>
+        <FieldMap mode={mode} />
       </div>
     </main>
   );
