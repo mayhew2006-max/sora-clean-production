@@ -3462,6 +3462,21 @@ function isMarketplaceQuery(text: string) {
                 Choose existing photo
               </span>
             </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setToolsOpen(false);
+                window.location.href = "/field";
+              }}
+              disabled={loading || toolLoading}
+              className="rounded-2xl border border-[#efb99f] bg-[#fff7f1] px-4 py-3 text-left text-sm font-black text-[#6f3b2a] shadow-sm disabled:opacity-40"
+            >
+              🌲 Grace Field
+              <span className="block text-xs font-semibold opacity-80">
+                Hunting, fishing, GPS & saved spots
+              </span>
+            </button>
           </div>
         </div>
       )}
@@ -3477,20 +3492,7 @@ function isMarketplaceQuery(text: string) {
           +
         </button>
 
-        <button
-          type="button"
-          onClick={() => {
-            window.location.href = "/field";
-          }}
-          disabled={locked || loading || toolLoading}
-          aria-label="Open Grace Field"
-          title="Grace Field"
-          className="bg-white border border-[#efb99f] text-[#6f3b2a] px-4 py-3 rounded-2xl text-xl leading-none font-black disabled:opacity-40 shadow-sm"
-        >
-          🌲
-        </button>
-
-        <button
+               <button
           onClick={tapToTalk}
           disabled={locked || loading || toolLoading}
           className="bg-[#f3a683] text-white px-4 py-3 rounded-2xl font-black disabled:opacity-40 shadow-sm"
@@ -3500,7 +3502,12 @@ function isMarketplaceQuery(text: string) {
 
         <textarea
           value={input}
-          onChange={(e) => setInput(e.target.value)}
+          onChange={(e) => {
+            setInput(e.target.value);
+            e.currentTarget.style.height = "auto";
+            e.currentTarget.style.height =
+              Math.min(e.currentTarget.scrollHeight, 160) + "px";
+          }}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
@@ -3510,7 +3517,7 @@ function isMarketplaceQuery(text: string) {
           disabled={locked || loading || toolLoading}
           rows={1}
           placeholder="Ask Grace anything..."
-          className="flex-1 min-w-0 max-h-40 resize-none bg-white border border-[#efb99f] rounded-2xl px-4 py-3 text-[#2f2723] placeholder:text-[#a98273] outline-none disabled:opacity-40 shadow-sm"
+          className="flex-1 min-w-0 min-h-[48px] max-h-40 overflow-y-auto resize-none bg-white border border-[#efb99f] rounded-2xl px-4 py-3 text-[#2f2723] placeholder:text-[#a98273] outline-none disabled:opacity-40 shadow-sm"
         />
 
         <button
