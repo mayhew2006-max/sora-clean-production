@@ -1,0 +1,465 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import {
+  MapContainer,
+  TileLayer,
+  Marker,
+  Popup,
+  useMap,
+  useMapEvents,
+} from "react-leaflet";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
+
+export type FieldMode = "hunt" | "fish";
+
+export type FieldSpot = {
+  id: string;
+  lat: number;
+  lng: number;
+  mode: FieldMode;
+  type: string;
+  name: string;
+  notes: string;
+  createdAt: string;
+};
+
+const huntTypes = [
+  ["stand", "🌲", "Tree Stand"],
+  ["blind", "⛺", "Ground Blind"],
+  ["camera", "📷", "Trail Camera"],
+  ["deer", "🦌", "Deer Sighting"],
+  ["scrape", "🦌", "Scrape / Rub"],
+  ["food", "🌾", "Food Plot"],
+  ["water", "💧", "Water"],
+  ["parking", "🅿️", "Parking"],
+];
+
+const fishTypes = [
+  ["hole", "🎯", "Fishing Hole"],
+  ["catch", "🐟", "Catch"],
+  ["structure", "🪵", "Structure"],
+  ["weed", "🌿", "Weed Bed"],
+  ["dropoff", "⬇️", "Drop-off"],
+  ["dock", "⚓", "Dock"],
+  ["ramp", "🚤", "Boat Ramp"],
+  ["hazard", "⚠️", "Hazard"],
+];
+
+function makeIcon(symbol: string) {
+  return L.divIcon({
+    className: "",
+    html: `
+      <div style="
+        width:38px;
+        height:38px;
+        border-radius:50%;
+        background:#172019;
+        border:2px solid #f4d27a;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        font-size:21px;
+        box-shadow:0 3px 10px rgba(0,0,0,.45);
+      ">${symbol}</div>
+    `,
+    iconSize: [38, 38],
+    iconAnchor: [19, 19],
+    popupAnchor: [0, -20],
+  });
+}
+
+function LocateUser({
+  position,
+}: {
+  position: [number, number] | null;
+}) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (position) {
+      map.flyTo(position, Math.max(map.getZoom(), 15));
+    }
+  }, [position, map]);
+
+  return null;
+}
+
+function MapTap({
+  onTap,
+}: {
+  onTap: (lat: number, lng: number) => void;
+}) {
+  useMapEvents({
+    click(e) {
+      onTap(e.latlng.lat, e.latlng.lng);
+    },
+  });
+
+  return null;
+}
+
+export default function FieldMap({
+  mode,
+}: {
+  mode: FieldMode;
+}) {
+  const [spots, setSpots] = useState<FieldSpot[]>([]);
+  const [position, setPosition] =
+    useState<[number, number] | null>(null);
+
+  const [selectedType, setSelectedType] = useState(
+    mode === "hunt" ? "stand" : "hole"
+  );
+
+  const [pending, setPending] =
+    useState<{ lat: number; lng: number } | null>(null);
+
+  const [name, setName] = useState("");
+  const [notes, setNotes] = useState("");
+  const [locationStatus, setLocationStatus] =
+    useState("Finding your location...");
+
+  const types = mode === "hunt" ? huntTypes : fishTypes;
+
+  useEffect(() => {
+    setSelectedType(mode === "hunt" ? "stand" : "hole");
+    setPending(null);
+  }, [mode]);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("graceFieldSpots");
+      if (saved) setSpots(JSON.parse(saved));
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        "graceFieldSpots",
+        JSON.stringify(spots)
+      );
+    } catch {}
+  }, [spots]);
+
+  function locateMe() {
+    if (!navigator.geolocation) {
+      setLocationStatus("GPS is not available on this device.");
+      return;
+    }
+
+    setLocationStatus("Finding your location...");
+
+    navigator.geolocation.getCurrentPosition(
+      (result) => {
+        const next: [number, number] = [
+          result.coords.latitude,
+          result.coords.longitude,
+        ];
+
+        setPosition(next);
+        setLocationStatus("GPS location found.");
+      },
+      () => {
+        setLocationStatus(
+          "Location unavailable. Check location permission."
+        );
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 10000,
+      }
+    );
+  }
+
+  useEffect(() => {
+    locateMe();
+  }, []);
+
+  function addSpot() {
+    if (!pending) return;
+
+    const selected =
+      types.find(([key]) => key === selectedType) || types[0];
+
+    const spot: FieldSpot = {
+      id:
+        typeof crypto !== "undefined" &&
+        "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : String(Date.now()),
+      lat: pending.lat,
+      lng: pending.lng,
+      mode,
+      type: selectedType,
+      name: name.trim() || selected[2],
+      notes: notes.trim(),
+      createdAt: new Date().toISOString(),
+    };
+
+    setSpots((current) => [...current, spot]);
+    setPending(null);
+    setName("");
+    setNotes("");
+  }
+
+  function deleteSpot(id: string) {
+    setSpots((current) =>
+      current.filter((spot) => spot.id !== id)
+    );
+  }
+
+  const visibleSpots = useMemo(
+    () => spots.filter((spot) => spot.mode === mode),
+    [spots, mode]
+  );
+
+  const center: [number, number] =
+    position || [38.5, -80.5];
+
+  return (
+    <div>
+      <div
+        style={{
+          display: "flex",
+          gap: 8,
+          overflowX: "auto",
+          paddingBottom: 10,
+        }}
+      >
+        {types.map(([key, symbol, label]) => (
+          <button
+            key={key}
+            onClick={() => setSelectedType(key)}
+            style={{
+              whiteSpace: "nowrap",
+              padding: "9px 12px",
+              borderRadius: 999,
+              border:
+                selectedType === key
+                  ? "2px solid #f4d27a"
+                  : "1px solid #566158",
+              background:
+                selectedType === key
+                  ? "#344437"
+                  : "#202a22",
+              color: "white",
+              cursor: "pointer",
+            }}
+          >
+            {symbol} {label}
+          </button>
+        ))}
+      </div>
+
+      <button
+        onClick={locateMe}
+        style={{
+          marginBottom: 10,
+          padding: "10px 14px",
+          borderRadius: 10,
+          border: "1px solid #68736b",
+          cursor: "pointer",
+          fontWeight: 700,
+        }}
+      >
+        📍 Find Me
+      </button>
+
+      <span
+        style={{
+          marginLeft: 10,
+          fontSize: 13,
+          opacity: 0.7,
+        }}
+      >
+        {locationStatus}
+      </span>
+
+      <div
+        style={{
+          height: "55vh",
+          minHeight: 420,
+          borderRadius: 16,
+          overflow: "hidden",
+          border: "1px solid #465148",
+        }}
+      >
+        <MapContainer
+          center={center}
+          zoom={position ? 15 : 7}
+          style={{ height: "100%", width: "100%" }}
+        >
+          <TileLayer
+            attribution="&copy; OpenStreetMap contributors"
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          />
+
+          <LocateUser position={position} />
+
+          <MapTap
+            onTap={(lat, lng) =>
+              setPending({ lat, lng })
+            }
+          />
+
+          {position && (
+            <Marker
+              position={position}
+              icon={makeIcon("📍")}
+            >
+              <Popup>You are here.</Popup>
+            </Marker>
+          )}
+
+          {visibleSpots.map((spot) => {
+            const info =
+              types.find(([key]) => key === spot.type) ||
+              types[0];
+
+            return (
+              <Marker
+                key={spot.id}
+                position={[spot.lat, spot.lng]}
+                icon={makeIcon(info[1])}
+              >
+                <Popup>
+                  <div style={{ minWidth: 180 }}>
+                    <strong>{spot.name}</strong>
+
+                    {spot.notes && (
+                      <p>{spot.notes}</p>
+                    )}
+
+                    <small>
+                      {new Date(
+                        spot.createdAt
+                      ).toLocaleString()}
+                    </small>
+
+                    <br />
+                    <br />
+
+                    <button
+                      onClick={() =>
+                        deleteSpot(spot.id)
+                      }
+                    >
+                      Delete marker
+                    </button>
+                  </div>
+                </Popup>
+              </Marker>
+            );
+          })}
+        </MapContainer>
+      </div>
+
+      {pending && (
+        <div
+          style={{
+            marginTop: 14,
+            padding: 16,
+            borderRadius: 14,
+            background: "#202a22",
+            border: "1px solid #465148",
+          }}
+        >
+          <strong>Save this spot</strong>
+
+          <div
+            style={{
+              fontSize: 12,
+              opacity: 0.65,
+              marginTop: 4,
+            }}
+          >
+            {pending.lat.toFixed(6)},{" "}
+            {pending.lng.toFixed(6)}
+          </div>
+
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder={
+              mode === "hunt"
+                ? "Name — Ridge Stand"
+                : "Name — The Honey Hole 😂"
+            }
+            style={{
+              width: "100%",
+              boxSizing: "border-box",
+              padding: 12,
+              borderRadius: 10,
+              marginTop: 12,
+            }}
+          />
+
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder={
+              mode === "hunt"
+                ? "Notes — buck trail, NW wind, morning stand..."
+                : "Notes — bass, 8 ft deep, green pumpkin worm..."
+            }
+            rows={3}
+            style={{
+              width: "100%",
+              boxSizing: "border-box",
+              padding: 12,
+              borderRadius: 10,
+              marginTop: 8,
+            }}
+          />
+
+          <div
+            style={{
+              display: "flex",
+              gap: 8,
+              marginTop: 10,
+            }}
+          >
+            <button
+              onClick={addSpot}
+              style={{
+                flex: 1,
+                padding: 12,
+                borderRadius: 10,
+                fontWeight: 800,
+                cursor: "pointer",
+              }}
+            >
+              Save Spot
+            </button>
+
+            <button
+              onClick={() => setPending(null)}
+              style={{
+                padding: 12,
+                borderRadius: 10,
+                cursor: "pointer",
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div
+        style={{
+          marginTop: 16,
+          opacity: 0.7,
+          fontSize: 13,
+        }}
+      >
+        Tap anywhere on the map to drop the selected marker.
+        Saved locations stay private on this device in this version.
+      </div>
+    </div>
+  );
+}
