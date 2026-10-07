@@ -1639,7 +1639,13 @@ export default function FieldMap({
         </button>
 
  <button
-          onClick={truckAction}
+          onClick={() => {
+                  if (truckSpot) {
+                    backToTruck();
+                  } else {
+                    truckAction();
+                  }
+                }}
           style={{
             padding: "10px 14px",
             borderRadius: 10,
@@ -1648,7 +1654,7 @@ export default function FieldMap({
             fontWeight: 700,
           }}
         >
-          🚙 {truckSpot ? "My Truck" : "Mark My Truck"}
+          🚙 {truckSpot ? "Back to Truck" : "Mark My Truck"}
         </button>
 
         {!tracking ? (
@@ -2610,59 +2616,6 @@ export default function FieldMap({
       )}
 
  <div
-        style={{
-          position: "absolute",
-          right: 18,
-          bottom:
-            "calc(env(safe-area-inset-bottom, 0px) + 92px)",
-          zIndex: 950,
-          display: "flex",
-          flexDirection: "column",
-          gap: 8,
-        }}
-      >
-        <button
-          type="button"
-          onClick={centerOnMe}
-          title="Center map on me"
-          style={{
-            padding: "10px 14px",
-            borderRadius: 999,
-            border: "1px solid #f4d27a",
-            background: "rgba(17,24,20,.94)",
-            color: "white",
-            fontWeight: 900,
-            boxShadow:
-              "0 4px 14px rgba(0,0,0,.45)",
-            cursor: "pointer",
-          }}
-        >
-          📍 Me
-        </button>
-
-        {truckSpot && (
-          <button
-            type="button"
-            onClick={backToTruck}
-            title="Show my truck"
-            style={{
-              padding: "10px 14px",
-              borderRadius: 999,
-              border: "1px solid #f4d27a",
-              background: "rgba(17,24,20,.94)",
-              color: "white",
-              fontWeight: 900,
-              boxShadow:
-                "0 4px 14px rgba(0,0,0,.45)",
-              cursor: "pointer",
-            }}
-          >
-            🚙 Back to Truck
-          </button>
-        )}
-      </div>
-
-      <div
         style={{
           position: "absolute",
           inset: 0,
