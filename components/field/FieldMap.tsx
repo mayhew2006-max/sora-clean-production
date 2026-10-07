@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   MapContainer,
   TileLayer,
   Marker,
   Popup,
+  Polyline,
   useMap,
   useMapEvents,
 } from "react-leaflet";
@@ -25,14 +26,25 @@ export type FieldSpot = {
   createdAt: string;
 };
 
+type TrailPoint = {
+  lat: number;
+  lng: number;
+  time: string;
+};
+
 const huntTypes = [
   ["stand", "🌲", "Tree Stand"],
   ["blind", "⛺", "Ground Blind"],
   ["camera", "📷", "Trail Camera"],
   ["deer", "🦌", "Deer Sighting"],
   ["scrape", "🦌", "Scrape / Rub"],
+  ["bedding", "🛏️", "Bedding Area"],
+  ["trail", "🐾", "Game Trail"],
   ["food", "🌾", "Food Plot"],
   ["water", "💧", "Water"],
+  ["kill", "🎯", "Harvest"],
+  ["blood", "🩸", "Blood / Sign"],
+  ["hazard", "⚠️", "Hazard"],
   ["parking", "🅿️", "Parking"],
 ];
 
@@ -44,10 +56,12 @@ const fishTypes = [
   ["dropoff", "⬇️", "Drop-off"],
   ["dock", "⚓", "Dock"],
   ["ramp", "🚤", "Boat Ramp"],
+  ["current", "🌊", "Current"],
   ["hazard", "⚠️", "Hazard"],
+  ["parking", "🅿️", "Parking"],
 ];
 
-function makeIcon(symbol: string) {
+function makeIcon(symbol: string, border = "#f4d27a") {
   return L.divIcon({
     className: "",
     html: `
@@ -56,7 +70,7 @@ function makeIcon(symbol: string) {
         height:38px;
         border-radius:50%;
         background:#172019;
-        border:2px solid #f4d27a;
+        border:2px solid ${border};
         display:flex;
         align-items:center;
         justify-content:center;
@@ -70,18 +84,25 @@ function makeIcon(symbol: string) {
   });
 }
 
-function LocateUser({
+function MoveMap({
   position,
+  navigationTarget,
 }: {
   position: [number, number] | null;
+  navigationTarget: FieldSpot | null;
 }) {
   const map = useMap();
 
   useEffect(() => {
-    if (position) {
+    if (navigationTarget) {
+      map.flyTo(
+        [navigationTarget.lat, navigationTarget.lng],
+        Math.max(map.getZoom(), 16)
+      );
+    } else if (position) {
       map.flyTo(position, Math.max(map.getZoom(), 15));
     }
-  }, [position, map]);
+  }, [position, navigationTarget, map]);
 
   return null;
 }
@@ -100,6 +121,73 @@ function MapTap({
   return null;
 }
 
+function distanceMeters(
+  a: [number, number],
+  b: [number, number]
+) {
+  const R = 6371000;
+  const lat1 = (a[0] * Math.PI) / 180;
+  const lat2 = (b[0] * Math.PI) / 180;
+  const dLat = ((b[0] - a[0]) * Math.PI) / 180;
+  const dLng = ((b[1] - a[1]) * Math.PI) / 180;
+
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1) *
+      Math.cos(lat2) *
+      Math.sin(dLng / 2) ** 2;
+
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+function bearingDegrees(
+  a: [number, number],
+  b: [number, number]
+) {
+  const lat1 = (a[0] * Math.PI) / 180;
+  const lat2 = (b[0] * Math.PI) / 180;
+  const dLng = ((b[1] - a[1]) * Math.PI) / 180;
+
+  const y = Math.sin(dLng) * Math.cos(lat2);
+  const x =
+    Math.cos(lat1) * Math.sin(lat2) -
+    Math.sin(lat1) *
+      Math.cos(lat2) *
+      Math.cos(dLng);
+
+  return (
+    ((Math.atan2(y, x) * 180) / Math.PI + 360) %
+    360
+  );
+}
+
+function compassDirection(degrees: number) {
+  const directions = [
+    "N",
+    "NE",
+    "E",
+    "SE",
+    "S",
+    "SW",
+    "W",
+    "NW",
+  ];
+
+  return directions[
+    Math.round(degrees / 45) % directions.length
+  ];
+}
+
+function formatDistance(meters: number) {
+  const feet = meters * 3.28084;
+
+  if (feet < 1000) {
+    return `${Math.round(feet)} ft`;
+  }
+
+  return `${(meters / 1609.344).toFixed(2)} mi`;
+}
+
 export default function FieldMap({
   mode,
 }: {
@@ -108,6 +196,9 @@ export default function FieldMap({
   const [spots, setSpots] = useState<FieldSpot[]>([]);
   const [position, setPosition] =
     useState<[number, number] | null>(null);
+
+  const [accuracy, setAccuracy] =
+    useState<number | null>(null);
 
   const [selectedType, setSelectedType] = useState(
     mode === "hunt" ? "stand" : "hole"
@@ -118,8 +209,17 @@ export default function FieldMap({
 
   const [name, setName] = useState("");
   const [notes, setNotes] = useState("");
+
   const [locationStatus, setLocationStatus] =
     useState("Finding your location...");
+
+  const [tracking, setTracking] = useState(false);
+  const [trail, setTrail] = useState<TrailPoint[]>([]);
+
+  const [navigationTarget, setNavigationTarget] =
+    useState<FieldSpot | null>(null);
+
+  const watchId = useRef<number | null>(null);
 
   const types = mode === "hunt" ? huntTypes : fishTypes;
 
@@ -132,6 +232,11 @@ export default function FieldMap({
     try {
       const saved = localStorage.getItem("graceFieldSpots");
       if (saved) setSpots(JSON.parse(saved));
+
+      const savedTrail =
+        localStorage.getItem("graceFieldTrail");
+
+      if (savedTrail) setTrail(JSON.parse(savedTrail));
     } catch {}
   }, []);
 
@@ -144,68 +249,113 @@ export default function FieldMap({
     } catch {}
   }, [spots]);
 
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        "graceFieldTrail",
+        JSON.stringify(trail)
+      );
+    } catch {}
+  }, [trail]);
+
+  function acceptPosition(result: GeolocationPosition) {
+    const reportedAccuracy = Math.round(
+      result.coords.accuracy
+    );
+
+    /*
+      Desktop browsers sometimes return a network/IP estimate
+      many miles away. Grace Field refuses extremely coarse
+      positions instead of pretending they are real GPS.
+    */
+    if (
+      !Number.isFinite(reportedAccuracy) ||
+      reportedAccuracy > 1500
+    ) {
+      setAccuracy(reportedAccuracy);
+
+      setLocationStatus(
+        `Location rejected — accuracy is only about ${reportedAccuracy} m.`
+      );
+
+      return false;
+    }
+
+    const next: [number, number] = [
+      result.coords.latitude,
+      result.coords.longitude,
+    ];
+
+    setPosition(next);
+    setAccuracy(reportedAccuracy);
+
+    setLocationStatus(
+      `Location locked • ±${reportedAccuracy} m`
+    );
+
+    if (tracking) {
+      setTrail((current) => {
+        const last = current[current.length - 1];
+
+        if (last) {
+          const moved = distanceMeters(
+            [last.lat, last.lng],
+            next
+          );
+
+          if (moved < 4) return current;
+        }
+
+        return [
+          ...current,
+          {
+            lat: next[0],
+            lng: next[1],
+            time: new Date().toISOString(),
+          },
+        ];
+      });
+    }
+
+    return true;
+  }
+
+  function locationError(error: GeolocationPositionError) {
+    console.error("Grace Field GPS error:", error);
+
+    if (error.code === 1) {
+      setLocationStatus(
+        "Location permission blocked. Allow precise location for Grace and try again."
+      );
+    } else if (error.code === 2) {
+      setLocationStatus(
+        "GPS position unavailable. Grace will not substitute a fake network location."
+      );
+    } else if (error.code === 3) {
+      setLocationStatus(
+        "GPS timed out. Try again with a clearer view of the sky."
+      );
+    } else {
+      setLocationStatus("Location unavailable.");
+    }
+  }
+
   function locateMe() {
     if (!navigator.geolocation) {
-      setLocationStatus("Location is not available on this device.");
+      setLocationStatus(
+        "Location is not available on this device."
+      );
       return;
     }
 
-    setLocationStatus("Finding your location...");
-
-    const found = (result: GeolocationPosition) => {
-      const next: [number, number] = [
-        result.coords.latitude,
-        result.coords.longitude,
-      ];
-
-      setPosition(next);
-
-      setLocationStatus(
-        `Location found • accuracy about ${Math.round(
-          result.coords.accuracy
-        )} m`
-      );
-    };
-
-    const failed = (error: GeolocationPositionError) => {
-      console.error("Grace Field location failed:", error);
-
-      if (error.code === 1) {
-        setLocationStatus(
-          "Location permission is blocked. Allow location for Grace or this website, then try again."
-        );
-      } else {
-        setLocationStatus(
-          "Your phone could not provide a location. Check app/browser location permission and Google Location Accuracy."
-        );
-      }
-    };
+    setLocationStatus("Finding precise location...");
 
     navigator.geolocation.getCurrentPosition(
-      found,
-      (error) => {
-        if (error.code === 1) {
-          failed(error);
-          return;
-        }
-
-        setLocationStatus(
-          "GPS unavailable — trying phone/network location..."
-        );
-
-        navigator.geolocation.getCurrentPosition(
-          found,
-          failed,
-          {
-            enableHighAccuracy: false,
-            timeout: 30000,
-            maximumAge: 120000,
-          }
-        );
-      },
+      acceptPosition,
+      locationError,
       {
         enableHighAccuracy: true,
-        timeout: 12000,
+        timeout: 30000,
         maximumAge: 0,
       }
     );
@@ -213,13 +363,104 @@ export default function FieldMap({
 
   useEffect(() => {
     locateMe();
+
+    return () => {
+      if (
+        watchId.current !== null &&
+        navigator.geolocation
+      ) {
+        navigator.geolocation.clearWatch(watchId.current);
+      }
+    };
   }, []);
+
+  function startTracking() {
+    if (!navigator.geolocation) return;
+
+    if (watchId.current !== null) {
+      navigator.geolocation.clearWatch(watchId.current);
+    }
+
+    setTracking(true);
+    setLocationStatus("Live GPS tracking started...");
+
+    watchId.current =
+      navigator.geolocation.watchPosition(
+        acceptPosition,
+        locationError,
+        {
+          enableHighAccuracy: true,
+          timeout: 30000,
+          maximumAge: 3000,
+        }
+      );
+  }
+
+  function stopTracking() {
+    if (
+      watchId.current !== null &&
+      navigator.geolocation
+    ) {
+      navigator.geolocation.clearWatch(watchId.current);
+      watchId.current = null;
+    }
+
+    setTracking(false);
+    setLocationStatus("Live tracking stopped.");
+  }
+
+  function clearTrail() {
+    if (
+      typeof window !== "undefined" &&
+      !window.confirm("Clear your breadcrumb trail?")
+    ) {
+      return;
+    }
+
+    setTrail([]);
+  }
+
+  function markTruck() {
+    if (!position) {
+      setLocationStatus(
+        "Get a GPS lock before marking your truck."
+      );
+      locateMe();
+      return;
+    }
+
+    const truck: FieldSpot = {
+      id:
+        typeof crypto !== "undefined" &&
+        "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : String(Date.now()),
+      lat: position[0],
+      lng: position[1],
+      mode,
+      type: "truck",
+      name: "My Truck",
+      notes: "Vehicle location",
+      createdAt: new Date().toISOString(),
+    };
+
+    setSpots((current) => [
+      ...current.filter(
+        (spot) =>
+          !(spot.mode === mode && spot.type === "truck")
+      ),
+      truck,
+    ]);
+
+    setLocationStatus("🚙 Truck location saved.");
+  }
 
   function addSpot() {
     if (!pending) return;
 
     const selected =
-      types.find(([key]) => key === selectedType) || types[0];
+      types.find(([key]) => key === selectedType) ||
+      types[0];
 
     const spot: FieldSpot = {
       id:
@@ -246,12 +487,34 @@ export default function FieldMap({
     setSpots((current) =>
       current.filter((spot) => spot.id !== id)
     );
+
+    if (navigationTarget?.id === id) {
+      setNavigationTarget(null);
+    }
   }
 
   const visibleSpots = useMemo(
     () => spots.filter((spot) => spot.mode === mode),
     [spots, mode]
   );
+
+  const navigation = useMemo(() => {
+    if (!position || !navigationTarget) return null;
+
+    const target: [number, number] = [
+      navigationTarget.lat,
+      navigationTarget.lng,
+    ];
+
+    const distance = distanceMeters(position, target);
+    const bearing = bearingDegrees(position, target);
+
+    return {
+      distance,
+      bearing,
+      direction: compassDirection(bearing),
+    };
+  }, [position, navigationTarget]);
 
   const center: [number, number] =
     position || [38.5, -80.5];
@@ -291,34 +554,160 @@ export default function FieldMap({
         ))}
       </div>
 
-      <button
-        onClick={locateMe}
+      <div
         style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: 8,
           marginBottom: 10,
-          padding: "10px 14px",
-          borderRadius: 10,
-          border: "1px solid #68736b",
-          cursor: "pointer",
-          fontWeight: 700,
         }}
       >
-        📍 Find Me
-      </button>
+        <button
+          onClick={locateMe}
+          style={{
+            padding: "10px 14px",
+            borderRadius: 10,
+            border: "1px solid #68736b",
+            cursor: "pointer",
+            fontWeight: 700,
+          }}
+        >
+          📍 Find Me
+        </button>
 
-      <span
-        style={{
-          marginLeft: 10,
-          fontSize: 13,
-          opacity: 0.7,
-        }}
-      >
-        {locationStatus}
-      </span>
+        <button
+          onClick={markTruck}
+          style={{
+            padding: "10px 14px",
+            borderRadius: 10,
+            border: "1px solid #68736b",
+            cursor: "pointer",
+            fontWeight: 700,
+          }}
+        >
+          🚙 Mark My Truck
+        </button>
+
+        {!tracking ? (
+          <button
+            onClick={startTracking}
+            style={{
+              padding: "10px 14px",
+              borderRadius: 10,
+              border: "1px solid #68736b",
+              cursor: "pointer",
+              fontWeight: 700,
+            }}
+          >
+            👣 Start Track
+          </button>
+        ) : (
+          <button
+            onClick={stopTracking}
+            style={{
+              padding: "10px 14px",
+              borderRadius: 10,
+              border: "2px solid #f4d27a",
+              background: "#344437",
+              color: "white",
+              cursor: "pointer",
+              fontWeight: 800,
+            }}
+          >
+            ⏹ Stop Track
+          </button>
+        )}
+
+        {trail.length > 0 && (
+          <button
+            onClick={clearTrail}
+            style={{
+              padding: "10px 14px",
+              borderRadius: 10,
+              border: "1px solid #68736b",
+              cursor: "pointer",
+              fontWeight: 700,
+            }}
+          >
+            🧹 Clear Trail
+          </button>
+        )}
+      </div>
 
       <div
         style={{
-          height: "55vh",
-          minHeight: 420,
+          marginBottom: 10,
+          fontSize: 13,
+          opacity: 0.8,
+        }}
+      >
+        {locationStatus}
+        {accuracy !== null && (
+          <>
+            {" "}
+            • accuracy ±
+            {accuracy < 305
+              ? `${Math.round(accuracy * 3.28084)} ft`
+              : `${accuracy} m`}
+          </>
+        )}
+      </div>
+
+      {navigationTarget && navigation && (
+        <div
+          style={{
+            marginBottom: 12,
+            padding: 14,
+            borderRadius: 14,
+            background: "#202a22",
+            border: "2px solid #f4d27a",
+          }}
+        >
+          <div
+            style={{
+              fontSize: 12,
+              opacity: 0.7,
+              textTransform: "uppercase",
+              letterSpacing: 1,
+            }}
+          >
+            Navigating to
+          </div>
+
+          <strong style={{ fontSize: 18 }}>
+            🧭 {navigationTarget.name}
+          </strong>
+
+          <div
+            style={{
+              marginTop: 6,
+              fontSize: 20,
+              fontWeight: 900,
+            }}
+          >
+            {formatDistance(navigation.distance)} •{" "}
+            {navigation.direction} •{" "}
+            {Math.round(navigation.bearing)}°
+          </div>
+
+          <button
+            onClick={() => setNavigationTarget(null)}
+            style={{
+              marginTop: 10,
+              padding: "8px 12px",
+              borderRadius: 9,
+              cursor: "pointer",
+            }}
+          >
+            Stop Navigation
+          </button>
+        </div>
+      )}
+
+      <div
+        style={{
+          height: "58vh",
+          minHeight: 430,
           borderRadius: 16,
           overflow: "hidden",
           border: "1px solid #465148",
@@ -334,7 +723,10 @@ export default function FieldMap({
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
 
-          <LocateUser position={position} />
+          <MoveMap
+            position={position}
+            navigationTarget={navigationTarget}
+          />
 
           <MapTap
             onTap={(lat, lng) =>
@@ -342,50 +734,107 @@ export default function FieldMap({
             }
           />
 
+          {trail.length > 1 && (
+            <Polyline
+              positions={trail.map((point) => [
+                point.lat,
+                point.lng,
+              ])}
+              pathOptions={{
+                weight: 5,
+                opacity: 0.85,
+              }}
+            />
+          )}
+
           {position && (
             <Marker
               position={position}
-              icon={makeIcon("📍")}
+              icon={makeIcon("📍", "#5ee7ff")}
             >
-              <Popup>You are here.</Popup>
+              <Popup>
+                <strong>You are here.</strong>
+                {accuracy !== null && (
+                  <div>
+                    Accuracy ±{Math.round(accuracy)} m
+                  </div>
+                )}
+              </Popup>
             </Marker>
           )}
 
           {visibleSpots.map((spot) => {
             const info =
-              types.find(([key]) => key === spot.type) ||
-              types[0];
+              spot.type === "truck"
+                ? ["truck", "🚙", "My Truck"]
+                : types.find(
+                    ([key]) => key === spot.type
+                  ) || types[0];
 
             return (
               <Marker
                 key={spot.id}
                 position={[spot.lat, spot.lng]}
-                icon={makeIcon(info[1])}
+                icon={makeIcon(
+                  info[1],
+                  spot.type === "truck"
+                    ? "#5ee7ff"
+                    : "#f4d27a"
+                )}
               >
                 <Popup>
-                  <div style={{ minWidth: 180 }}>
+                  <div style={{ minWidth: 190 }}>
                     <strong>{spot.name}</strong>
 
-                    {spot.notes && (
-                      <p>{spot.notes}</p>
-                    )}
+                    {spot.notes && <p>{spot.notes}</p>}
 
                     <small>
+                      Saved{" "}
                       {new Date(
                         spot.createdAt
                       ).toLocaleString()}
                     </small>
 
-                    <br />
-                    <br />
+                    {position && (
+                      <div
+                        style={{
+                          marginTop: 8,
+                          fontWeight: 700,
+                        }}
+                      >
+                        {formatDistance(
+                          distanceMeters(position, [
+                            spot.lat,
+                            spot.lng,
+                          ])
+                        )}{" "}
+                        away
+                      </div>
+                    )}
 
-                    <button
-                      onClick={() =>
-                        deleteSpot(spot.id)
-                      }
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: 6,
+                        marginTop: 10,
+                      }}
                     >
-                      Delete marker
-                    </button>
+                      <button
+                        onClick={() =>
+                          setNavigationTarget(spot)
+                        }
+                      >
+                        🧭 Navigate
+                      </button>
+
+                      <button
+                        onClick={() =>
+                          deleteSpot(spot.id)
+                        }
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </div>
                 </Popup>
               </Marker>
@@ -393,6 +842,21 @@ export default function FieldMap({
           })}
         </MapContainer>
       </div>
+
+      {tracking && (
+        <div
+          style={{
+            marginTop: 10,
+            padding: 10,
+            borderRadius: 10,
+            background: "#344437",
+            fontWeight: 800,
+          }}
+        >
+          👣 Recording breadcrumb trail • {trail.length} GPS
+          points
+        </div>
+      )}
 
       {pending && (
         <div
@@ -489,12 +953,16 @@ export default function FieldMap({
       <div
         style={{
           marginTop: 16,
-          opacity: 0.7,
+          opacity: 0.72,
           fontSize: 13,
+          lineHeight: 1.5,
         }}
       >
-        Tap anywhere on the map to drop the selected marker.
-        Saved locations stay private on this device in this version.
+        Tap the map to save a field marker. Use Mark My Truck
+        before heading into the woods. Start Track records a
+        breadcrumb trail while you move. Tap any saved marker
+        and choose Navigate for live distance and direction.
+        Saved Field data stays private on this device.
       </div>
     </div>
   );
