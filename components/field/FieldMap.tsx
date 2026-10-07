@@ -11,6 +11,7 @@ import {
   useMapEvents,
 } from "react-leaflet";
 import L from "leaflet";
+import { supabase } from "@/lib/supabaseClient";
 import "leaflet/dist/leaflet.css";
 
 export type FieldMode = "hunt" | "fish";
@@ -221,7 +222,92 @@ export default function FieldMap({
 
   const watchId = useRef<number | null>(null);
 
+  // Grace account / shared 50-action allowance
+  const FREE_LIMIT = 50;
+  const [userId, setUserId] = useState<string | null>(null);
+  const [userEmail, setUserEmail] = useState("");
+  const [accountFreeUsed, setAccountFreeUsed] = useState(0);
+  const [paid, setPaid] = useState(false);
+  const [authReady, setAuthReady] = useState(false);
+
+  const freeLeft = Math.max(FREE_LIMIT - accountFreeUsed, 0);
+  const fieldLocked = authReady && !paid && freeLeft <= 0;
+
   const types = mode === "hunt" ? huntTypes : fishTypes;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadFieldAccount() {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (cancelled) return;
+
+      const user = session?.user ?? null;
+
+      if (!user) {
+        setUserId(null);
+        setUserEmail("");
+        setAuthReady(true);
+        return;
+      }
+
+      setUserId(user.id);
+      setUserEmail(user.email || "");
+
+      const { data: usage, error } = await supabase
+        .from("grace_user_usage")
+        .select("free_messages_used, paid, founder")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (cancelled) return;
+
+      if (error) {
+        console.error("Grace Field usage load failed:", error);
+        setAuthReady(true);
+        return;
+      }
+
+      if (!usage) {
+        const { error: createError } = await supabase
+          .from("grace_user_usage")
+          .upsert({
+            user_id: user.id,
+            email: user.email || "",
+            free_messages_used: 0,
+            updated_at: new Date().toISOString(),
+          });
+
+        if (createError) {
+          console.error(
+            "Grace Field usage account creation failed:",
+            createError
+          );
+        }
+
+        setAccountFreeUsed(0);
+        setPaid(false);
+      } else {
+        setAccountFreeUsed(
+          Number(usage.free_messages_used || 0)
+        );
+        setPaid(
+          Boolean(usage.paid) || Boolean(usage.founder)
+        );
+      }
+
+      setAuthReady(true);
+    }
+
+    loadFieldAccount();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     setSelectedType(mode === "hunt" ? "stand" : "hole");
@@ -374,7 +460,50 @@ export default function FieldMap({
     };
   }, []);
 
-  function startTracking() {
+  async function useFieldAction() {
+    if (!authReady) {
+      setLocationStatus("Grace is checking your account...");
+      return false;
+    }
+
+    if (!userId) {
+      window.location.href = "/login";
+      return false;
+    }
+
+    if (paid) return true;
+
+    if (fieldLocked) {
+      window.location.href = "/pay";
+      return false;
+    }
+
+    const nextUsed = accountFreeUsed + 1;
+    setAccountFreeUsed(nextUsed);
+
+    const { error } = await supabase
+      .from("grace_user_usage")
+      .upsert({
+        user_id: userId,
+        email: userEmail,
+        free_messages_used: nextUsed,
+        updated_at: new Date().toISOString(),
+      });
+
+    if (error) {
+      console.error("Grace Field usage update failed:", error);
+      setAccountFreeUsed(accountFreeUsed);
+      setLocationStatus(
+        "Grace could not update your account. Try again."
+      );
+      return false;
+    }
+
+    return true;
+  }
+
+  async function startTracking() {
+    if (!(await useFieldAction())) return;
     if (!navigator.geolocation) return;
 
     if (watchId.current !== null) {
@@ -451,7 +580,7 @@ export default function FieldMap({
     }, 100);
   }
 
- function markTruck() {
+ async function markTruck() {
     if (!position) {
       setLocationStatus(
         "Get a GPS lock before marking your truck."
@@ -459,6 +588,8 @@ export default function FieldMap({
       locateMe();
       return;
     }
+
+    if (!(await useFieldAction())) return;
 
     const truck: FieldSpot = {
       id:
@@ -486,8 +617,9 @@ export default function FieldMap({
     setLocationStatus("🚙 Truck location saved.");
   }
 
-  function addSpot() {
+  async function addSpot() {
     if (!pending) return;
+    if (!(await useFieldAction())) return;
 
     const selected =
       types.find(([key]) => key === selectedType) ||
