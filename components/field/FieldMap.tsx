@@ -25,12 +25,27 @@ export type FieldSpot = {
   name: string;
   notes: string;
   createdAt: string;
+  updatedAt?: string;
+  syncPending?: boolean;
 };
 
 type TrailPoint = {
   lat: number;
   lng: number;
   time: string;
+};
+
+type FieldWeather = {
+  temperature: number;
+  feelsLike: number;
+  windSpeed: number;
+  windDirection: number;
+  windGust: number;
+  precipitation: number;
+  weatherCode: number;
+  sunrise: string;
+  sunset: string;
+  fetchedAt: string;
 };
 
 type MapLayer = "standard" | "satellite" | "topo" | "terrain";
@@ -270,6 +285,9 @@ export default function FieldMap({
   const [navigationTarget, setNavigationTarget] =
     useState<FieldSpot | null>(null);
 
+  const [returningToStart, setReturningToStart] =
+    useState(false);
+
   const [mapLayer, setMapLayer] =
     useState<MapLayer>("satellite");
 
@@ -282,6 +300,18 @@ export default function FieldMap({
   const [historyOpen, setHistoryOpen] =
     useState(false);
 
+  const [fieldPanel, setFieldPanel] =
+    useState<"weather" | "offline" | null>(null);
+
+  const [weather, setWeather] =
+    useState<FieldWeather | null>(null);
+
+  const [weatherLoading, setWeatherLoading] =
+    useState(false);
+
+  const [weatherError, setWeatherError] =
+    useState("");
+
   const watchId = useRef<number | null>(null);
 
   // Grace account / shared 50-action allowance
@@ -291,6 +321,15 @@ export default function FieldMap({
   const [accountFreeUsed, setAccountFreeUsed] = useState(0);
   const [paid, setPaid] = useState(false);
   const [authReady, setAuthReady] = useState(false);
+
+  const [fieldCloudReady, setFieldCloudReady] =
+    useState(false);
+
+  const [fieldSyncing, setFieldSyncing] =
+    useState(false);
+
+  const [fieldSyncStatus, setFieldSyncStatus] =
+    useState("Local Field memory ready.");
 
   const freeLeft = Math.max(FREE_LIMIT - accountFreeUsed, 0);
   const fieldLocked = authReady && !paid && freeLeft <= 0;
@@ -522,6 +561,445 @@ export default function FieldMap({
     };
   }, []);
 
+  function validUuid(value: string) {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      value
+    );
+  }
+
+  function makeFieldId() {
+    if (
+      typeof crypto !== "undefined" &&
+      typeof crypto.randomUUID === "function"
+    ) {
+      return crypto.randomUUID();
+    }
+
+    // RFC4122-style fallback for older WebViews.
+    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(
+      /[xy]/g,
+      (c) => {
+        const r = Math.floor(Math.random() * 16);
+        const v = c === "x" ? r : (r & 0x3) | 0x8;
+        return v.toString(16);
+      }
+    );
+  }
+
+  function normalizeLocalFieldSpots(
+    input: unknown
+  ): FieldSpot[] {
+    if (!Array.isArray(input)) return [];
+
+    return input
+      .filter((spot: any) => {
+        return (
+          spot &&
+          Number.isFinite(Number(spot.lat)) &&
+          Number.isFinite(Number(spot.lng)) &&
+          (spot.mode === "hunt" || spot.mode === "fish") &&
+          typeof spot.type === "string"
+        );
+      })
+      .map((spot: any) => {
+        const createdAt =
+          typeof spot.createdAt === "string" &&
+          spot.createdAt
+            ? spot.createdAt
+            : new Date().toISOString();
+
+        return {
+          id:
+            typeof spot.id === "string" &&
+            validUuid(spot.id)
+              ? spot.id
+              : makeFieldId(),
+
+          lat: Number(spot.lat),
+          lng: Number(spot.lng),
+
+          mode: spot.mode as FieldMode,
+
+          type: String(spot.type || "spot"),
+
+          name:
+            typeof spot.name === "string"
+              ? spot.name
+              : "",
+
+          notes:
+            typeof spot.notes === "string"
+              ? spot.notes
+              : "",
+
+          createdAt,
+
+          updatedAt:
+            typeof spot.updatedAt === "string" &&
+            spot.updatedAt
+              ? spot.updatedAt
+              : createdAt,
+
+          syncPending:
+            Boolean(spot.syncPending),
+        } satisfies FieldSpot;
+      });
+  }
+
+  function cloudRowToFieldSpot(row: any): FieldSpot {
+    return {
+      id: String(row.id),
+      lat: Number(row.lat),
+      lng: Number(row.lng),
+      mode: row.mode as FieldMode,
+      type: String(row.type || "spot"),
+      name: String(row.name || ""),
+      notes: String(row.notes || ""),
+      createdAt: String(
+        row.created_at || new Date().toISOString()
+      ),
+      updatedAt: String(
+        row.updated_at ||
+          row.created_at ||
+          new Date().toISOString()
+      ),
+      syncPending: false,
+    };
+  }
+
+  function fieldSpotToCloudRow(
+    spot: FieldSpot,
+    ownerId: string
+  ) {
+    return {
+      id: spot.id,
+      user_id: ownerId,
+      mode: spot.mode,
+      type: spot.type,
+      name: spot.name || "",
+      notes: spot.notes || "",
+      lat: spot.lat,
+      lng: spot.lng,
+      created_at: spot.createdAt,
+      updated_at:
+        spot.updatedAt ||
+        spot.createdAt ||
+        new Date().toISOString(),
+    };
+  }
+
+  function mergeFieldSpots(
+    localSpots: FieldSpot[],
+    cloudSpots: FieldSpot[]
+  ) {
+    const merged = new Map<string, FieldSpot>();
+
+    for (const spot of cloudSpots) {
+      merged.set(spot.id, spot);
+    }
+
+    for (const local of localSpots) {
+      const cloud = merged.get(local.id);
+
+      if (!cloud) {
+        merged.set(local.id, local);
+        continue;
+      }
+
+      const localTime = new Date(
+        local.updatedAt || local.createdAt
+      ).getTime();
+
+      const cloudTime = new Date(
+        cloud.updatedAt || cloud.createdAt
+      ).getTime();
+
+      if (localTime > cloudTime) {
+        merged.set(local.id, local);
+      }
+    }
+
+    return Array.from(merged.values()).sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() -
+        new Date(a.createdAt).getTime()
+    );
+  }
+
+  async function saveFieldSpotToCloud(
+    spot: FieldSpot
+  ) {
+    if (!userId) return false;
+
+    try {
+      const row = fieldSpotToCloudRow(
+        {
+          ...spot,
+          syncPending: false,
+        },
+        userId
+      );
+
+      const { error } = await supabase
+        .from("grace_field_spots")
+        .upsert(row, {
+          onConflict: "id",
+        });
+
+      if (error) {
+        console.error(
+          "Grace Field cloud save failed:",
+          error
+        );
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error(
+        "Grace Field cloud save failed:",
+        error
+      );
+      return false;
+    }
+  }
+
+  async function deleteFieldSpotFromCloud(
+    spotId: string
+  ) {
+    if (!userId) return false;
+
+    try {
+      const { error } = await supabase
+        .from("grace_field_spots")
+        .delete()
+        .eq("id", spotId)
+        .eq("user_id", userId);
+
+      if (error) {
+        console.error(
+          "Grace Field cloud delete failed:",
+          error
+        );
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error(
+        "Grace Field cloud delete failed:",
+        error
+      );
+      return false;
+    }
+  }
+
+  useEffect(() => {
+    if (!authReady || !userId) return;
+
+    const fieldUserId: string = userId;
+    let cancelled = false;
+
+    async function loadGraceFieldCloud() {
+      setFieldSyncing(true);
+      setFieldSyncStatus(
+        "Syncing Grace Field memory..."
+      );
+
+      let localSpots: FieldSpot[] = [];
+
+      try {
+        const saved =
+          localStorage.getItem("graceFieldSpots");
+
+        if (saved) {
+          localSpots =
+            normalizeLocalFieldSpots(
+              JSON.parse(saved)
+            );
+        }
+      } catch {}
+
+      const {
+        data: cloudRows,
+        error: cloudError,
+      } = await supabase
+        .from("grace_field_spots")
+        .select(
+          "id,user_id,mode,type,name,notes,lat,lng,created_at,updated_at"
+        )
+        .eq("user_id", fieldUserId)
+        .order("created_at", {
+          ascending: false,
+        });
+
+      if (cancelled) return;
+
+      if (cloudError) {
+        console.error(
+          "Grace Field cloud load failed:",
+          cloudError
+        );
+
+        // Offline/local mode remains completely usable.
+        if (localSpots.length > 0) {
+          setSpots(localSpots);
+        }
+
+        setFieldCloudReady(false);
+        setFieldSyncing(false);
+        setFieldSyncStatus(
+          "Offline Field memory active."
+        );
+        return;
+      }
+
+      const cloudSpots = (
+        cloudRows || []
+      ).map(cloudRowToFieldSpot);
+
+      // Merge instead of replacing so the first cloud
+      // connection never destroys markers already on
+      // this phone.
+      const merged = mergeFieldSpots(
+        localSpots,
+        cloudSpots
+      );
+
+      if (cancelled) return;
+
+      setSpots(merged);
+
+      try {
+        localStorage.setItem(
+          "graceFieldSpots",
+          JSON.stringify(merged)
+        );
+      } catch {}
+
+      // Upload anything that only exists locally, or
+      // whose local version is newer than the cloud row.
+      const cloudMap = new Map(
+        cloudSpots.map((spot) => [
+          spot.id,
+          spot,
+        ])
+      );
+
+      const needsUpload =
+        merged.filter((spot) => {
+          const cloud =
+            cloudMap.get(spot.id);
+
+          if (!cloud) return true;
+
+          const localTime =
+            new Date(
+              spot.updatedAt ||
+                spot.createdAt
+            ).getTime();
+
+          const cloudTime =
+            new Date(
+              cloud.updatedAt ||
+                cloud.createdAt
+            ).getTime();
+
+          return localTime > cloudTime;
+        });
+
+      if (needsUpload.length > 0) {
+        const rows =
+          needsUpload.map((spot) =>
+            fieldSpotToCloudRow(
+              {
+                ...spot,
+                syncPending: false,
+              },
+              fieldUserId
+            )
+          );
+
+        const { error: migrationError } =
+          await supabase
+            .from("grace_field_spots")
+            .upsert(rows, {
+              onConflict: "id",
+            });
+
+        if (cancelled) return;
+
+        if (migrationError) {
+          console.error(
+            "Grace Field migration failed:",
+            migrationError
+          );
+
+          const pendingIds = new Set(
+            needsUpload.map(
+              (spot) => spot.id
+            )
+          );
+
+          const pending = merged.map(
+            (spot) =>
+              pendingIds.has(spot.id)
+                ? {
+                    ...spot,
+                    syncPending: true,
+                  }
+                : spot
+          );
+
+          setSpots(pending);
+
+          try {
+            localStorage.setItem(
+              "graceFieldSpots",
+              JSON.stringify(pending)
+            );
+          } catch {}
+
+          setFieldSyncStatus(
+            "Field saved locally. Cloud sync pending."
+          );
+        } else {
+          const synced =
+            merged.map((spot) => ({
+              ...spot,
+              syncPending: false,
+            }));
+
+          setSpots(synced);
+
+          try {
+            localStorage.setItem(
+              "graceFieldSpots",
+              JSON.stringify(synced)
+            );
+          } catch {}
+
+          setFieldSyncStatus(
+            "Grace Field memory synced."
+          );
+        }
+      } else {
+        setFieldSyncStatus(
+          "Grace Field memory synced."
+        );
+      }
+
+      setFieldCloudReady(true);
+      setFieldSyncing(false);
+    }
+
+    loadGraceFieldCloud();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authReady, userId]);
+
   async function useFieldAction() {
     if (!authReady) {
       setLocationStatus("Grace is checking your account...");
@@ -600,6 +1078,45 @@ export default function FieldMap({
     setLocationStatus("Live tracking stopped.");
   }
 
+  function returnToStart() {
+    if (trail.length === 0) {
+      setLocationStatus(
+        "No breadcrumb trail yet. Start Track first."
+      );
+      return;
+    }
+
+    const first = trail[0];
+
+    const startSpot: FieldSpot = {
+      id: "grace-trail-start",
+      lat: first.lat,
+      lng: first.lng,
+      mode,
+      type: "trail-start",
+      name: "Trail Start",
+      notes:
+        "Return destination from your recorded breadcrumb trail.",
+      createdAt: first.time,
+    };
+
+    setNavigationTarget(startSpot);
+    setReturningToStart(true);
+    setToolsOpen(false);
+    setHistoryOpen(false);
+    setFieldPanel(null);
+
+    setLocationStatus(
+      "🧭 Returning to the start of your recorded trail."
+    );
+  }
+
+  function stopNavigation() {
+    setNavigationTarget(null);
+    setReturningToStart(false);
+    setLocationStatus("Navigation stopped.");
+  }
+
   function clearTrail() {
     if (
       typeof window !== "undefined" &&
@@ -642,6 +1159,135 @@ export default function FieldMap({
     }, 100);
   }
 
+ function weatherDescription(code: number) {
+    if (code === 0) return "Clear";
+    if ([1, 2].includes(code)) return "Partly cloudy";
+    if (code === 3) return "Overcast";
+    if ([45, 48].includes(code)) return "Fog";
+    if ([51, 53, 55, 56, 57].includes(code))
+      return "Drizzle";
+    if ([61, 63, 65, 66, 67].includes(code))
+      return "Rain";
+    if ([71, 73, 75, 77].includes(code))
+      return "Snow";
+    if ([80, 81, 82].includes(code))
+      return "Rain showers";
+    if ([85, 86].includes(code))
+      return "Snow showers";
+    if ([95, 96, 99].includes(code))
+      return "Thunderstorms";
+    return "Current conditions";
+  }
+
+  function windCardinal(degrees: number) {
+    return compassDirection(degrees);
+  }
+
+  function formatFieldTime(value: string) {
+    if (!value) return "—";
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) return value;
+
+    return date.toLocaleTimeString([], {
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  }
+
+  async function loadFieldWeather() {
+    if (!position) {
+      setLocationStatus(
+        "Get a GPS lock before checking Field weather."
+      );
+      locateMe();
+      return;
+    }
+
+    if (!(await useFieldAction())) return;
+
+    setWeatherLoading(true);
+    setWeatherError("");
+
+    try {
+      const [lat, lng] = position;
+
+      const params = new URLSearchParams({
+        latitude: String(lat),
+        longitude: String(lng),
+        current:
+          "temperature_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m",
+        daily: "sunrise,sunset",
+        temperature_unit: "fahrenheit",
+        wind_speed_unit: "mph",
+        precipitation_unit: "inch",
+        timezone: "auto",
+        forecast_days: "1",
+      });
+
+      const response = await fetch(
+        `https://api.open-meteo.com/v1/forecast?${params.toString()}`
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          `Weather request failed: ${response.status}`
+        );
+      }
+
+      const data = await response.json();
+
+      const current = data?.current;
+      const daily = data?.daily;
+
+      if (!current) {
+        throw new Error("Weather data unavailable.");
+      }
+
+      setWeather({
+        temperature: Number(current.temperature_2m),
+        feelsLike: Number(current.apparent_temperature),
+        windSpeed: Number(current.wind_speed_10m),
+        windDirection: Number(current.wind_direction_10m),
+        windGust: Number(current.wind_gusts_10m),
+        precipitation: Number(current.precipitation),
+        weatherCode: Number(current.weather_code),
+        sunrise: String(daily?.sunrise?.[0] || ""),
+        sunset: String(daily?.sunset?.[0] || ""),
+        fetchedAt: new Date().toISOString(),
+      });
+
+      setFieldPanel("weather");
+      setToolsOpen(false);
+    } catch (error) {
+      console.error("Grace Field weather failed:", error);
+
+      setWeatherError(
+        "Grace could not load live weather. Check your connection and try again."
+      );
+
+      setFieldPanel("weather");
+      setToolsOpen(false);
+    } finally {
+      setWeatherLoading(false);
+    }
+  }
+
+ function truckAction() {
+    if (truckSpot) {
+      setNavigationTarget(truckSpot);
+      setReturningToStart(false);
+      setToolsOpen(false);
+      setHistoryOpen(false);
+      setFieldPanel(null);
+      setLocationStatus("🚙 Navigating to My Truck.");
+      return;
+    }
+
+    markTruck();
+  }
+
  async function markTruck() {
     if (!position) {
       setLocationStatus(
@@ -666,6 +1312,8 @@ export default function FieldMap({
       name: "My Truck",
       notes: "Vehicle location",
       createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      syncPending: true,
     };
 
     setSpots((current) => [
@@ -700,6 +1348,8 @@ export default function FieldMap({
       name: name.trim() || selected[2],
       notes: notes.trim(),
       createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      syncPending: true,
     };
 
     setSpots((current) => [...current, spot]);
@@ -718,9 +1368,30 @@ export default function FieldMap({
     }
   }
 
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        "graceFieldSpots",
+        JSON.stringify(spots)
+      );
+    } catch (error) {
+      console.warn(
+        "Grace Field local save skipped:",
+        error
+      );
+    }
+  }, [spots]);
+
   const visibleSpots = useMemo(
     () => spots.filter((spot) => spot.mode === mode),
     [spots, mode]
+  );
+
+  const truckSpot = useMemo(
+    () =>
+      visibleSpots.find((spot) => spot.type === "truck") ||
+      null,
+    [visibleSpots]
   );
 
   const historySpots = useMemo(
@@ -772,7 +1443,7 @@ export default function FieldMap({
             position: "absolute",
             left: 10,
             right: 10,
-            bottom: 72,
+            bottom: "calc(env(safe-area-inset-bottom, 0px) + 76px)",
             zIndex: 920,
             padding: 10,
             borderRadius: 18,
@@ -910,7 +1581,7 @@ export default function FieldMap({
         </button>
 
  <button
-          onClick={markTruck}
+          onClick={truckAction}
           style={{
             padding: "10px 14px",
             borderRadius: 10,
@@ -919,7 +1590,7 @@ export default function FieldMap({
             fontWeight: 700,
           }}
         >
-          🚙 Mark My Truck
+          🚙 {truckSpot ? "My Truck" : "Mark My Truck"}
         </button>
 
         {!tracking ? (
@@ -949,6 +1620,23 @@ export default function FieldMap({
             }}
           >
             ⏹ Stop Track
+          </button>
+        )}
+
+        {trail.length > 0 && (
+          <button
+            onClick={returnToStart}
+            style={{
+              padding: "10px 14px",
+              borderRadius: 10,
+              border: "1px solid #f4d27a",
+              background: "#344437",
+              color: "white",
+              cursor: "pointer",
+              fontWeight: 800,
+            }}
+          >
+            🧭 Return to Start
           </button>
         )}
 
@@ -999,14 +1687,15 @@ export default function FieldMap({
 
             <button
               type="button"
-              disabled
+              onClick={loadFieldWeather}
               style={{
                 padding: 11,
                 borderRadius: 11,
-                border: "1px solid #465148",
+                border: "1px solid #f4d27a",
                 background: "#202a22",
-                color: "rgba(255,255,255,.55)",
+                color: "white",
                 fontWeight: 800,
+                cursor: "pointer",
               }}
             >
               🌦️ Weather / Wind
@@ -1014,14 +1703,28 @@ export default function FieldMap({
 
             <button
               type="button"
-              disabled
+              onClick={() => {
+                const context = position
+                  ? `Grace Field ${mode} scout at ${position[0].toFixed(
+                      5
+                    )}, ${position[1].toFixed(5)}`
+                  : `Grace Field ${mode} scout`;
+
+                sessionStorage.setItem(
+                  "graceFieldScoutContext",
+                  context
+                );
+
+                window.location.href = "/chat";
+              }}
               style={{
                 padding: 11,
                 borderRadius: 11,
-                border: "1px solid #465148",
+                border: "1px solid #f4d27a",
                 background: "#202a22",
-                color: "rgba(255,255,255,.55)",
+                color: "white",
                 fontWeight: 800,
+                cursor: "pointer",
               }}
             >
               ✨ Scout with Grace
@@ -1029,14 +1732,18 @@ export default function FieldMap({
 
             <button
               type="button"
-              disabled
+              onClick={() => {
+                setFieldPanel("offline");
+                setToolsOpen(false);
+              }}
               style={{
                 padding: 11,
                 borderRadius: 11,
-                border: "1px solid #465148",
+                border: "1px solid #f4d27a",
                 background: "#202a22",
-                color: "rgba(255,255,255,.55)",
+                color: "white",
                 fontWeight: 800,
+                cursor: "pointer",
               }}
             >
               📥 Offline Area
@@ -1046,13 +1753,14 @@ export default function FieldMap({
       )}
 
       {/* Compact Field Tools launcher */}
+      {!navigationTarget && (
       <button
         type="button"
         onClick={() => setToolsOpen((open) => !open)}
         style={{
           position: "absolute",
           left: 12,
-          bottom: 14,
+          bottom: "calc(env(safe-area-inset-bottom, 0px) + 18px)",
           zIndex: 940,
           padding: "12px 16px",
           borderRadius: 999,
@@ -1068,6 +1776,276 @@ export default function FieldMap({
       >
         🧰 {toolsOpen ? "Close Tools" : "Field Tools"}
       </button>
+      )}
+
+      {fieldPanel && (
+        <div
+          style={{
+            position: "absolute",
+            left: 12,
+            right: 12,
+            bottom:
+              "calc(env(safe-area-inset-bottom, 0px) + 76px)",
+            zIndex: 968,
+            maxWidth: 520,
+            margin: "0 auto",
+            padding: 16,
+            borderRadius: 18,
+            background: "rgba(17,24,20,.98)",
+            border: "1px solid #f4d27a",
+            boxShadow: "0 8px 30px rgba(0,0,0,.65)",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 10,
+            }}
+          >
+            <strong
+              style={{
+                color: "#f4d27a",
+                fontSize: 18,
+              }}
+            >
+              {fieldPanel === "weather"
+                ? "🌦️ Weather / Wind"
+                : "📥 Offline Area"}
+            </strong>
+
+            <button
+              type="button"
+              onClick={() => setFieldPanel(null)}
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: "50%",
+                border: "1px solid #68736b",
+                background: "#202a22",
+                color: "white",
+                fontWeight: 900,
+              }}
+            >
+              ✕
+            </button>
+          </div>
+
+          {fieldPanel === "weather" ? (
+            <div style={{ marginTop: 12 }}>
+              {weatherLoading ? (
+                <div>🌦️ Loading live Field conditions...</div>
+              ) : weatherError ? (
+                <div>
+                  <div>{weatherError}</div>
+
+                  <button
+                    type="button"
+                    onClick={loadFieldWeather}
+                    style={{
+                      marginTop: 10,
+                      padding: "9px 12px",
+                      borderRadius: 9,
+                      border: "1px solid #f4d27a",
+                      background: "#344437",
+                      color: "white",
+                      fontWeight: 800,
+                    }}
+                  >
+                    Try Again
+                  </button>
+                </div>
+              ) : weather ? (
+                <>
+                  <div
+                    style={{
+                      fontSize: 22,
+                      fontWeight: 900,
+                    }}
+                  >
+                    {Math.round(weather.temperature)}°F •{" "}
+                    {weatherDescription(weather.weatherCode)}
+                  </div>
+
+                  <div
+                    style={{
+                      marginTop: 4,
+                      fontSize: 13,
+                      opacity: 0.72,
+                    }}
+                  >
+                    Feels like{" "}
+                    {Math.round(weather.feelsLike)}°F
+                  </div>
+
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns:
+                        "repeat(2, minmax(0, 1fr))",
+                      gap: 8,
+                      marginTop: 12,
+                    }}
+                  >
+                    <div
+                      style={{
+                        padding: 11,
+                        borderRadius: 12,
+                        background: "#202a22",
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: 11,
+                          opacity: 0.6,
+                        }}
+                      >
+                        WIND
+                      </div>
+
+                      <strong>
+                        {windCardinal(
+                          weather.windDirection
+                        )}{" "}
+                        {Math.round(weather.windSpeed)} mph
+                      </strong>
+
+                      <div
+                        style={{
+                          fontSize: 12,
+                          opacity: 0.7,
+                        }}
+                      >
+                        Gusts{" "}
+                        {Math.round(weather.windGust)} mph •{" "}
+                        {Math.round(weather.windDirection)}°
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        padding: 11,
+                        borderRadius: 12,
+                        background: "#202a22",
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: 11,
+                          opacity: 0.6,
+                        }}
+                      >
+                        PRECIPITATION
+                      </div>
+
+                      <strong>
+                        {weather.precipitation.toFixed(2)} in
+                      </strong>
+                    </div>
+
+                    <div
+                      style={{
+                        padding: 11,
+                        borderRadius: 12,
+                        background: "#202a22",
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: 11,
+                          opacity: 0.6,
+                        }}
+                      >
+                        SUNRISE
+                      </div>
+
+                      <strong>
+                        🌅 {formatFieldTime(weather.sunrise)}
+                      </strong>
+                    </div>
+
+                    <div
+                      style={{
+                        padding: 11,
+                        borderRadius: 12,
+                        background: "#202a22",
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: 11,
+                          opacity: 0.6,
+                        }}
+                      >
+                        SUNSET
+                      </div>
+
+                      <strong>
+                        🌇 {formatFieldTime(weather.sunset)}
+                      </strong>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={loadFieldWeather}
+                    style={{
+                      width: "100%",
+                      marginTop: 12,
+                      padding: 10,
+                      borderRadius: 10,
+                      border: "1px solid #68736b",
+                      background: "#202a22",
+                      color: "white",
+                      fontWeight: 800,
+                      cursor: "pointer",
+                    }}
+                  >
+                    ↻ Refresh Conditions
+                  </button>
+
+                  <div
+                    style={{
+                      marginTop: 8,
+                      fontSize: 11,
+                      opacity: 0.55,
+                    }}
+                  >
+                    Live conditions for your current GPS
+                    position • Open-Meteo
+                  </div>
+                </>
+              ) : (
+                <div>No weather loaded yet.</div>
+              )}
+            </div>
+          ) : (
+            <div
+              style={{
+                marginTop: 12,
+                lineHeight: 1.5,
+              }}
+            >
+              <strong>Offline foundation is active.</strong>
+
+              <div
+                style={{
+                  marginTop: 7,
+                  opacity: 0.78,
+                  fontSize: 13,
+                }}
+              >
+                Your saved Field markers and breadcrumb trail
+                already remain on this device. Downloadable
+                offline map areas are the next stage so Grace
+                can keep mapping, tracking and navigating where
+                there is no service.
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {historyOpen && (
         <div
@@ -1264,6 +2242,7 @@ export default function FieldMap({
                             type="button"
                             onClick={() => {
                               setNavigationTarget(spot);
+                              setReturningToStart(false);
                               setHistoryOpen(false);
                             }}
                             style={{
@@ -1344,6 +2323,7 @@ export default function FieldMap({
       </div>
 
       {/* Grace Outdoors map layers */}
+      {!navigationTarget && (
       <div
         style={{
           position: "absolute",
@@ -1419,59 +2399,159 @@ export default function FieldMap({
           </div>
         )}
       </div>
+      )}
 
       {navigationTarget && navigation && (
         <div
           style={{
-            marginBottom: 12,
+            position: "absolute",
+            top: 112,
+            left: 12,
+            right: 12,
+            zIndex: 960,
+            maxWidth: 520,
+            margin: "0 auto",
             padding: 14,
-            borderRadius: 14,
-            background: "#202a22",
+            borderRadius: 18,
+            background: "rgba(17,24,20,.94)",
             border: "2px solid #f4d27a",
+            boxShadow: "0 8px 28px rgba(0,0,0,.6)",
+            textAlign: "center",
           }}
         >
           <div
             style={{
-              fontSize: 12,
-              opacity: 0.7,
+              fontSize: 11,
+              opacity: 0.65,
               textTransform: "uppercase",
-              letterSpacing: 1,
+              letterSpacing: 1.5,
             }}
           >
-            Navigating to
+            {returningToStart
+              ? "RETURN TO START"
+              : "NAVIGATING TO"}
           </div>
-
-          <strong style={{ fontSize: 18 }}>
-            🧭 {navigationTarget.name}
-          </strong>
 
           <div
             style={{
-              marginTop: 6,
-              fontSize: 20,
+              marginTop: 4,
+              fontSize: 19,
               fontWeight: 900,
             }}
           >
-            {formatDistance(navigation.distance)} •{" "}
+            {returningToStart ? "👣 " : "🧭 "}
+            {navigationTarget.name}
+          </div>
+
+          <div
+            style={{
+              height: 92,
+              display: "grid",
+              placeItems: "center",
+            }}
+          >
+            <div
+              style={{
+                fontSize: 64,
+                lineHeight: 1,
+                transform: `rotate(${navigation.bearing}deg)`,
+                transition: "transform .25s ease",
+                transformOrigin: "center",
+                filter:
+                  "drop-shadow(0 3px 6px rgba(0,0,0,.55))",
+              }}
+            >
+              ↑
+            </div>
+          </div>
+
+          <div
+            style={{
+              fontSize: 30,
+              fontWeight: 900,
+              color: "#f4d27a",
+            }}
+          >
+            {formatDistance(navigation.distance)}
+          </div>
+
+          <div
+            style={{
+              marginTop: 2,
+              fontSize: 16,
+              fontWeight: 800,
+            }}
+          >
             {navigation.direction} •{" "}
             {Math.round(navigation.bearing)}°
           </div>
 
-          <button
-            onClick={() => setNavigationTarget(null)}
+          {returningToStart && (
+            <div
+              style={{
+                marginTop: 7,
+                fontSize: 12,
+                opacity: 0.72,
+              }}
+            >
+              Follow your recorded breadcrumb trail back.
+              Grace is showing your original route on the map.
+            </div>
+          )}
+
+          <div
             style={{
-              marginTop: 10,
-              padding: "8px 12px",
-              borderRadius: 9,
-              cursor: "pointer",
+              display: "flex",
+              gap: 8,
+              marginTop: 12,
             }}
           >
-            Stop Navigation
-          </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (!navigationTarget) return;
+
+                setLocationStatus(
+                  `🧭 ${navigationTarget.name} • ${formatDistance(
+                    navigation.distance
+                  )} • ${navigation.direction}`
+                );
+              }}
+              style={{
+                flex: 1,
+                padding: "10px 8px",
+                borderRadius: 10,
+                border: "1px solid #68736b",
+                background: "#202a22",
+                color: "white",
+                fontWeight: 800,
+                cursor: "pointer",
+              }}
+            >
+              🎯 Target
+            </button>
+
+            <button
+              type="button"
+              onClick={stopNavigation}
+              style={{
+                flex: 1,
+                padding: "10px 8px",
+                borderRadius: 10,
+                border: "1px solid #7b4d4d",
+                background: "#2b2020",
+                color: "white",
+                fontWeight: 800,
+                cursor: "pointer",
+              }}
+            >
+              ✕ Stop
+            </button>
+          </div>
         </div>
       )}
 
-      <div
+ <div
         style={{
           position: "absolute",
           inset: 0,
@@ -1563,6 +2643,8 @@ export default function FieldMap({
             const info =
               spot.type === "truck"
                 ? ["truck", "🚙", "My Truck"]
+                : spot.type === "trail-start"
+                ? ["trail-start", "👣", "Trail Start"]
                 : types.find(
                     ([key]) => key === spot.type
                   ) || types[0];
@@ -1616,9 +2698,10 @@ export default function FieldMap({
                       }}
                     >
                       <button
-                        onClick={() =>
-                          setNavigationTarget(spot)
-                        }
+                        onClick={() => {
+                          setNavigationTarget(spot);
+                          setReturningToStart(false);
+                        }}
                       >
                         🧭 Navigate
                       </button>
