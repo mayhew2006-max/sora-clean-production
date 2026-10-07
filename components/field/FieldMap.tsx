@@ -33,6 +33,56 @@ type TrailPoint = {
   time: string;
 };
 
+type MapLayer = "standard" | "satellite" | "topo" | "terrain";
+
+const mapLayers: Record<
+  MapLayer,
+  {
+    label: string;
+    symbol: string;
+    url: string;
+    attribution: string;
+    maxZoom?: number;
+  }
+> = {
+  standard: {
+    label: "Standard",
+    symbol: "🗺️",
+    url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    attribution: "&copy; OpenStreetMap contributors",
+    maxZoom: 19,
+  },
+
+  satellite: {
+    label: "Satellite",
+    symbol: "🛰️",
+    url:
+      "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    attribution:
+      "Tiles &copy; Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community",
+    maxZoom: 19,
+  },
+
+  topo: {
+    label: "Topo",
+    symbol: "⛰️",
+    url: "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",
+    attribution:
+      "Map data &copy; OpenStreetMap contributors, SRTM | Map style &copy; OpenTopoMap",
+    maxZoom: 17,
+  },
+
+  terrain: {
+    label: "Terrain",
+    symbol: "🌲",
+    url:
+      "https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}",
+    attribution:
+      "Tiles &copy; Esri and contributors",
+    maxZoom: 19,
+  },
+};
+
 const huntTypes = [
   ["stand", "🌲", "Tree Stand"],
   ["blind", "⛺", "Ground Blind"],
@@ -219,6 +269,18 @@ export default function FieldMap({
 
   const [navigationTarget, setNavigationTarget] =
     useState<FieldSpot | null>(null);
+
+  const [mapLayer, setMapLayer] =
+    useState<MapLayer>("satellite");
+
+  const [layersOpen, setLayersOpen] =
+    useState(false);
+
+  const [toolsOpen, setToolsOpen] =
+    useState(false);
+
+  const [historyOpen, setHistoryOpen] =
+    useState(false);
 
   const watchId = useRef<number | null>(null);
 
@@ -661,6 +723,16 @@ export default function FieldMap({
     [spots, mode]
   );
 
+  const historySpots = useMemo(
+    () =>
+      [...visibleSpots].sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() -
+          new Date(a.createdAt).getTime()
+      ),
+    [visibleSpots]
+  );
+
   const navigation = useMemo(() => {
     if (!position || !navigationTarget) return null;
 
@@ -682,16 +754,91 @@ export default function FieldMap({
   const center: [number, number] =
     position || [38.5, -80.5];
 
+  const activeLayer = mapLayers[mapLayer];
+
   return (
-    <div>
-      <div
-        style={{
-          display: "flex",
-          gap: 8,
-          overflowX: "auto",
-          paddingBottom: 10,
-        }}
-      >
+    <div
+      style={{
+        position: "relative",
+        width: "100%",
+        height: "100dvh",
+        overflow: "hidden",
+        background: "#111814",
+      }}
+    >
+      {toolsOpen && (
+        <div
+          style={{
+            position: "absolute",
+            left: 10,
+            right: 10,
+            bottom: 72,
+            zIndex: 920,
+            padding: 10,
+            borderRadius: 18,
+            background: "rgba(17,24,20,.96)",
+            border: "1px solid rgba(244,210,122,.55)",
+            boxShadow: "0 8px 28px rgba(0,0,0,.55)",
+            maxHeight: "46vh",
+            overflowY: "auto",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 10,
+              marginBottom: 8,
+            }}
+          >
+            <strong
+              style={{
+                fontSize: 15,
+                color: "#f4d27a",
+              }}
+            >
+              FIELD TOOLS
+            </strong>
+
+            <button
+              type="button"
+              onClick={() => setToolsOpen(false)}
+              style={{
+                width: 34,
+                height: 34,
+                borderRadius: "50%",
+                border: "1px solid #68736b",
+                background: "#202a22",
+                color: "white",
+                fontWeight: 900,
+                cursor: "pointer",
+              }}
+            >
+              ✕
+            </button>
+          </div>
+
+          <div
+            style={{
+              fontSize: 11,
+              opacity: 0.65,
+              marginBottom: 6,
+              textTransform: "uppercase",
+              letterSpacing: 1,
+            }}
+          >
+            Marker
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              gap: 8,
+              overflowX: "auto",
+              paddingBottom: 10,
+            }}
+          >
         {types.map(([key, symbol, label]) => (
           <button
             key={key}
@@ -718,13 +865,24 @@ export default function FieldMap({
       </div>
 
       <div
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          gap: 8,
-          marginBottom: 10,
-        }}
-      >
+            style={{
+              fontSize: 11,
+              opacity: 0.65,
+              margin: "2px 0 6px",
+              textTransform: "uppercase",
+              letterSpacing: 1,
+            }}
+          >
+            Actions
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 8,
+            }}
+          >
         <button
           onClick={locateMe}
           style={{
@@ -810,11 +968,367 @@ export default function FieldMap({
         )}
       </div>
 
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+              gap: 8,
+              marginTop: 10,
+              paddingTop: 10,
+              borderTop: "1px solid rgba(255,255,255,.12)",
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => {
+                setHistoryOpen(true);
+                setToolsOpen(false);
+              }}
+              style={{
+                padding: 11,
+                borderRadius: 11,
+                border: "1px solid #f4d27a",
+                background: "#202a22",
+                color: "white",
+                fontWeight: 800,
+                cursor: "pointer",
+              }}
+            >
+              🗂️ Saved / History ({historySpots.length})
+            </button>
+
+            <button
+              type="button"
+              disabled
+              style={{
+                padding: 11,
+                borderRadius: 11,
+                border: "1px solid #465148",
+                background: "#202a22",
+                color: "rgba(255,255,255,.55)",
+                fontWeight: 800,
+              }}
+            >
+              🌦️ Weather / Wind
+            </button>
+
+            <button
+              type="button"
+              disabled
+              style={{
+                padding: 11,
+                borderRadius: 11,
+                border: "1px solid #465148",
+                background: "#202a22",
+                color: "rgba(255,255,255,.55)",
+                fontWeight: 800,
+              }}
+            >
+              ✨ Scout with Grace
+            </button>
+
+            <button
+              type="button"
+              disabled
+              style={{
+                padding: 11,
+                borderRadius: 11,
+                border: "1px solid #465148",
+                background: "#202a22",
+                color: "rgba(255,255,255,.55)",
+                fontWeight: 800,
+              }}
+            >
+              📥 Offline Area
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Compact Field Tools launcher */}
+      <button
+        type="button"
+        onClick={() => setToolsOpen((open) => !open)}
+        style={{
+          position: "absolute",
+          left: 12,
+          bottom: 14,
+          zIndex: 940,
+          padding: "12px 16px",
+          borderRadius: 999,
+          border: "1px solid rgba(244,210,122,.75)",
+          background: toolsOpen
+            ? "#f4d27a"
+            : "rgba(17,24,20,.95)",
+          color: toolsOpen ? "#111814" : "white",
+          fontWeight: 900,
+          boxShadow: "0 5px 20px rgba(0,0,0,.5)",
+          cursor: "pointer",
+        }}
+      >
+        🧰 {toolsOpen ? "Close Tools" : "Field Tools"}
+      </button>
+
+      {historyOpen && (
+        <div
+          style={{
+            position: "absolute",
+            left: 12,
+            right: 12,
+            top: 82,
+            bottom: 72,
+            zIndex: 965,
+            maxWidth: 620,
+            margin: "0 auto",
+            padding: 14,
+            borderRadius: 18,
+            background: "rgba(17,24,20,.98)",
+            border: "1px solid rgba(244,210,122,.7)",
+            boxShadow: "0 8px 30px rgba(0,0,0,.65)",
+            overflow: "hidden",
+            display: "flex",
+            flexDirection: "column",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 10,
+              marginBottom: 10,
+            }}
+          >
+            <div>
+              <div
+                style={{
+                  color: "#f4d27a",
+                  fontWeight: 900,
+                  fontSize: 18,
+                }}
+              >
+                🗂️ Saved / History
+              </div>
+
+              <div
+                style={{
+                  fontSize: 12,
+                  opacity: 0.7,
+                  marginTop: 2,
+                }}
+              >
+                {mode === "hunt" ? "Hunting" : "Fishing"} •{" "}
+                {historySpots.length} saved
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setHistoryOpen(false)}
+              style={{
+                width: 38,
+                height: 38,
+                borderRadius: "50%",
+                border: "1px solid #68736b",
+                background: "#202a22",
+                color: "white",
+                fontWeight: 900,
+                cursor: "pointer",
+              }}
+            >
+              ✕
+            </button>
+          </div>
+
+          <div
+            style={{
+              overflowY: "auto",
+              paddingRight: 2,
+            }}
+          >
+            {historySpots.length === 0 ? (
+              <div
+                style={{
+                  padding: "30px 12px",
+                  textAlign: "center",
+                  opacity: 0.7,
+                }}
+              >
+                No saved{" "}
+                {mode === "hunt" ? "hunting" : "fishing"} spots yet.
+              </div>
+            ) : (
+              historySpots.map((spot) => {
+                const info =
+                  spot.type === "truck"
+                    ? ["truck", "🚙", "My Truck"]
+                    : types.find(
+                        ([key]) => key === spot.type
+                      ) || types[0];
+
+                return (
+                  <div
+                    key={spot.id}
+                    style={{
+                      marginBottom: 9,
+                      padding: 12,
+                      borderRadius: 13,
+                      background: "#202a22",
+                      border: "1px solid #465148",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: 10,
+                        alignItems: "flex-start",
+                      }}
+                    >
+                      <div style={{ fontSize: 25 }}>
+                        {info[1]}
+                      </div>
+
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div
+                          style={{
+                            fontWeight: 900,
+                            fontSize: 16,
+                          }}
+                        >
+                          {spot.name}
+                        </div>
+
+                        <div
+                          style={{
+                            fontSize: 12,
+                            opacity: 0.65,
+                            marginTop: 2,
+                          }}
+                        >
+                          {info[2]} •{" "}
+                          {new Date(
+                            spot.createdAt
+                          ).toLocaleString()}
+                        </div>
+
+                        {spot.notes && (
+                          <div
+                            style={{
+                              marginTop: 7,
+                              fontSize: 13,
+                              lineHeight: 1.4,
+                            }}
+                          >
+                            {spot.notes}
+                          </div>
+                        )}
+
+                        <div
+                          style={{
+                            marginTop: 7,
+                            fontSize: 11,
+                            opacity: 0.55,
+                          }}
+                        >
+                          {spot.lat.toFixed(5)},{" "}
+                          {spot.lng.toFixed(5)}
+                        </div>
+
+                        {position && (
+                          <div
+                            style={{
+                              marginTop: 5,
+                              fontSize: 12,
+                              fontWeight: 800,
+                              color: "#f4d27a",
+                            }}
+                          >
+                            {formatDistance(
+                              distanceMeters(position, [
+                                spot.lat,
+                                spot.lng,
+                              ])
+                            )}{" "}
+                            away
+                          </div>
+                        )}
+
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: 7,
+                            marginTop: 10,
+                          }}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setNavigationTarget(spot);
+                              setHistoryOpen(false);
+                            }}
+                            style={{
+                              flex: 1,
+                              padding: "9px 10px",
+                              borderRadius: 9,
+                              border:
+                                "1px solid #f4d27a",
+                              background: "#344437",
+                              color: "white",
+                              fontWeight: 800,
+                              cursor: "pointer",
+                            }}
+                          >
+                            🧭 Navigate
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (
+                                window.confirm(
+                                  `Delete "${spot.name}"?`
+                                )
+                              ) {
+                                deleteSpot(spot.id);
+                              }
+                            }}
+                            style={{
+                              padding: "9px 11px",
+                              borderRadius: 9,
+                              border:
+                                "1px solid #7b4d4d",
+                              background: "#2b2020",
+                              color: "white",
+                              fontWeight: 800,
+                              cursor: "pointer",
+                            }}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
+
       <div
         style={{
-          marginBottom: 10,
-          fontSize: 13,
-          opacity: 0.8,
+          position: "absolute",
+          top: 72,
+          left: 12,
+          zIndex: 850,
+          maxWidth: "calc(100% - 24px)",
+          padding: "7px 10px",
+          borderRadius: 999,
+          background: "rgba(17,24,20,.82)",
+          fontSize: 12,
+          opacity: 0.9,
+          pointerEvents: "none",
         }}
       >
         {locationStatus}
@@ -826,6 +1340,83 @@ export default function FieldMap({
               ? `${Math.round(accuracy * 3.28084)} ft`
               : `${accuracy} m`}
           </>
+        )}
+      </div>
+
+      {/* Grace Outdoors map layers */}
+      <div
+        style={{
+          position: "absolute",
+          top: 118,
+          right: 12,
+          zIndex: 950,
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => setLayersOpen((open) => !open)}
+          style={{
+            padding: "10px 13px",
+            borderRadius: 999,
+            border: "1px solid rgba(244,210,122,.7)",
+            background: "rgba(17,24,20,.94)",
+            color: "white",
+            fontWeight: 900,
+            boxShadow: "0 4px 16px rgba(0,0,0,.4)",
+            cursor: "pointer",
+          }}
+        >
+          {activeLayer.symbol} Layers
+        </button>
+
+        {layersOpen && (
+          <div
+            style={{
+              marginTop: 8,
+              width: 150,
+              padding: 6,
+              borderRadius: 14,
+              background: "rgba(17,24,20,.96)",
+              border: "1px solid rgba(244,210,122,.5)",
+              boxShadow: "0 6px 20px rgba(0,0,0,.5)",
+            }}
+          >
+            {(
+              Object.entries(mapLayers) as [
+                MapLayer,
+                (typeof mapLayers)[MapLayer]
+              ][]
+            ).map(([key, layer]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => {
+                  setMapLayer(key);
+                  setLayersOpen(false);
+                }}
+                style={{
+                  width: "100%",
+                  padding: "10px 9px",
+                  margin: "2px 0",
+                  textAlign: "left",
+                  borderRadius: 9,
+                  border:
+                    mapLayer === key
+                      ? "1px solid #f4d27a"
+                      : "1px solid transparent",
+                  background:
+                    mapLayer === key
+                      ? "rgba(244,210,122,.16)"
+                      : "transparent",
+                  color: "white",
+                  fontWeight: 800,
+                  cursor: "pointer",
+                }}
+              >
+                {layer.symbol} {layer.label}
+              </button>
+            ))}
+          </div>
         )}
       </div>
 
@@ -882,11 +1473,13 @@ export default function FieldMap({
 
       <div
         style={{
-          height: "58vh",
-          minHeight: 430,
-          borderRadius: 16,
+          position: "absolute",
+          inset: 0,
+          height: "100%",
+          minHeight: 0,
+          borderRadius: 0,
           overflow: "hidden",
-          border: "1px solid #465148",
+          border: 0,
         }}
       >
         <MapContainer
@@ -895,8 +1488,10 @@ export default function FieldMap({
           style={{ height: "100%", width: "100%" }}
         >
           <TileLayer
-            attribution="&copy; OpenStreetMap contributors"
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            key={mapLayer}
+            attribution={activeLayer.attribution}
+            url={activeLayer.url}
+            maxZoom={activeLayer.maxZoom}
           />
 
           <MoveMap
@@ -1063,11 +1658,18 @@ export default function FieldMap({
         <div
           id="grace-field-save-spot"
           style={{
-            marginTop: 14,
+            position: "absolute",
+            left: 12,
+            right: 12,
+            bottom: 76,
+            zIndex: 970,
+            maxWidth: 520,
+            margin: "0 auto",
             padding: 16,
-            borderRadius: 14,
-            background: "#202a22",
-            border: "1px solid #465148",
+            borderRadius: 16,
+            background: "rgba(17,24,20,.98)",
+            border: "1px solid #f4d27a",
+            boxShadow: "0 8px 30px rgba(0,0,0,.6)",
           }}
         >
           <strong>Save this spot</strong>
@@ -1152,20 +1754,7 @@ export default function FieldMap({
         </div>
       )}
 
-      <div
-        style={{
-          marginTop: 16,
-          opacity: 0.72,
-          fontSize: 13,
-          lineHeight: 1.5,
-        }}
-      >
-        Tap the map to save a field marker. Use Mark My Truck
-        before heading into the woods. Start Track records a
-        breadcrumb trail while you move. Tap any saved marker
-        and choose Navigate for live distance and direction.
-        Saved Field data stays private on this device.
-      </div>
+      {/* Map-first interface: help/history will live in Field Tools. */}
     </div>
   );
 }

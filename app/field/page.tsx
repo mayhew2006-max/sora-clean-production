@@ -9,31 +9,61 @@ const FieldMap = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div style={{ padding: 30 }}>
-        Loading Grace Field...
+      <div
+        style={{
+          height: "100%",
+          display: "grid",
+          placeItems: "center",
+          background: "#111814",
+          color: "white",
+          fontWeight: 800,
+        }}
+      >
+        Loading Grace Outdoors...
       </div>
     ),
   }
 );
 
 export default function GraceField() {
-  const [mode, setMode] =
-    useState<FieldMode>("hunt");
+  const [mode, setMode] = useState<FieldMode>("hunt");
 
   return (
     <main
       style={{
-        minHeight: "100vh",
+        position: "fixed",
+        inset: 0,
+        overflow: "hidden",
         background: "#111814",
         color: "white",
-        padding: 18,
         fontFamily: "Arial, sans-serif",
       }}
     >
+      {/* Full-screen Field map */}
       <div
         style={{
-          maxWidth: 900,
-          margin: "0 auto",
+          position: "absolute",
+          inset: 0,
+        }}
+      >
+        <FieldMap mode={mode} />
+      </div>
+
+      {/* Top Grace bar */}
+      <div
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          zIndex: 1000,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 10,
+          padding:
+            "calc(env(safe-area-inset-top, 0px) + 10px) 12px 10px",
+          pointerEvents: "none",
         }}
       >
         <button
@@ -42,14 +72,14 @@ export default function GraceField() {
             window.location.href = "/chat";
           }}
           style={{
-            marginBottom: 18,
-            padding: "10px 16px",
+            pointerEvents: "auto",
+            padding: "10px 14px",
             borderRadius: 999,
-            border: "1px solid #58635b",
-            background: "#1b251f",
+            border: "1px solid rgba(244,210,122,.65)",
+            background: "rgba(17,24,20,.92)",
             color: "white",
-            fontWeight: 800,
-            cursor: "pointer",
+            fontWeight: 900,
+            boxShadow: "0 4px 16px rgba(0,0,0,.35)",
           }}
         >
           ← Grace
@@ -57,75 +87,47 @@ export default function GraceField() {
 
         <div
           style={{
-            fontSize: 13,
-            opacity: 0.65,
-            letterSpacing: 2,
-          }}
-        >
-          GRACE
-        </div>
-
-        <h1
-          style={{
-            margin: "4px 0",
-            fontSize: 34,
-          }}
-        >
-          Field
-        </h1>
-
-        <p
-          style={{
-            opacity: 0.75,
-            marginTop: 0,
-          }}
-        >
-          Your hunting & fishing companion.
-        </p>
-
-        <div
-          style={{
+            pointerEvents: "auto",
             display: "flex",
-            gap: 10,
-            margin: "20px 0",
+            padding: 4,
+            borderRadius: 999,
+            background: "rgba(17,24,20,.92)",
+            border: "1px solid rgba(244,210,122,.55)",
+            boxShadow: "0 4px 16px rgba(0,0,0,.35)",
           }}
         >
           <button
+            type="button"
             onClick={() => setMode("hunt")}
             style={{
-              flex: 1,
-              padding: 14,
-              borderRadius: 12,
-              border:
-                mode === "hunt"
-                  ? "2px solid #f4d27a"
-                  : "1px solid #58635b",
-              fontWeight: 800,
-              cursor: "pointer",
+              border: 0,
+              borderRadius: 999,
+              padding: "9px 13px",
+              background:
+                mode === "hunt" ? "#f4d27a" : "transparent",
+              color: mode === "hunt" ? "#111814" : "white",
+              fontWeight: 900,
             }}
           >
             🦌 Hunt
           </button>
 
           <button
+            type="button"
             onClick={() => setMode("fish")}
             style={{
-              flex: 1,
-              padding: 14,
-              borderRadius: 12,
-              border:
-                mode === "fish"
-                  ? "2px solid #f4d27a"
-                  : "1px solid #58635b",
-              fontWeight: 800,
-              cursor: "pointer",
+              border: 0,
+              borderRadius: 999,
+              padding: "9px 13px",
+              background:
+                mode === "fish" ? "#f4d27a" : "transparent",
+              color: mode === "fish" ? "#111814" : "white",
+              fontWeight: 900,
             }}
           >
             🎣 Fish
           </button>
         </div>
-
-        <FieldMap mode={mode} />
       </div>
     </main>
   );
