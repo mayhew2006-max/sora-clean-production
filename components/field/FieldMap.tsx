@@ -150,25 +150,32 @@ function makeIcon(symbol: string, border = "#f4d27a") {
   });
 }
 
-function MoveMap({
-  position,
-  navigationTarget,
+function MapController({
+  command,
+  onComplete,
 }: {
-  position: [number, number] | null;
-  navigationTarget: FieldSpot | null;
+  command:
+    | {
+        id: number;
+        lat: number;
+        lng: number;
+        zoom: number;
+      }
+    | null;
+  onComplete: () => void;
 }) {
   const map = useMap();
 
   useEffect(() => {
-    if (navigationTarget) {
-      map.flyTo(
-        [navigationTarget.lat, navigationTarget.lng],
-        Math.max(map.getZoom(), 16)
-      );
-    } else if (position) {
-      map.flyTo(position, Math.max(map.getZoom(), 15));
-    }
-  }, [position, navigationTarget, map]);
+    if (!command) return;
+
+    map.flyTo(
+      [command.lat, command.lng],
+      Math.max(map.getZoom(), command.zoom)
+    );
+
+    onComplete();
+  }, [command, map, onComplete]);
 
   return null;
 }
@@ -284,6 +291,14 @@ export default function FieldMap({
 
   const [navigationTarget, setNavigationTarget] =
     useState<FieldSpot | null>(null);
+
+  const [mapCommand, setMapCommand] =
+    useState<{
+      id: number;
+      lat: number;
+      lng: number;
+      zoom: number;
+    } | null>(null);
 
   const [returningToStart, setReturningToStart] =
     useState(false);
@@ -1274,7 +1289,50 @@ export default function FieldMap({
     }
   }
 
- function truckAction() {
+ function centerMapOn(
+    lat: number,
+    lng: number,
+    zoom = 16
+  ) {
+    setMapCommand({
+      id: Date.now(),
+      lat,
+      lng,
+      zoom,
+    });
+  }
+
+  function centerOnMe() {
+    if (!position) {
+      setLocationStatus(
+        "Waiting for your GPS position."
+      );
+      locateMe();
+      return;
+    }
+
+    centerMapOn(position[0], position[1], 16);
+    setLocationStatus("📍 Centered on your location.");
+  }
+
+  function backToTruck() {
+    if (!truckSpot) {
+      setLocationStatus(
+        "No truck marker saved yet. Mark My Truck first."
+      );
+      return;
+    }
+
+    centerMapOn(
+      truckSpot.lat,
+      truckSpot.lng,
+      17
+    );
+
+    setLocationStatus("🚙 Showing My Truck.");
+  }
+
+  function truckAction() {
     if (truckSpot) {
       setNavigationTarget(truckSpot);
       setReturningToStart(false);
@@ -2554,6 +2612,59 @@ export default function FieldMap({
  <div
         style={{
           position: "absolute",
+          right: 18,
+          bottom:
+            "calc(env(safe-area-inset-bottom, 0px) + 92px)",
+          zIndex: 950,
+          display: "flex",
+          flexDirection: "column",
+          gap: 8,
+        }}
+      >
+        <button
+          type="button"
+          onClick={centerOnMe}
+          title="Center map on me"
+          style={{
+            padding: "10px 14px",
+            borderRadius: 999,
+            border: "1px solid #f4d27a",
+            background: "rgba(17,24,20,.94)",
+            color: "white",
+            fontWeight: 900,
+            boxShadow:
+              "0 4px 14px rgba(0,0,0,.45)",
+            cursor: "pointer",
+          }}
+        >
+          📍 Me
+        </button>
+
+        {truckSpot && (
+          <button
+            type="button"
+            onClick={backToTruck}
+            title="Show my truck"
+            style={{
+              padding: "10px 14px",
+              borderRadius: 999,
+              border: "1px solid #f4d27a",
+              background: "rgba(17,24,20,.94)",
+              color: "white",
+              fontWeight: 900,
+              boxShadow:
+                "0 4px 14px rgba(0,0,0,.45)",
+              cursor: "pointer",
+            }}
+          >
+            🚙 Back to Truck
+          </button>
+        )}
+      </div>
+
+      <div
+        style={{
+          position: "absolute",
           inset: 0,
           height: "100%",
           minHeight: 0,
@@ -2574,9 +2685,9 @@ export default function FieldMap({
             maxZoom={activeLayer.maxZoom}
           />
 
-          <MoveMap
-            position={position}
-            navigationTarget={navigationTarget}
+          <MapController
+            command={mapCommand}
+            onComplete={() => setMapCommand(null)}
           />
 
           <MapTap
