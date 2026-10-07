@@ -420,7 +420,38 @@ export default function FieldMap({
     setTrail([]);
   }
 
-  function markTruck() {
+  function markHere() {
+    if (!position) {
+      setLocationStatus(
+        "Get a GPS lock before marking your current location."
+      );
+      locateMe();
+      return;
+    }
+
+    setPending({
+      lat: position[0],
+      lng: position[1],
+    });
+
+    setName("");
+    setNotes("");
+
+    setLocationStatus(
+      "📌 Current location selected — add a name or notes below."
+    );
+
+    setTimeout(() => {
+      document
+        .getElementById("grace-field-save-spot")
+        ?.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+        });
+    }, 100);
+  }
+
+ function markTruck() {
     if (!position) {
       setLocationStatus(
         "Get a GPS lock before marking your truck."
@@ -576,6 +607,19 @@ export default function FieldMap({
         </button>
 
         <button
+          onClick={markHere}
+          style={{
+            padding: "10px 14px",
+            borderRadius: 10,
+            border: "1px solid #68736b",
+            cursor: "pointer",
+            fontWeight: 700,
+          }}
+        >
+          📌 Mark Here
+        </button>
+
+ <button
           onClick={markTruck}
           style={{
             padding: "10px 14px",
@@ -729,10 +773,35 @@ export default function FieldMap({
           />
 
           <MapTap
-            onTap={(lat, lng) =>
-              setPending({ lat, lng })
-            }
+            onTap={(lat, lng) => {
+              setPending({ lat, lng });
+              setName("");
+              setNotes("");
+              setLocationStatus(
+                "📌 Map location selected — add a name or notes below."
+              );
+
+              setTimeout(() => {
+                document
+                  .getElementById("grace-field-save-spot")
+                  ?.scrollIntoView({
+                    behavior: "smooth",
+                    block: "center",
+                  });
+              }, 100);
+            }}
           />
+
+          {pending && (
+            <Marker
+              position={[pending.lat, pending.lng]}
+              icon={makeIcon("📌", "#ff9f43")}
+            >
+              <Popup>
+                New marker location
+              </Popup>
+            </Marker>
+          )}
 
           {trail.length > 1 && (
             <Polyline
@@ -860,6 +929,7 @@ export default function FieldMap({
 
       {pending && (
         <div
+          id="grace-field-save-spot"
           style={{
             marginTop: 14,
             padding: 16,
