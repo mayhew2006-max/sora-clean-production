@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type ScoutResponse = {
   reply?: string;
@@ -20,6 +20,11 @@ export default function FieldScoutPanel({
   mode: ScoutMode;
 }) {
   const [open, setOpen] = useState(false);
+  useEffect(() => {
+    const show = () => setOpen(true);
+    window.addEventListener("grace-field-open-scout", show);
+    return () => window.removeEventListener("grace-field-open-scout", show);
+  }, []);
   const [question, setQuestion] = useState("");
   const [destination, setDestination] = useState("");
   const [reply, setReply] = useState("");
@@ -278,21 +283,7 @@ export default function FieldScoutPanel({
         </section>
       )}
 
-      <div style={{ display: "flex", justifyContent: "flex-end" }}>
-        <button
-          type="button"
-          onClick={() => setOpen((value) => !value)}
-          style={{
-            ...surface,
-            borderRadius: 999,
-            padding: "13px 19px",
-            fontWeight: 900,
-            cursor: "pointer",
-          }}
-        >
-          {open ? "Close Grace" : "✦ Ask Grace"}
-        </button>
-      </div>
+     
     </div>
   );
 }

@@ -312,7 +312,25 @@ export default function FieldMap({
   const [toolsOpen, setToolsOpen] =
     useState(false);
 
-  const [historyOpen, setHistoryOpen] =
+ 
+  useEffect(() => {
+    const showTools = () => {
+      setLayersOpen(false);
+      setToolsOpen(true);
+    };
+    const showLayers = () => {
+      setToolsOpen(false);
+      setLayersOpen(true);
+    };
+    window.addEventListener("grace-field-open-tools", showTools);
+    window.addEventListener("grace-field-open-layers", showLayers);
+    return () => {
+      window.removeEventListener("grace-field-open-tools", showTools);
+      window.removeEventListener("grace-field-open-layers", showLayers);
+    };
+  }, []);
+
+ const [historyOpen, setHistoryOpen] =
     useState(false);
 
   const [fieldPanel, setFieldPanel] =
@@ -1881,32 +1899,6 @@ window.location.href = "/chat";
         </div>
       )}
 
-      {/* Compact Field Tools launcher */}
-      {!navigationTarget && (
-      <button
-        type="button"
-        onClick={() => setToolsOpen((open) => !open)}
-        style={{
-          position: "absolute",
-          left: 12,
-          bottom: "calc(env(safe-area-inset-bottom, 0px) + 18px)",
-          zIndex: 940,
-          padding: "12px 16px",
-          borderRadius: 999,
-          border: "1px solid rgba(244,210,122,.75)",
-          background: toolsOpen
-            ? "#f4d27a"
-            : "rgba(17,24,20,.95)",
-          color: toolsOpen ? "#111814" : "white",
-          fontWeight: 900,
-          boxShadow: "0 5px 20px rgba(0,0,0,.5)",
-          cursor: "pointer",
-        }}
-      >
-        🧰 {toolsOpen ? "Close Tools" : "Field Tools"}
-      </button>
-      )}
-
       {fieldPanel && (
         <div
           style={{
@@ -2452,7 +2444,7 @@ window.location.href = "/chat";
       </div>
 
       {/* Grace Outdoors map layers */}
-      {!navigationTarget && (
+      {layersOpen && !navigationTarget && (
       <div
         style={{
           position: "absolute",
@@ -2461,23 +2453,6 @@ window.location.href = "/chat";
           zIndex: 950,
         }}
       >
-        <button
-          type="button"
-          onClick={() => setLayersOpen((open) => !open)}
-          style={{
-            padding: "10px 13px",
-            borderRadius: 999,
-            border: "1px solid rgba(244,210,122,.7)",
-            background: "rgba(17,24,20,.94)",
-            color: "white",
-            fontWeight: 900,
-            boxShadow: "0 4px 16px rgba(0,0,0,.4)",
-            cursor: "pointer",
-          }}
-        >
-          {activeLayer.symbol} Layers
-        </button>
-
         {layersOpen && (
           <div
             style={{

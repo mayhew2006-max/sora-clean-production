@@ -25,7 +25,8 @@ const FieldMap = dynamic(
 
 export default function GraceField() {
   const [mode, setMode] = useState<FieldMode>("hunt");
-  const [heading, setHeading] = useState<number | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+ const [heading, setHeading] = useState<number | null>(null);
 
   useEffect(() => {
     function onOrientation(event: DeviceOrientationEvent) {
@@ -81,71 +82,7 @@ export default function GraceField() {
         <FieldScoutPanel mode={mode} />
       </div>
 
-      <header style={{
-        position: "absolute",
-        zIndex: 1200,
-        top: "calc(env(safe-area-inset-top, 0px) + 10px)",
-        left: 12,
-        right: 12,
-        display: "flex",
-        alignItems: "flex-start",
-        justifyContent: "space-between",
-        gap: 8,
-        pointerEvents: "none"
-      }}>
-        <div style={{
-          display: "flex",
-          gap: 6,
-          alignItems: "center",
-          pointerEvents: "auto"
-        }}>
-          <button
-            type="button"
-            style={buttonStyle}
-            onClick={() => window.location.href = "/chat"}
-            aria-label="Return to Grace"
-          >
-            ←
-          </button>
-
-          <div style={{
-            ...buttonStyle,
-            fontSize: 11,
-            letterSpacing: 1.1,
-            padding: "12px 10px"
-          }}>
-            GRACE FIELD
-          </div>
-        </div>
-
-        <div style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 5,
-          pointerEvents: "auto"
-        }}>
-          {(["hunt", "fish"] as const).map((value) => (
-            <button
-              key={value}
-              type="button"
-              onClick={() => setMode(value)}
-              style={{
-                ...buttonStyle,
-                padding: "11px 10px",
-                background:
-                  mode === value
-                    ? "#d4bd83"
-                    : "rgba(12,20,16,.94)",
-                color:
-                  mode === value ? "#152018" : "#f1f4ee",
-                fontSize: 12
-              }}
-            >
-              {value === "hunt" ? "Hunt" : "Fish"}
-            </button>
-          ))}
-        </div>
-      </header>
+     
 
       <div style={{
         position: "absolute",
