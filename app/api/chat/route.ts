@@ -1,3 +1,4 @@
+import { buildFieldIntelligence } from "@/lib/grace-field-brain";
 import {
   GRACE_BAD_BITCH_PERSONALITY,
   GRACE_PROFESSIONAL_STYLE,
@@ -13,71 +14,7 @@ export async function POST(req: Request) {
     } = await req.json();
 
    
-    let verifiedFieldLocation = "";
-
-    if (typeof fieldContext === "string") {
-      let match: RegExpMatchArray | null = null;
-
-      try {
-        const field = JSON.parse(fieldContext);
-        const lat = Number(field?.location?.latitude);
-        const lng = Number(field?.location?.longitude);
-
-        if (
-          Number.isFinite(lat) &&
-          Number.isFinite(lng) &&
-          Math.abs(lat) <= 90 &&
-          Math.abs(lng) <= 180
-        ) {
-          match = `${lat}, ${lng}`.match(
-            /(-?\d{1,2}(?:\.\d+)?)\s*,\s*(-?\d{1,3}(?:\.\d+)?)/
-          );
-        }
-      } catch {
-        match = fieldContext.match(
-          /(-?\d{1,2}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)/
-        );
-      }
-
-      if (match) {
-        try {
-          const lat = Number(match[1]);
-          const lng = Number(match[2]);
-
-          const lookup = new URL(
-            "https://geocoding.geo.census.gov/geocoder/geographies/coordinates"
-          );
-
-          lookup.searchParams.set("x", String(lng));
-          lookup.searchParams.set("y", String(lat));
-          lookup.searchParams.set("benchmark", "Public_AR_Current");
-          lookup.searchParams.set("vintage", "Current_Current");
-          lookup.searchParams.set("format", "json");
-
-          const geoResponse = await fetch(lookup, {
-            signal: AbortSignal.timeout(8000),
-            cache: "no-store",
-          });
-
-          if (geoResponse.ok) {
-            const geoData = await geoResponse.json();
-            const geography = geoData?.result?.geographies || {};
-            const county = geography.Counties?.[0]?.NAME;
-            const state = geography.States?.[0]?.NAME;
-
-            if (county && state) {
-              verifiedFieldLocation =
-                `Verified GPS jurisdiction: ${county}, ${state}. ` +
-                `Source: US Census Geocoder.`;
-            }
-          }
-        } catch (error) {
-          console.error("Field location lookup:", error);
-        }
-      }
-    }
-
- const safeFieldContext =
+    const safeFieldContext =
       typeof fieldContext === "string"
         ? fieldContext.slice(0, 12000)
         : "";
@@ -412,27 +349,8 @@ For humor, have some damn fun.
 `.trim();
 
    
-    const fieldAccuracyRules = safeFieldContext
-      ? `
-GRACE FIELD ACCURACY RULES:
-GPS scouting context: ${safeFieldContext}
-${verifiedFieldLocation || "County and state NOT VERIFIED."}
-
-- Never guess county, state, waterways, or nearby public access.
-- Use only the verified jurisdiction above when available.
-- Do not describe weather as live or verified unless actual
-  weather measurements were provided in the request.
-- Never invent temperature, wind, stocking dates, species
-  presence, fishing regulations, or hunting regulations.
-- A GPS coordinate alone does not establish water conditions.
-- Do not call general knowledge "verified".
-- Give useful, specific scouting tactics based on available facts.
-- Separate observed facts from hypotheses.
-- If a key fact is missing, identify it briefly.
-- Prioritize a practical recommendation over beginner lectures.
-- Keep the first response concise and actionable.
-- Maintain Grace's personality without sacrificing accuracy.
-`
+    const fieldIntelligence = safeFieldContext
+      ? await buildFieldIntelligence(safeFieldContext)
       : "";
 
  const recentMessages = safeMessages.slice(-16);
@@ -522,7 +440,7 @@ THIS STYLE LOCK APPLIES TO THE CURRENT RESPONSE.
         body: JSON.stringify({
           model: process.env.OPENAI_MODEL || "gpt-4o-mini",
           temperature: 0.8,
-          max_tokens: safeFieldContext ? 1200 : 850,
+          max_tokens: safeFieldContext ? 650 : 850,
           messages: [
             {
               role: "system",
@@ -531,7 +449,7 @@ THIS STYLE LOCK APPLIES TO THE CURRENT RESPONSE.
             ...priorMessages,
             {
               role: "system",
-              content: bostonStyleLock + "\\n" + fieldAccuracyRules,
+              content: bostonStyleLock + "\n" + fieldIntelligence,
             },
             ...(latestMessage ? [latestMessage] : []),
           ],
