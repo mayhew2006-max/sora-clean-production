@@ -52,14 +52,95 @@ out tags 15;`;
   }
 }
 
+
+async function resolveDestination(query: string) {
+  try {
+    const url = new URL(
+      "https://nominatim.openstreetmap.org/search"
+    );
+
+    url.searchParams.set("q", query);
+    url.searchParams.set("format", "json");
+    url.searchParams.set("addressdetails", "1");
+    url.searchParams.set("limit", "1");
+
+    const response = await fetch(url, {
+      headers: {
+        "User-Agent": "GraceField/1.0 (grace-assistant.vercel.app)",
+        "Accept": "application/json",
+      },
+      signal: AbortSignal.timeout(9000),
+      cache: "no-store",
+    });
+
+    if (!response.ok) return null;
+
+    const results = await response.json();
+    const result = results?.[0];
+
+    if (!result) return null;
+
+    const lat = Number(result.lat);
+    const lng = Number(result.lon);
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lng))
+      return null;
+
+    return {
+      name: String(result.display_name || query),
+      latitude: lat,
+      longitude: lng,
+      source: "OpenStreetMap Nominatim",
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function POST(req: Request) {
   try {
     const body = await req.json();
 
-    const rawContext =
+    let rawContext =
       typeof body.fieldContext === "string"
         ? body.fieldContext.slice(0, 12000)
         : "";
+
+    const destination =
+      typeof body.destination === "string"
+        ? body.destination.trim().slice(0, 180)
+        : "";
+
+    let resolvedDestinationName = "";
+
+    if (destination) {
+      const resolved = await resolveDestination(destination);
+
+      if (!resolved) {
+        return NextResponse.json(
+          {
+            error:
+              "Grace couldn't verify that destination. Try a more specific place name, including the state or country.",
+          },
+          { status: 422 }
+        );
+      }
+
+      resolvedDestinationName = resolved.name;
+
+      rawContext = JSON.stringify({
+        source: "Grace Field",
+        mode: body.mode === "hunt" ? "hunt" : "fish",
+        capturedAt: new Date().toISOString(),
+        location: {
+          latitude: resolved.latitude,
+          longitude: resolved.longitude,
+        },
+        destination: resolved.name,
+        destinationSource: resolved.source,
+        savedSpots: [],
+      });
+    }
 
     const question =
       typeof body.question === "string"
@@ -100,6 +181,20 @@ export async function POST(req: Request) {
     ]);
 
     const mode = parsed?.mode === "fish" ? "fish" : "hunt";
+    const destinationInstructions = resolvedDestinationName
+      ? `
+REQUESTED DESTINATION:
+${resolvedDestinationName}
+
+The user asked about this destination, NOT their
+current GPS location. Use its resolved coordinates.
+Never substitute the user's home or current location.
+The destination name is from OpenStreetMap Nominatim.
+It does not establish fishing access, species,
+regulations, or water conditions.
+`
+      : "";
+
 
     const system = `
 You are Grace, the user's familiar, witty Boston-style
@@ -110,6 +205,8 @@ You are answering a fresh GRACE FIELD SCOUT request.
 This is NOT a continuation of an old fishing conversation.
 
 ${intelligence}
+
+${destinationInstructions}
 
 OPENSTREETMAP WATER FEATURES WITHIN APPROXIMATELY
 1.5 KM OF THE SUPPLIED GPS POINT:

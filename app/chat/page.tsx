@@ -136,6 +136,7 @@ export default function GraceChat() {
   const [fieldScoutContext, setFieldScoutContext] =
     useState("");
 
+ 
   useEffect(() => {
     try {
       const context =
@@ -2640,7 +2641,17 @@ function isMarketplaceQuery(text: string) {
     setInput("");
 
     try {
-      const scoutRequest = Boolean(fieldScoutContext);
+      const scoutAnywhereMatch = clean.match(
+        /^scout anywhere:\\s*(.+)$/i
+      );
+
+      const scoutRequest =
+        Boolean(fieldScoutContext) ||
+        Boolean(scoutAnywhereMatch);
+
+      const destination = scoutAnywhereMatch
+        ? scoutAnywhereMatch[1].trim()
+        : "";
 
       const res = await fetch(
         scoutRequest ? "/api/field-scout" : "/api/chat",
@@ -2652,6 +2663,10 @@ function isMarketplaceQuery(text: string) {
               ? {
                   question: clean,
                   fieldContext: fieldScoutContext,
+                  destination,
+                  mode: /hunt|deer|elk|turkey/i.test(clean)
+                    ? "hunt"
+                    : "fish",
                 }
               : {
                   messages: nextMessages.slice(-8),
