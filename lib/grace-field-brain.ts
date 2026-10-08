@@ -49,7 +49,7 @@ function parseFieldContext(raw: string): FieldContext | null {
   }
 }
 
-async function fetchCounty(lat: number, lng: number) {
+export async function fetchCounty(lat: number, lng: number) {
   try {
     const url = new URL(
       "https://geocoding.geo.census.gov/geocoder/geographies/coordinates"

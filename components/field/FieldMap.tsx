@@ -1779,19 +1779,48 @@ export default function FieldMap({
 
             <button
               type="button"
-              onClick={() => {
+              onClick={async () => {
+                let freshLocation: {
+                  latitude: number;
+                  longitude: number;
+                  accuracyMeters: number;
+                } | null = null;
+
+                try {
+                  const gps = await new Promise<GeolocationPosition>(
+                    (resolve, reject) => {
+                      navigator.geolocation.getCurrentPosition(
+                        resolve,
+                        reject,
+                        {
+                          enableHighAccuracy: true,
+                          maximumAge: 0,
+                          timeout: 15000,
+                        }
+                      );
+                    }
+                  );
+
+                  freshLocation = {
+                    latitude: gps.coords.latitude,
+                    longitude: gps.coords.longitude,
+                    accuracyMeters: gps.coords.accuracy,
+                  };
+                } catch {
+                  window.alert(
+                    "Grace couldn't get a fresh GPS location. " +
+                    "Check location permission and try again."
+                  );
+                  return;
+                }
+
+                
                 
 const fieldSnapshot = {
   source: "Grace Field",
   mode,
   capturedAt: new Date().toISOString(),
-  location: position
-    ? {
-        latitude: position[0],
-        longitude: position[1],
-        accuracyMeters: accuracy,
-      }
-    : null,
+  location: freshLocation,
   weather: weather
     ? {
         ...weather,

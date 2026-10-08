@@ -2682,6 +2682,13 @@ function isMarketplaceQuery(text: string) {
       );
 
       const data = await res.json();
+
+      // A Field snapshot is a one-request handoff,
+      // not a permanent GPS location for later chats.
+      if (fieldScoutContext && scoutRequest) {
+        setFieldScoutContext("");
+      }
+
       const reply =
         data.reply ||
         data.error ||

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { buildFieldIntelligence } from "@/lib/grace-field-brain";
+import { buildFieldIntelligence, fetchCounty } from "@/lib/grace-field-brain";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -173,11 +173,14 @@ export async function POST(req: Request) {
       lng >= -180 &&
       lng <= 180;
 
-    const [intelligence, waterways] = await Promise.all([
+    const [intelligence, waterways, verifiedCounty] = await Promise.all([
       buildFieldIntelligence(rawContext),
       validGPS
         ? nearbyWaterways(lat, lng)
         : Promise.resolve([]),
+      validGPS
+        ? fetchCounty(lat, lng)
+        : Promise.resolve(null),
     ]);
 
     const mode = parsed?.mode === "fish" ? "fish" : "hunt";
@@ -317,9 +320,31 @@ ANSWER FORMAT:
       );
     }
 
+    const locationLabel = verifiedCounty
+      ? `${verifiedCounty.county}, ${verifiedCounty.state}`
+      : "County/state not independently verified";
+
+    // Remove any unsupported county claims from the generated answer.
+    const cleanedReply = reply
+      .replace(/\*\*/g, "")
+      .replace(/\b[A-Z][A-Za-z .'-]* County\b(?:,?\s*[A-Z][A-Za-z .'-]*)?/g,
+        (claim: string) =>
+          verifiedCounty &&
+          claim.toLowerCase().includes(verifiedCounty.county.toLowerCase())
+            ? claim
+            : "the area")
+      .trim();
+
     return NextResponse.json({
-      reply: reply.replace(/\*\*/g, "").trim(),
-      scoutVersion: "field-brain-v2",
+      reply: `Location: ${locationLabel}\\n\\n${cleanedReply}`,
+      verifiedLocation: verifiedCounty
+        ? {
+            county: verifiedCounty.county,
+            state: verifiedCounty.state,
+            source: verifiedCounty.source,
+          }
+        : null,
+      scoutVersion: "field-brain-v3",
       gpsAvailable: validGPS,
       mappedWaterFeatures: waterways.length,
     });
