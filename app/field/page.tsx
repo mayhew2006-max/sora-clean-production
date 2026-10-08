@@ -141,7 +141,7 @@ export default function GraceField() {
                 const positions = [
                   { top: 7, left: "50%", transform: "translateX(-50%)" },
                   { right: 7, top: "50%", transform: "translateY(-50%)" },
-                  { bottom: 7, left: "50%", transform: "translateX(-50%)" },
+                  { bottom: 110, left: "50%", transform: "translateX(-50%)" },
                   { left: 7, top: "50%", transform: "translateY(-50%)" }
                 ];
 
