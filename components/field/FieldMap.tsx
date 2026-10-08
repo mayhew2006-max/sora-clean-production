@@ -1538,7 +1538,7 @@ export default function FieldMap({
             background: "rgba(17,24,20,.96)",
             border: "1px solid rgba(244,210,122,.55)",
             boxShadow: "0 8px 28px rgba(0,0,0,.55)",
-            maxHeight: "min(52dvh, 440px)",
+            maxHeight: "min(43dvh, 370px)",
             overflowY: "auto",
           }}
         >
@@ -2448,23 +2448,52 @@ window.location.href = "/chat";
       <div
         style={{
           position: "absolute",
-          top: 500,
+          bottom: "calc(env(safe-area-inset-bottom, 0px) + 100px)",
+          left: 12,
           right: 12,
           zIndex: 950,
+          display: "flex",
+          justifyContent: "center",
         }}
       >
         {layersOpen && (
           <div
             style={{
               marginTop: 8,
-              width: 150,
-              padding: 6,
+              width: "min(100%, 420px)",
+              maxHeight: "43dvh",
+              overflowY: "auto",
+              padding: 12,
               borderRadius: 14,
               background: "rgba(17,24,20,.96)",
               border: "1px solid rgba(244,210,122,.5)",
               boxShadow: "0 6px 20px rgba(0,0,0,.5)",
             }}
           >
+            <div style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: 8
+            }}>
+              <strong style={{color:"#d4bd83",letterSpacing:1}}>
+                MAP LAYERS
+              </strong>
+              <button
+                type="button"
+                onClick={() => setLayersOpen(false)}
+                style={{
+                  border:"1px solid #68736b",
+                  borderRadius:999,
+                  background:"#202a22",
+                  color:"white",
+                  padding:"7px 12px",
+                  fontWeight:800
+                }}
+              >
+                ✕ Close
+              </button>
+            </div>
             {(
               Object.entries(mapLayers) as [
                 MapLayer,
