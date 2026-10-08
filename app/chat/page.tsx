@@ -2645,9 +2645,14 @@ function isMarketplaceQuery(text: string) {
         /^scout anywhere:\\s*(.+)$/i
       );
 
+      const outdoorQuestion =
+        /\b(fish|fishing|angler|trout|bass|walleye|catfish|salmon|hunting|hunt|deer|elk|turkey|scout|scouting)\b/i.test(clean) &&
+        /\b(where|near|around|at|in|location|spot|spots|lake|river|creek|stream|county|state|country|best|recommend|conditions)\b/i.test(clean);
+
       const scoutRequest =
+        Boolean(scoutAnywhereMatch) ||
         Boolean(fieldScoutContext) ||
-        Boolean(scoutAnywhereMatch);
+        outdoorQuestion;
 
       const destination = scoutAnywhereMatch
         ? scoutAnywhereMatch[1].trim()
