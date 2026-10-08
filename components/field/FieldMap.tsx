@@ -1780,18 +1780,42 @@ export default function FieldMap({
             <button
               type="button"
               onClick={() => {
-                const context = position
-                  ? `Grace Field ${mode} scout at ${position[0].toFixed(
-                      5
-                    )}, ${position[1].toFixed(5)}`
-                  : `Grace Field ${mode} scout`;
+                
+const fieldSnapshot = {
+  source: "Grace Field",
+  mode,
+  capturedAt: new Date().toISOString(),
+  location: position
+    ? {
+        latitude: position[0],
+        longitude: position[1],
+        accuracyMeters: accuracy,
+      }
+    : null,
+  weather: weather
+    ? {
+        ...weather,
+        note: "Weather observation from the Field weather service; check fetchedAt for freshness.",
+      }
+    : null,
+  savedSpots: visibleSpots.slice(0, 30).map((spot) => ({
+    name: spot.name,
+    type: spot.type,
+    lat: spot.lat,
+    lng: spot.lng,
+    notes: spot.notes,
+    createdAt: spot.createdAt,
+  })),
+  instruction:
+    "Analyze this actual field context. Give practical location-specific scouting reasoning, distinguish verified data from inference, and identify missing environmental information. Do not invent water bodies, species, terrain, regulations, or public access.",
+};
 
-                sessionStorage.setItem(
-                  "graceFieldScoutContext",
-                  context
-                );
+sessionStorage.setItem(
+  "graceFieldScoutContext",
+  JSON.stringify(fieldSnapshot)
+);
 
-                window.location.href = "/chat";
+window.location.href = "/chat";
               }}
               style={{
                 padding: 11,

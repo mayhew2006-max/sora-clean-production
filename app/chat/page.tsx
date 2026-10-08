@@ -144,8 +144,11 @@ export default function GraceChat() {
       if (context) {
         setFieldScoutContext(context);
         setInput(
-          "Grace, help me scout this location. " +
-          context
+          "Grace, analyze my current Grace Field scouting data. " +
+          "Give me useful hunting or fishing recommendations based on " +
+          "the available GPS, weather, wind, and saved observations. " +
+          "Tell me what is verified, what is inferred, and what information " +
+          "is missing. Do not give generic beginner advice."
         );
         sessionStorage.removeItem(
           "graceFieldScoutContext"
