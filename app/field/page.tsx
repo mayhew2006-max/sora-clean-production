@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import type { FieldMode } from "@/components/field/FieldMap";
 import FieldScoutPanel from "@/components/field/FieldScoutPanel";
+import FieldWeekendKit from "@/components/field/FieldWeekendKit";
 
 const FieldMap = dynamic(
   () => import("@/components/field/FieldMap"),
@@ -86,6 +87,7 @@ export default function GraceField() {
       <div style={{ position: "absolute", inset: 0 }}>
         <FieldMap mode={mode} />
         <FieldScoutPanel mode={mode} />
+<FieldWeekendKit />
       </div>
 
      
