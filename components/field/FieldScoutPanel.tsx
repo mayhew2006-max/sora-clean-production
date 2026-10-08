@@ -23,7 +23,10 @@ export default function FieldScoutPanel({
   useEffect(() => {
     const show = () => setOpen(true);
     window.addEventListener("grace-field-open-scout", show);
+    const hide = () => setOpen(false);
+    window.addEventListener("grace-field-close-scout", hide);
     return () => window.removeEventListener("grace-field-open-scout", show);
+      window.removeEventListener("grace-field-close-scout", hide);
   }, []);
   const [question, setQuestion] = useState("");
   const [destination, setDestination] = useState("");

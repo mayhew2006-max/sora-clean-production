@@ -26,6 +26,12 @@ const FieldMap = dynamic(
 export default function GraceField() {
   const [mode, setMode] = useState<FieldMode>("hunt");
   const [menuOpen, setMenuOpen] = useState(false);
+
+  useEffect(() => {
+    const closeMenu = () => setMenuOpen(false);
+    window.addEventListener("grace-field-open-scout", closeMenu);
+    return () => window.removeEventListener("grace-field-open-scout", closeMenu);
+  }, []);
  const [heading, setHeading] = useState<number | null>(null);
 
   useEffect(() => {
@@ -201,7 +207,10 @@ export default function GraceField() {
     pointerEvents:"none"
   }}>
     <button type="button"
-      onClick={() => setMenuOpen(v => !v)}
+      onClick={() => {
+        window.dispatchEvent(new Event("grace-field-close-scout"));
+        setMenuOpen(v => !v);
+    }}
       style={{
         pointerEvents:"auto",
         padding:"14px 25px",
