@@ -199,7 +199,7 @@ export default function GraceField() {
   {/* Grace Field unified controls */}
   <div style={{
     position:"fixed",
-    bottom:"calc(env(safe-area-inset-bottom, 0px) + 85px)",
+    bottom:"calc(env(safe-area-inset-bottom, 0px) + 22px)",
     left:0,right:0,
     zIndex:9999,
     display:"flex",
@@ -229,7 +229,7 @@ export default function GraceField() {
   {menuOpen && (
     <div style={{
       position:"fixed",
-      bottom:"calc(env(safe-area-inset-bottom, 0px) + 155px)",
+      bottom:"calc(env(safe-area-inset-bottom, 0px) + 94px)",
       left:12,right:12,
       zIndex:9998,
       maxWidth:520,

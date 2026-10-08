@@ -1531,14 +1531,14 @@ export default function FieldMap({
             position: "absolute",
             left: 10,
             right: 10,
-            bottom: "calc(env(safe-area-inset-bottom, 0px) + 76px)",
+            bottom: "calc(env(safe-area-inset-bottom, 0px) + 100px)",
             zIndex: 920,
             padding: 10,
             borderRadius: 18,
             background: "rgba(17,24,20,.96)",
             border: "1px solid rgba(244,210,122,.55)",
             boxShadow: "0 8px 28px rgba(0,0,0,.55)",
-            maxHeight: "46vh",
+            maxHeight: "min(52dvh, 440px)",
             overflowY: "auto",
           }}
         >
@@ -2448,7 +2448,7 @@ window.location.href = "/chat";
       <div
         style={{
           position: "absolute",
-          top: 118,
+          top: 500,
           right: 12,
           zIndex: 950,
         }}
