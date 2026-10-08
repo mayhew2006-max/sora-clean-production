@@ -127,7 +127,7 @@ const fishTypes = [
   ["parking", "🅿️", "Parking"],
 ];
 
-function makeIcon(symbol: string, border = "#f4d27a") {
+function makeIcon(symbol: string, border = "#C8AE79") {
   return L.divIcon({
     className: "",
     html: `
@@ -1522,7 +1522,7 @@ export default function FieldMap({
         width: "100%",
         height: "100dvh",
         overflow: "hidden",
-        background: "#111814",
+        background: "#0C1411",
       }}
     >
       {toolsOpen && (
@@ -1554,7 +1554,7 @@ export default function FieldMap({
             <strong
               style={{
                 fontSize: 15,
-                color: "#f4d27a",
+                color: "#C8AE79",
               }}
             >
               FIELD TOOLS
@@ -1568,7 +1568,7 @@ export default function FieldMap({
                 height: 34,
                 borderRadius: "50%",
                 border: "1px solid #68736b",
-                background: "#202a22",
+                background: "#18251F",
                 color: "white",
                 fontWeight: 900,
                 cursor: "pointer",
@@ -1608,12 +1608,12 @@ export default function FieldMap({
               borderRadius: 999,
               border:
                 selectedType === key
-                  ? "2px solid #f4d27a"
+                  ? "2px solid #C8AE79"
                   : "1px solid #566158",
               background:
                 selectedType === key
                   ? "#344437"
-                  : "#202a22",
+                  : "#18251F",
               color: "white",
               cursor: "pointer",
             }}
@@ -1652,7 +1652,7 @@ export default function FieldMap({
             fontWeight: 700,
           }}
         >
-          📍 Find Me
+          ⌖ FIND ME
         </button>
 
         <button
@@ -1665,7 +1665,7 @@ export default function FieldMap({
             fontWeight: 700,
           }}
         >
-          📌 Mark Here
+          ＋ SAVE LOCATION
         </button>
 
  <button
@@ -1698,7 +1698,7 @@ export default function FieldMap({
               fontWeight: 700,
             }}
           >
-            👣 Start Track
+            ◎ START TRACK
           </button>
         ) : (
           <button
@@ -1706,7 +1706,7 @@ export default function FieldMap({
             style={{
               padding: "10px 14px",
               borderRadius: 10,
-              border: "2px solid #f4d27a",
+              border: "2px solid #C8AE79",
               background: "#344437",
               color: "white",
               cursor: "pointer",
@@ -1723,7 +1723,7 @@ export default function FieldMap({
             style={{
               padding: "10px 14px",
               borderRadius: 10,
-              border: "1px solid #f4d27a",
+              border: "1px solid rgba(200,174,121,.55)",
               background: "#344437",
               color: "white",
               cursor: "pointer",
@@ -1769,14 +1769,14 @@ export default function FieldMap({
               style={{
                 padding: 11,
                 borderRadius: 11,
-                border: "1px solid #f4d27a",
-                background: "#202a22",
+                border: "1px solid rgba(200,174,121,.55)",
+                background: "#18251F",
                 color: "white",
                 fontWeight: 800,
                 cursor: "pointer",
               }}
             >
-              🗂️ Saved / History ({historySpots.length})
+              ▤ SAVED / HISTORY ({historySpots.length})
             </button>
 
             <button
@@ -1785,8 +1785,8 @@ export default function FieldMap({
               style={{
                 padding: 11,
                 borderRadius: 11,
-                border: "1px solid #f4d27a",
-                background: "#202a22",
+                border: "1px solid rgba(200,174,121,.55)",
+                background: "#18251F",
                 color: "white",
                 fontWeight: 800,
                 cursor: "pointer",
@@ -1867,14 +1867,14 @@ window.location.href = "/chat";
               style={{
                 padding: 11,
                 borderRadius: 11,
-                border: "1px solid #f4d27a",
-                background: "#202a22",
+                border: "1px solid rgba(200,174,121,.55)",
+                background: "#18251F",
                 color: "white",
                 fontWeight: 800,
                 cursor: "pointer",
               }}
             >
-              ✨ Scout with Grace
+              ✦ GRACE SCOUT
             </button>
 
             <button
@@ -1886,14 +1886,14 @@ window.location.href = "/chat";
               style={{
                 padding: 11,
                 borderRadius: 11,
-                border: "1px solid #f4d27a",
-                background: "#202a22",
+                border: "1px solid rgba(200,174,121,.55)",
+                background: "#18251F",
                 color: "white",
                 fontWeight: 800,
                 cursor: "pointer",
               }}
             >
-              📥 Offline Area
+              ↓ OFFLINE MAPS
             </button>
           </div>
         </div>
@@ -1913,7 +1913,7 @@ window.location.href = "/chat";
             padding: 16,
             borderRadius: 18,
             background: "rgba(17,24,20,.98)",
-            border: "1px solid #f4d27a",
+            border: "1px solid rgba(200,174,121,.55)",
             boxShadow: "0 8px 30px rgba(0,0,0,.65)",
           }}
         >
@@ -1927,13 +1927,13 @@ window.location.href = "/chat";
           >
             <strong
               style={{
-                color: "#f4d27a",
+                color: "#C8AE79",
                 fontSize: 18,
               }}
             >
               {fieldPanel === "weather"
                 ? "🌦️ Weather / Wind"
-                : "📥 Offline Area"}
+                : "↓ OFFLINE MAPS"}
             </strong>
 
             <button
@@ -1944,7 +1944,7 @@ window.location.href = "/chat";
                 height: 36,
                 borderRadius: "50%",
                 border: "1px solid #68736b",
-                background: "#202a22",
+                background: "#18251F",
                 color: "white",
                 fontWeight: 900,
               }}
@@ -1968,7 +1968,7 @@ window.location.href = "/chat";
                       marginTop: 10,
                       padding: "9px 12px",
                       borderRadius: 9,
-                      border: "1px solid #f4d27a",
+                      border: "1px solid rgba(200,174,121,.55)",
                       background: "#344437",
                       color: "white",
                       fontWeight: 800,
@@ -2013,7 +2013,7 @@ window.location.href = "/chat";
                       style={{
                         padding: 11,
                         borderRadius: 12,
-                        background: "#202a22",
+                        background: "#18251F",
                       }}
                     >
                       <div
@@ -2048,7 +2048,7 @@ window.location.href = "/chat";
                       style={{
                         padding: 11,
                         borderRadius: 12,
-                        background: "#202a22",
+                        background: "#18251F",
                       }}
                     >
                       <div
@@ -2069,7 +2069,7 @@ window.location.href = "/chat";
                       style={{
                         padding: 11,
                         borderRadius: 12,
-                        background: "#202a22",
+                        background: "#18251F",
                       }}
                     >
                       <div
@@ -2090,7 +2090,7 @@ window.location.href = "/chat";
                       style={{
                         padding: 11,
                         borderRadius: 12,
-                        background: "#202a22",
+                        background: "#18251F",
                       }}
                     >
                       <div
@@ -2117,7 +2117,7 @@ window.location.href = "/chat";
                       padding: 10,
                       borderRadius: 10,
                       border: "1px solid #68736b",
-                      background: "#202a22",
+                      background: "#18251F",
                       color: "white",
                       fontWeight: 800,
                       cursor: "pointer",
@@ -2201,12 +2201,12 @@ window.location.href = "/chat";
             <div>
               <div
                 style={{
-                  color: "#f4d27a",
+                  color: "#C8AE79",
                   fontWeight: 900,
                   fontSize: 18,
                 }}
               >
-                🗂️ Saved / History
+                ▤ SAVED / HISTORY
               </div>
 
               <div
@@ -2229,7 +2229,7 @@ window.location.href = "/chat";
                 height: 38,
                 borderRadius: "50%",
                 border: "1px solid #68736b",
-                background: "#202a22",
+                background: "#18251F",
                 color: "white",
                 fontWeight: 900,
                 cursor: "pointer",
@@ -2272,7 +2272,7 @@ window.location.href = "/chat";
                       marginBottom: 9,
                       padding: 12,
                       borderRadius: 13,
-                      background: "#202a22",
+                      background: "#18251F",
                       border: "1px solid #465148",
                     }}
                   >
@@ -2339,7 +2339,7 @@ window.location.href = "/chat";
                               marginTop: 5,
                               fontSize: 12,
                               fontWeight: 800,
-                              color: "#f4d27a",
+                              color: "#C8AE79",
                             }}
                           >
                             {formatDistance(
@@ -2371,7 +2371,7 @@ window.location.href = "/chat";
                               padding: "9px 10px",
                               borderRadius: 9,
                               border:
-                                "1px solid #f4d27a",
+                                "1px solid rgba(200,174,121,.55)",
                               background: "#344437",
                               color: "white",
                               fontWeight: 800,
@@ -2476,7 +2476,7 @@ window.location.href = "/chat";
               alignItems: "center",
               marginBottom: 8
             }}>
-              <strong style={{color:"#d4bd83",letterSpacing:1}}>
+              <strong style={{color:"#C8AE79",letterSpacing:1}}>
                 MAP LAYERS
               </strong>
               <button
@@ -2485,7 +2485,7 @@ window.location.href = "/chat";
                 style={{
                   border:"1px solid #68736b",
                   borderRadius:999,
-                  background:"#202a22",
+                  background:"#18251F",
                   color:"white",
                   padding:"7px 12px",
                   fontWeight:800
@@ -2515,7 +2515,7 @@ window.location.href = "/chat";
                   borderRadius: 9,
                   border:
                     mapLayer === key
-                      ? "1px solid #f4d27a"
+                      ? "1px solid rgba(200,174,121,.55)"
                       : "1px solid transparent",
                   background:
                     mapLayer === key
@@ -2547,7 +2547,7 @@ window.location.href = "/chat";
             padding: 14,
             borderRadius: 18,
             background: "rgba(17,24,20,.94)",
-            border: "2px solid #f4d27a",
+            border: "2px solid #C8AE79",
             boxShadow: "0 8px 28px rgba(0,0,0,.6)",
             textAlign: "center",
           }}
@@ -2602,7 +2602,7 @@ window.location.href = "/chat";
             style={{
               fontSize: 30,
               fontWeight: 900,
-              color: "#f4d27a",
+              color: "#C8AE79",
             }}
           >
             {formatDistance(navigation.distance)}
@@ -2655,7 +2655,7 @@ window.location.href = "/chat";
                 padding: "10px 8px",
                 borderRadius: 10,
                 border: "1px solid #68736b",
-                background: "#202a22",
+                background: "#18251F",
                 color: "white",
                 fontWeight: 800,
                 cursor: "pointer",
@@ -2790,7 +2790,7 @@ window.location.href = "/chat";
                   info[1],
                   spot.type === "truck"
                     ? "#5ee7ff"
-                    : "#f4d27a"
+                    : "#C8AE79"
                 )}
               >
                 <Popup>
@@ -2884,7 +2884,7 @@ window.location.href = "/chat";
             padding: 16,
             borderRadius: 16,
             background: "rgba(17,24,20,.98)",
-            border: "1px solid #f4d27a",
+            border: "1px solid rgba(200,174,121,.55)",
             boxShadow: "0 8px 30px rgba(0,0,0,.6)",
           }}
         >

@@ -14,7 +14,7 @@ const FieldMap = dynamic(
         height: "100%",
         display: "grid",
         placeItems: "center",
-        background: "#101713",
+        background: "#0C1411",
         color: "#e9eee8"
       }}>
         Loading Grace Field...
@@ -60,7 +60,7 @@ export default function GraceField() {
     border: "1px solid rgba(225,234,220,.24)",
     borderRadius: 13,
     background: "rgba(12,20,16,.94)",
-    color: "#f1f4ee",
+    color: "#E8EDE7",
     padding: "10px 12px",
     fontWeight: 800,
     cursor: "pointer",
@@ -79,8 +79,8 @@ export default function GraceField() {
       position: "fixed",
       inset: 0,
       overflow: "hidden",
-      background: "#101713",
-      color: "#f1f4ee",
+      background: "#0C1411",
+      color: "#E8EDE7",
       fontFamily: "Arial, sans-serif"
     }}>
       <div style={{ position: "absolute", inset: 0 }}>
@@ -119,7 +119,7 @@ export default function GraceField() {
           height: 82,
           margin: "0 auto",
           borderRadius: "50%",
-          border: "2px solid #d4bd83",
+          border: "2px solid #C8AE79",
           background:
             "radial-gradient(circle, #26372b 0%, #111b15 75%)",
           boxShadow: "inset 0 0 14px rgba(0,0,0,.65)"
@@ -129,7 +129,7 @@ export default function GraceField() {
             left: "50%",
             top: -7,
             transform: "translateX(-50%)",
-            color: "#e9d59d",
+            color: "#D9C394",
             fontSize: 17,
             zIndex: 2
           }}>
@@ -156,7 +156,7 @@ export default function GraceField() {
                     position: "absolute",
                     ...positions[i],
                     color:
-                      direction === "N" ? "#e5b76d" : "#dce7da",
+                      direction === "N" ? "#e5b76d" : "#E1E9E0",
                     fontWeight: 900,
                     fontSize: 13
                   }}>
@@ -171,14 +171,14 @@ export default function GraceField() {
             position: "absolute",
             inset: 28,
             borderRadius: "50%",
-            background: "#d4bd83",
-            border: "2px solid #101713"
+            background: "#C8AE79",
+            border: "2px solid #0C1411"
           }} />
         </div>
 
         <div style={{
           marginTop: 7,
-          color: "#e9d59d",
+          color: "#D9C394",
           fontSize: 19,
           fontWeight: 900
         }}>
@@ -213,16 +213,16 @@ export default function GraceField() {
     }}
       style={{
         pointerEvents:"auto",
-        padding:"14px 25px",
+        padding:"13px 23px",
         borderRadius:999,
-        background:menuOpen?"#d4bd83":"#101713",
-        color:menuOpen?"#101713":"#e9d59d",
-        border:"2px solid #d4bd83",
+        background:menuOpen?"#C8AE79":"#0C1411",
+        color:menuOpen?"#0C1411":"#D9C394",
+        border:"1px solid rgba(200,174,121,.72)",
         fontWeight:900,
-        fontSize:16,
+        fontSize:13,
         boxShadow:"0 5px 22px rgba(0,0,0,.6)"
       }}>
-      🧰 {menuOpen ? "Close Menu" : "Field Menu"}
+      ☰ {menuOpen ? "CLOSE" : "FIELD MENU"}
     </button>
   </div>
 
@@ -237,13 +237,13 @@ export default function GraceField() {
       overflowY:"auto",
       margin:"0 auto",
       padding:15,
-      borderRadius:20,
-      background:"rgba(12,20,16,.98)",
-      border:"1px solid #d4bd83",
+      borderRadius:18,
+      background:"rgba(10,18,14,.97)",
+      border:"1px solid #C8AE79",
       boxShadow:"0 8px 35px rgba(0,0,0,.7)"
     }}>
       <div style={{
-        color:"#d4bd83",
+        color:"#C8AE79",
         fontWeight:900,
         letterSpacing:1,
         marginBottom:12
@@ -265,19 +265,19 @@ export default function GraceField() {
             style={{
               padding:14,
               borderRadius:12,
-              border:"1px solid #d4bd83",
-              background:mode===value?"#d4bd83":"#26352a",
-              color:mode===value?"#152018":"white",
+              border:"1px solid #C8AE79",
+              background:mode===value?"#C8AE79":"#1C2C24",
+              color:mode===value?"#101A15":"white",
               fontWeight:900
             }}>
-            {value==="hunt"?"🦌 Hunt":"🎣 Fish"}
+            {value==="hunt"?"HUNT":"FISH"}
           </button>
         ))}
 
         {[
-          ["🧰 Field Tools","grace-field-open-tools"],
-          ["🗺️ Map Layers","grace-field-open-layers"],
-          ["✨ Ask Grace","grace-field-open-scout"]
+          ["FIELD TOOLS","grace-field-open-tools"],
+          ["MAP LAYERS","grace-field-open-layers"],
+          ["ASK GRACE","grace-field-open-scout"]
         ].map(([label,event]) => (
           <button key={event} type="button"
             onClick={() => {
@@ -287,8 +287,8 @@ export default function GraceField() {
             style={{
               padding:14,
               borderRadius:12,
-              border:"1px solid #d4bd83",
-              background:"#26352a",
+              border:"1px solid #C8AE79",
+              background:"#1C2C24",
               color:"white",
               fontWeight:900
             }}>
@@ -301,8 +301,8 @@ export default function GraceField() {
           style={{
             padding:14,
             borderRadius:12,
-            border:"1px solid #d4bd83",
-            background:"#26352a",
+            border:"1px solid #C8AE79",
+            background:"#1C2C24",
             color:"white",
             fontWeight:900
           }}>

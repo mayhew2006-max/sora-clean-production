@@ -180,12 +180,12 @@ export default function FieldScoutPanel({
             <div>
               <div
                 style={{
-                  color: "#d4bd83",
+                  color: "#C8AE79",
                   fontWeight: 900,
                   letterSpacing: 1,
                 }}
               >
-                GRACE SCOUT
+                GRACE / SCOUT
               </div>
               <div style={{ fontSize: 11, opacity: 0.7 }}>
                 Your outdoor guide, wherever you explore
@@ -245,8 +245,8 @@ export default function FieldScoutPanel({
               padding: 13,
               borderRadius: 12,
               border: 0,
-              background: busy ? "#697466" : "#d4bd83",
-              color: "#152018",
+              background: busy ? "#697466" : "#C8AE79",
+              color: "#101A15",
               fontWeight: 900,
               cursor: busy ? "wait" : "pointer",
             }}
@@ -258,7 +258,7 @@ export default function FieldScoutPanel({
             <div
               style={{
                 marginTop: 13,
-                color: "#d4bd83",
+                color: "#C8AE79",
                 fontSize: 12,
                 fontWeight: 800,
               }}
