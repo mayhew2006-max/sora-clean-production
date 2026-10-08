@@ -26,16 +26,15 @@ const FieldMap = dynamic(
 export default function GraceField() {
   const [mode, setMode] = useState<FieldMode>("hunt");
   const [heading, setHeading] = useState<number | null>(null);
-  const [toolsVisible, setToolsVisible] = useState(true);
 
   useEffect(() => {
     function onOrientation(event: DeviceOrientationEvent) {
-      const compassEvent = event as DeviceOrientationEvent & {
+      const e = event as DeviceOrientationEvent & {
         webkitCompassHeading?: number;
       };
 
-      if (typeof compassEvent.webkitCompassHeading === "number") {
-        setHeading(compassEvent.webkitCompassHeading);
+      if (typeof e.webkitCompassHeading === "number") {
+        setHeading((e.webkitCompassHeading + 360) % 360);
       } else if (typeof event.alpha === "number" && event.absolute) {
         setHeading((360 - event.alpha) % 360);
       }
@@ -51,16 +50,22 @@ export default function GraceField() {
   }, []);
 
   const buttonStyle: React.CSSProperties = {
-    background: "rgba(12,20,16,.9)",
-    color: "#f1f4ee",
-    border: "1px solid rgba(225,234,220,.22)",
+    border: "1px solid rgba(225,234,220,.24)",
     borderRadius: 13,
+    background: "rgba(12,20,16,.94)",
+    color: "#f1f4ee",
     padding: "10px 12px",
-    fontWeight: 700,
+    fontWeight: 800,
+    cursor: "pointer",
     backdropFilter: "blur(14px)",
-    boxShadow: "0 6px 20px rgba(0,0,0,.3)",
-    cursor: "pointer"
+    boxShadow: "0 5px 18px rgba(0,0,0,.32)"
   };
+
+  const cardinal = heading === null
+    ? "—"
+    : ["N", "NE", "E", "SE", "S", "SW", "W", "NW"][
+        Math.round(heading / 45) % 8
+      ];
 
   return (
     <main style={{
@@ -73,7 +78,7 @@ export default function GraceField() {
     }}>
       <div style={{ position: "absolute", inset: 0 }}>
         <FieldMap mode={mode} />
- <FieldScoutPanel mode={mode} />
+        <FieldScoutPanel mode={mode} />
       </div>
 
       <header style={{
@@ -83,14 +88,16 @@ export default function GraceField() {
         left: 12,
         right: 12,
         display: "flex",
-        justifyContent: "space-between",
         alignItems: "flex-start",
+        justifyContent: "space-between",
+        gap: 8,
         pointerEvents: "none"
       }}>
         <div style={{
-          pointerEvents: "auto",
           display: "flex",
-          gap: 6
+          gap: 6,
+          alignItems: "center",
+          pointerEvents: "auto"
         }}>
           <button
             type="button"
@@ -103,111 +110,147 @@ export default function GraceField() {
 
           <div style={{
             ...buttonStyle,
-            display: "flex",
-            gap: 7,
-            alignItems: "center",
-            letterSpacing: 1,
-            fontSize: 12
+            fontSize: 11,
+            letterSpacing: 1.1,
+            padding: "12px 10px"
           }}>
             GRACE FIELD
           </div>
         </div>
 
         <div style={{
-          pointerEvents: "auto",
-          background: "rgba(12,20,16,.94)",
-          border: "1px solid rgba(225,234,220,.25)",
-          borderRadius: 16,
-          padding: "8px 12px",
-          minWidth: 100,
-          textAlign: "center",
-          boxShadow: "0 6px 20px rgba(0,0,0,.35)"
+          display: "flex",
+          alignItems: "center",
+          gap: 5,
+          pointerEvents: "auto"
         }}>
-          <div style={{
-            fontSize: 10,
-            letterSpacing: 2,
-            color: "#a6b5a9"
-          }}>
-            COMPASS
-          </div>
-
-          <div style={{
-            fontSize: 23,
-            fontWeight: 900,
-            color: "#e9d59d"
-          }}>
-            {heading === null ? "—" : `${Math.round(heading)}°`}
-          </div>
-
-          <div style={{
-            fontSize: 10,
-            color: "#b4c4b5"
-          }}>
-            {heading === null ? "Sensor unavailable" : "LIVE HEADING"}
-          </div>
+          {(["hunt", "fish"] as const).map((value) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setMode(value)}
+              style={{
+                ...buttonStyle,
+                padding: "11px 10px",
+                background:
+                  mode === value
+                    ? "#d4bd83"
+                    : "rgba(12,20,16,.94)",
+                color:
+                  mode === value ? "#152018" : "#f1f4ee",
+                fontSize: 12
+              }}
+            >
+              {value === "hunt" ? "Hunt" : "Fish"}
+            </button>
+          ))}
         </div>
       </header>
 
       <div style={{
         position: "absolute",
-        zIndex: 1200,
-        bottom: "calc(env(safe-area-inset-bottom, 0px) + 18px)",
-        left: "50%",
-        transform: "translateX(-50%)",
-        pointerEvents: "auto"
+        zIndex: 1190,
+        top: "calc(env(safe-area-inset-top, 0px) + 70px)",
+        right: 12,
+        width: 112,
+        padding: "10px 8px",
+        borderRadius: 18,
+        border: "1px solid rgba(225,234,220,.3)",
+        background: "rgba(12,20,16,.94)",
+        boxShadow: "0 6px 24px rgba(0,0,0,.45)",
+        textAlign: "center",
+        pointerEvents: "none"
       }}>
-        {toolsVisible ? (
+        <div style={{
+          fontSize: 9,
+          letterSpacing: 2,
+          color: "#b6c4b8",
+          marginBottom: 7
+        }}>
+          COMPASS
+        </div>
+
+        <div style={{
+          position: "relative",
+          width: 82,
+          height: 82,
+          margin: "0 auto",
+          borderRadius: "50%",
+          border: "2px solid #d4bd83",
+          background:
+            "radial-gradient(circle, #26372b 0%, #111b15 75%)",
+          boxShadow: "inset 0 0 14px rgba(0,0,0,.65)"
+        }}>
           <div style={{
-            display: "flex",
-            gap: 6,
-            padding: 6,
-            borderRadius: 18,
-            background: "rgba(12,20,16,.94)",
-            border: "1px solid rgba(225,234,220,.2)",
-            backdropFilter: "blur(16px)",
-            boxShadow: "0 8px 28px rgba(0,0,0,.4)"
+            position: "absolute",
+            left: "50%",
+            top: -7,
+            transform: "translateX(-50%)",
+            color: "#e9d59d",
+            fontSize: 17,
+            zIndex: 2
           }}>
-            <button
-              type="button"
-              style={{
-                ...buttonStyle,
-                background: mode === "hunt" ? "#d4bd83" : "transparent",
-                color: mode === "hunt" ? "#152018" : "#f1f4ee"
-              }}
-              onClick={() => setMode("hunt")}
-            >
-              Hunt
-            </button>
-
-            <button
-              type="button"
-              style={{
-                ...buttonStyle,
-                background: mode === "fish" ? "#d4bd83" : "transparent",
-                color: mode === "fish" ? "#152018" : "#f1f4ee"
-              }}
-              onClick={() => setMode("fish")}
-            >
-              Fish
-            </button>
-
-            <button
-              type="button"
-              style={buttonStyle}
-              onClick={() => setToolsVisible(false)}
-            >
-              Hide
-            </button>
+            ▼
           </div>
-        ) : (
-          <button
-            type="button"
-            style={buttonStyle}
-            onClick={() => setToolsVisible(true)}
-          >
-            Tools ↑
-          </button>
-        )}
+
+          <div style={{
+            position: "absolute",
+            inset: 0,
+            transform: `rotate(${- (heading ?? 0)}deg)`,
+            transition: "transform .15s linear"
+          }}>
+            {(["N", "E", "S", "W"] as const).map(
+              (direction, i) => {
+                const positions = [
+                  { top: 7, left: "50%", transform: "translateX(-50%)" },
+                  { right: 7, top: "50%", transform: "translateY(-50%)" },
+                  { bottom: 7, left: "50%", transform: "translateX(-50%)" },
+                  { left: 7, top: "50%", transform: "translateY(-50%)" }
+                ];
+
+                return (
+                  <span key={direction} style={{
+                    position: "absolute",
+                    ...positions[i],
+                    color:
+                      direction === "N" ? "#e5b76d" : "#dce7da",
+                    fontWeight: 900,
+                    fontSize: 13
+                  }}>
+                    {direction}
+                  </span>
+                );
+              }
+            )}
+          </div>
+
+          <div style={{
+            position: "absolute",
+            inset: 28,
+            borderRadius: "50%",
+            background: "#d4bd83",
+            border: "2px solid #101713"
+          }} />
+        </div>
+
+        <div style={{
+          marginTop: 7,
+          color: "#e9d59d",
+          fontSize: 19,
+          fontWeight: 900
+        }}>
+          {heading === null
+            ? "—"
+            : `${Math.round(heading)}°`}
+        </div>
+
+        <div style={{
+          fontSize: 10,
+          color: "#b4c4b5",
+          letterSpacing: 1
+        }}>
+          {heading === null ? "NO SENSOR" : cardinal}
+        </div>
       </div>
     </main>
   );
