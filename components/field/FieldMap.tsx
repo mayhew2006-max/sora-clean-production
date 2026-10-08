@@ -1340,7 +1340,7 @@ export default function FieldMap({
       return;
     }
 
-    moveTo(position[0], position[1]);
+    centerMapOn(position[0], position[1], 17);
     setLocationStatus("📍 Showing your current location.");
   }
 
