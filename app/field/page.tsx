@@ -141,7 +141,7 @@ export default function GraceField() {
                 const positions = [
                   { top: 7, left: "50%", transform: "translateX(-50%)" },
                   { right: 7, top: "50%", transform: "translateY(-50%)" },
-                  { bottom: 110, left: "50%", transform: "translateX(-50%)" },
+                  { bottom: 7, left: "50%", transform: "translateX(-50%)" },
                   { left: 7, top: "50%", transform: "translateY(-50%)" }
                 ];
 
@@ -189,6 +189,120 @@ export default function GraceField() {
           {heading === null ? "NO SENSOR" : cardinal}
         </div>
       </div>
-    </main>
+    
+  {/* Grace Field unified controls */}
+  <div style={{
+    position:"fixed",
+    bottom:"calc(env(safe-area-inset-bottom, 0px) + 85px)",
+    left:0,right:0,
+    zIndex:9999,
+    display:"flex",
+    justifyContent:"center",
+    pointerEvents:"none"
+  }}>
+    <button type="button"
+      onClick={() => setMenuOpen(v => !v)}
+      style={{
+        pointerEvents:"auto",
+        padding:"14px 25px",
+        borderRadius:999,
+        background:menuOpen?"#d4bd83":"#101713",
+        color:menuOpen?"#101713":"#e9d59d",
+        border:"2px solid #d4bd83",
+        fontWeight:900,
+        fontSize:16,
+        boxShadow:"0 5px 22px rgba(0,0,0,.6)"
+      }}>
+      🧰 {menuOpen ? "Close Menu" : "Field Menu"}
+    </button>
+  </div>
+
+  {menuOpen && (
+    <div style={{
+      position:"fixed",
+      bottom:"calc(env(safe-area-inset-bottom, 0px) + 155px)",
+      left:12,right:12,
+      zIndex:9998,
+      maxWidth:520,
+      maxHeight:"55dvh",
+      overflowY:"auto",
+      margin:"0 auto",
+      padding:15,
+      borderRadius:20,
+      background:"rgba(12,20,16,.98)",
+      border:"1px solid #d4bd83",
+      boxShadow:"0 8px 35px rgba(0,0,0,.7)"
+    }}>
+      <div style={{
+        color:"#d4bd83",
+        fontWeight:900,
+        letterSpacing:1,
+        marginBottom:12
+      }}>
+        GRACE FIELD
+      </div>
+
+      <div style={{
+        display:"grid",
+        gridTemplateColumns:"1fr 1fr",
+        gap:9
+      }}>
+        {(["hunt","fish"] as const).map(value => (
+          <button key={value} type="button"
+            onClick={() => {
+              setMode(value);
+              setMenuOpen(false);
+            }}
+            style={{
+              padding:14,
+              borderRadius:12,
+              border:"1px solid #d4bd83",
+              background:mode===value?"#d4bd83":"#26352a",
+              color:mode===value?"#152018":"white",
+              fontWeight:900
+            }}>
+            {value==="hunt"?"🦌 Hunt":"🎣 Fish"}
+          </button>
+        ))}
+
+        {[
+          ["🧰 Field Tools","grace-field-open-tools"],
+          ["🗺️ Map Layers","grace-field-open-layers"],
+          ["✨ Ask Grace","grace-field-open-scout"]
+        ].map(([label,event]) => (
+          <button key={event} type="button"
+            onClick={() => {
+              setMenuOpen(false);
+              window.dispatchEvent(new Event(event));
+            }}
+            style={{
+              padding:14,
+              borderRadius:12,
+              border:"1px solid #d4bd83",
+              background:"#26352a",
+              color:"white",
+              fontWeight:900
+            }}>
+            {label}
+          </button>
+        ))}
+
+        <button type="button"
+          onClick={() => window.location.href="/chat"}
+          style={{
+            padding:14,
+            borderRadius:12,
+            border:"1px solid #d4bd83",
+            background:"#26352a",
+            color:"white",
+            fontWeight:900
+          }}>
+          ← Back to Grace
+        </button>
+      </div>
+    </div>
+  )}
+
+</main>
   );
 }
