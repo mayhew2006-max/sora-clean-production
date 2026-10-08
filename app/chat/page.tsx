@@ -2640,19 +2640,32 @@ function isMarketplaceQuery(text: string) {
     setInput("");
 
     try {
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: nextMessages.slice(-8),
-          memory: memoryRef.current.slice(-1500),
-            fieldContext: fieldScoutContext,
+      const scoutRequest = Boolean(fieldScoutContext);
 
-        }),
-      });
+      const res = await fetch(
+        scoutRequest ? "/api/field-scout" : "/api/chat",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(
+            scoutRequest
+              ? {
+                  question: clean,
+                  fieldContext: fieldScoutContext,
+                }
+              : {
+                  messages: nextMessages.slice(-8),
+                  memory: memoryRef.current.slice(-1500),
+                }
+          ),
+        }
+      );
 
       const data = await res.json();
-      const reply = data.reply || "I’m here. Tell me what you want to do next.";
+      const reply =
+        data.reply ||
+        data.error ||
+        "Grace couldn't complete that request.";
 
       setMessages([...nextMessages, { role: "assistant", content: reply }]);
       speak(reply).catch(() => console.log("voice playback failed"));
