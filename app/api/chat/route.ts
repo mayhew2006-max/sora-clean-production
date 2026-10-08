@@ -5,7 +5,18 @@ import {
 
 export async function POST(req: Request) {
   try {
-    const { messages, memory, personality } = await req.json();
+    const {
+      messages,
+      memory,
+      personality,
+      fieldContext,
+    } = await req.json();
+
+    const safeFieldContext =
+      typeof fieldContext === "string"
+        ? fieldContext.slice(0, 1500)
+        : "";
+
 
     const safeMessages = Array.isArray(messages)
       ? messages
@@ -227,6 +238,20 @@ Use relevant provided memory naturally.
 Never dump memory back at the user.
 Never mention stored memory unless needed.
 Never claim to remember something that was not provided.
+
+${safeFieldContext ? `
+CURRENT GRACE FIELD CONTEXT:
+${safeFieldContext}
+
+The user opened Grace from Grace Field.
+Use this location and activity as current context.
+GPS coordinates describe the reported Field position,
+not a verified street address.
+Never invent nearby landmarks, property boundaries,
+legal hunting access, or fishing regulations.
+If current conditions or regulations are needed,
+explain when live verification is required.
+` : ""}
 
 ${hasMemory ? `Relevant remembered context:\n${memory.trim()}` : ""}
 

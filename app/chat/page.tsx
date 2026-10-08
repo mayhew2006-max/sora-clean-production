@@ -133,6 +133,27 @@ export default function GraceChat() {
   ]);
 
   const [input, setInput] = useState("");
+  const [fieldScoutContext, setFieldScoutContext] =
+    useState("");
+
+  useEffect(() => {
+    try {
+      const context =
+        sessionStorage.getItem("graceFieldScoutContext");
+
+      if (context) {
+        setFieldScoutContext(context);
+        setInput(
+          "Grace, help me scout this location. " +
+          context
+        );
+        sessionStorage.removeItem(
+          "graceFieldScoutContext"
+        );
+      }
+    } catch {}
+  }, []);
+
   const [memory, setMemory] = useState("");
   const [paid, setPaid] = useState(false);
   const [authReady, setAuthReady] = useState(false);
@@ -2622,6 +2643,8 @@ function isMarketplaceQuery(text: string) {
         body: JSON.stringify({
           messages: nextMessages.slice(-8),
           memory: memoryRef.current.slice(-1500),
+            fieldContext: fieldScoutContext,
+
         }),
       });
 

@@ -1332,7 +1332,19 @@ export default function FieldMap({
     setLocationStatus("🚙 Showing My Truck.");
   }
 
-  function truckAction() {
+ 
+  function findMeNow() {
+    if (!position) {
+      setLocationStatus("Finding your GPS position...");
+      locateMe();
+      return;
+    }
+
+    moveTo(position[0], position[1]);
+    setLocationStatus("📍 Showing your current location.");
+  }
+
+ function truckAction() {
     if (truckSpot) {
       setNavigationTarget(truckSpot);
       setReturningToStart(false);
@@ -1613,7 +1625,7 @@ export default function FieldMap({
             }}
           >
         <button
-          onClick={locateMe}
+          onClick={findMeNow}
           style={{
             padding: "10px 14px",
             borderRadius: 10,
