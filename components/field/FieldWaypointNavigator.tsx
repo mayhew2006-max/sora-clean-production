@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type Destination = {
   name: string;
@@ -16,6 +16,8 @@ type Fix = {
 };
 
 const GOLD = "#C8AE79";
+const ARRIVAL_METERS = 9.144;
+const MAX_FIX_AGE = 15000;
 
 const button: React.CSSProperties = {
   padding: "13px 12px",
@@ -28,40 +30,20 @@ const button: React.CSSProperties = {
   cursor: "pointer",
 };
 
-function rad(value: number) {
-  return value * Math.PI / 180;
+function rad(n: number) {
+  return n * Math.PI / 180;
 }
 
-function deg(value: number) {
-  return value * 180 / Math.PI;
+function deg(n: number) {
+  return n * 180 / Math.PI;
 }
 
-function distanceMeters(a: Fix, b: Destination) {
-  const radius = 6371000;
-  const dLat = rad(b.lat - a.lat);
-  const dLng = rad(b.lng - a.lng);
-
-  const h =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(rad(a.lat)) *
-    Math.cos(rad(b.lat)) *
-    Math.sin(dLng / 2) ** 2;
-
-  return 2 * radius * Math.asin(Math.sqrt(Math.min(1, h)));
+function normalize(n: number) {
+  return ((n % 360) + 360) % 360;
 }
 
-function bearing(a: Fix, b: Destination) {
-  const dLng = rad(b.lng - a.lng);
-
-  const y = Math.sin(dLng) * Math.cos(rad(b.lat));
-
-  const x =
-    Math.cos(rad(a.lat)) * Math.sin(rad(b.lat)) -
-    Math.sin(rad(a.lat)) *
-    Math.cos(rad(b.lat)) *
-    Math.cos(dLng);
-
-  return (deg(Math.atan2(y, x)) + 360) % 360;
+function shortestTurn(from: number, to: number) {
+  return ((to - from + 540) % 360) - 180;
 }
 
 function cardinal(angle: number) {
@@ -71,18 +53,41 @@ function cardinal(angle: number) {
     "S", "SSW", "SW", "WSW",
     "W", "WNW", "NW", "NNW",
   ];
-
   return directions[Math.round(angle / 22.5) % 16];
 }
 
-function formatDistance(meters: number) {
+function distanceMeters(a: Fix, b: Destination) {
+  const R = 6371000;
+  const dLat = rad(b.lat - a.lat);
+  const dLng = rad(b.lng - a.lng);
+
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(rad(a.lat)) *
+    Math.cos(rad(b.lat)) *
+    Math.sin(dLng / 2) ** 2;
+
+  return 2 * R * Math.asin(Math.sqrt(Math.min(1, h)));
+}
+
+function bearing(a: Fix, b: Destination) {
+  const dLng = rad(b.lng - a.lng);
+
+  const y = Math.sin(dLng) * Math.cos(rad(b.lat));
+  const x =
+    Math.cos(rad(a.lat)) * Math.sin(rad(b.lat)) -
+    Math.sin(rad(a.lat)) *
+    Math.cos(rad(b.lat)) *
+    Math.cos(dLng);
+
+  return normalize(deg(Math.atan2(y, x)));
+}
+
+function distanceText(meters: number) {
   const feet = meters * 3.28084;
-
-  if (feet < 5280) {
-    return `${Math.round(feet).toLocaleString()} ft`;
-  }
-
-  return `${(feet / 5280).toFixed(2)} mi`;
+  return feet < 5280
+    ? `${Math.round(feet).toLocaleString()} ft`
+    : `${(feet / 5280).toFixed(2)} mi`;
 }
 
 export default function FieldWaypointNavigator() {
@@ -94,9 +99,12 @@ export default function FieldWaypointNavigator() {
   const [error, setError] = useState("");
   const [now, setNow] = useState(Date.now());
 
+  const headingRef = useRef<number | null>(null);
+
   useEffect(() => {
     const open = (event: Event) => {
-      const detail = (event as CustomEvent<Destination>).detail;
+      const detail =
+        (event as CustomEvent<Destination>).detail;
 
       if (!detail) return;
 
@@ -108,6 +116,8 @@ export default function FieldWaypointNavigator() {
           Math.abs(lat) > 90 ||
           Math.abs(lng) > 180) return;
 
+      headingRef.current = null;
+      setHeading(null);
       setFix(null);
       setError("");
       setDestination({
@@ -117,10 +127,14 @@ export default function FieldWaypointNavigator() {
       });
     };
 
-    window.addEventListener("grace-field-navigate-waypoint", open);
+    window.addEventListener(
+      "grace-field-navigate-waypoint",
+      open
+    );
 
     return () => window.removeEventListener(
-      "grace-field-navigate-waypoint", open
+      "grace-field-navigate-waypoint",
+      open
     );
   }, []);
 
@@ -128,18 +142,28 @@ export default function FieldWaypointNavigator() {
     if (!destination) return;
 
     if (!navigator.geolocation) {
-      setError("GPS is unavailable on this device.");
+      setError("GPS is unavailable.");
       return;
     }
 
-    const id = navigator.geolocation.watchPosition(
+    const watch = navigator.geolocation.watchPosition(
       position => {
+        const { latitude, longitude, accuracy } =
+          position.coords;
+
+        if (
+          !Number.isFinite(latitude) ||
+          !Number.isFinite(longitude) ||
+          !Number.isFinite(accuracy)
+        ) return;
+
         setFix({
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-          accuracy: position.coords.accuracy,
+          lat: latitude,
+          lng: longitude,
+          accuracy,
           timestamp: position.timestamp,
         });
+
         setNow(Date.now());
         setError("");
       },
@@ -148,12 +172,12 @@ export default function FieldWaypointNavigator() {
       },
       {
         enableHighAccuracy: true,
-        maximumAge: 5000,
+        maximumAge: 3000,
         timeout: 20000,
       }
     );
 
-    return () => navigator.geolocation.clearWatch(id);
+    return () => navigator.geolocation.clearWatch(watch);
   }, [destination]);
 
   useEffect(() => {
@@ -164,49 +188,141 @@ export default function FieldWaypointNavigator() {
         webkitCompassHeading?: number;
       };
 
-      if (typeof compass.webkitCompassHeading === "number") {
-        setHeading((compass.webkitCompassHeading + 360) % 360);
+      let raw: number | null = null;
+
+      if (
+        typeof compass.webkitCompassHeading === "number"
+      ) {
+        raw = compass.webkitCompassHeading;
       } else if (
         event.absolute &&
         typeof event.alpha === "number"
       ) {
-        setHeading((360 - event.alpha) % 360);
+        raw = 360 - event.alpha;
       }
+
+      if (raw === null || !Number.isFinite(raw)) return;
+
+      raw = normalize(raw);
+
+      const previous = headingRef.current;
+
+      if (previous === null) {
+        headingRef.current = raw;
+      } else {
+        const change = shortestTurn(previous, raw);
+
+        // Circular low-pass filter. The shorter path across
+        // 0/360 degrees prevents a full-circle arrow spin.
+        const alpha = Math.abs(change) > 45 ? 0.28 : 0.13;
+
+        headingRef.current = normalize(
+          previous + change * alpha
+        );
+      }
+
+      setHeading(headingRef.current);
     };
 
-    window.addEventListener("deviceorientationabsolute", onOrientation);
-    window.addEventListener("deviceorientation", onOrientation);
+    // Some Android browsers fire both event types.
+    // Prefer the absolute event when available.
+    let absoluteSeen = false;
+
+    const absolute = (event: DeviceOrientationEvent) => {
+      absoluteSeen = true;
+      onOrientation(event);
+    };
+
+    const ordinary = (event: DeviceOrientationEvent) => {
+      if (!absoluteSeen) onOrientation(event);
+    };
+
+    window.addEventListener(
+      "deviceorientationabsolute",
+      absolute
+    );
+    window.addEventListener(
+      "deviceorientation",
+      ordinary
+    );
 
     return () => {
-      window.removeEventListener("deviceorientationabsolute", onOrientation);
-      window.removeEventListener("deviceorientation", onOrientation);
+      window.removeEventListener(
+        "deviceorientationabsolute",
+        absolute
+      );
+      window.removeEventListener(
+        "deviceorientation",
+        ordinary
+      );
     };
   }, [destination]);
 
   useEffect(() => {
     if (!destination) return;
 
-    const timer = window.setInterval(() => setNow(Date.now()), 3000);
+    const timer = window.setInterval(
+      () => setNow(Date.now()),
+      3000
+    );
+
     return () => window.clearInterval(timer);
   }, [destination]);
 
   const values = useMemo(() => {
-    if (!destination || !fix) return null;
+    if (!fix || !destination) return null;
 
     return {
       meters: distanceMeters(fix, destination),
       bearing: bearing(fix, destination),
     };
-  }, [destination, fix]);
+  }, [fix, destination]);
 
   if (!destination) return null;
 
-  const fresh = !!fix && now - fix.timestamp < 15000;
-  const reliable = fresh && !!fix && fix.accuracy <= 100;
-  const relativeAngle =
-    values && heading !== null
-      ? (values.bearing - heading + 360) % 360
-      : null;
+  const fresh = !!fix &&
+    now - fix.timestamp >= 0 &&
+    now - fix.timestamp < MAX_FIX_AGE;
+
+  const accurate = !!fix && fix.accuracy <= 25;
+
+  const nearby = !!values &&
+    values.meters <= ARRIVAL_METERS;
+
+  const uncertain = !!fix && !!values &&
+    values.meters <= Math.max(
+      ARRIVAL_METERS,
+      fix.accuracy * 2
+    );
+
+  const usable = fresh && accurate &&
+    !nearby && !uncertain;
+
+  const relative = values && heading !== null
+    ? shortestTurn(heading, values.bearing)
+    : null;
+
+  let instruction = "WAITING FOR GPS";
+
+  if (!fresh && fix) {
+    instruction = "GPS UPDATE NEEDED";
+  } else if (nearby && fresh) {
+    instruction = "DESTINATION NEARBY";
+  } else if (!accurate && fix) {
+    instruction = "GPS ACCURACY LOW";
+  } else if (uncertain && fresh) {
+    instruction = "DIRECTION UNCERTAIN";
+  } else if (usable && relative === null) {
+    instruction = "COMPASS UNAVAILABLE";
+  } else if (usable && relative !== null) {
+    if (Math.abs(relative) <= 18) {
+      instruction = "STRAIGHT AHEAD";
+    } else if (relative > 0) {
+      instruction = "TURN RIGHT";
+    } else {
+      instruction = "TURN LEFT";
+    }
+  }
 
   return (
     <div style={{
@@ -225,7 +341,8 @@ export default function FieldWaypointNavigator() {
         overflowY: "auto",
         boxSizing: "border-box",
         padding: 18,
-        paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 90px)",
+        paddingBottom:
+          "calc(env(safe-area-inset-bottom, 0px) + 90px)",
         background: "#101D16",
         border: `1px solid ${GOLD}`,
         borderRadius: "22px 22px 0 0",
@@ -234,8 +351,8 @@ export default function FieldWaypointNavigator() {
       }}>
         <div style={{
           display: "flex",
-          alignItems: "center",
           justifyContent: "space-between",
+          alignItems: "center",
           gap: 12,
         }}>
           <div>
@@ -244,7 +361,7 @@ export default function FieldWaypointNavigator() {
               letterSpacing: 2,
               color: GOLD,
             }}>
-              GRACE FIELD NAVIGATION
+              GRACE FIELD NAVIGATION V2
             </div>
             <h2 style={{ margin: "7px 0" }}>
               {destination.name}
@@ -267,16 +384,12 @@ export default function FieldWaypointNavigator() {
           textAlign: "center",
         }}>
           <div style={{
-            fontSize: 12,
-            color: reliable ? "#B4DFB9" : "#E8CA83",
+            color: usable ? "#B4DFB9" : GOLD,
+            fontSize: 14,
+            fontWeight: 800,
+            letterSpacing: 1,
           }}>
-            {!fix
-              ? "WAITING FOR GPS"
-              : !fresh
-                ? "GPS POSITION IS STALE"
-                : !reliable
-                  ? "LOW GPS ACCURACY"
-                  : "LIVE GPS POSITION"}
+            {instruction}
           </div>
 
           <div style={{
@@ -292,30 +405,33 @@ export default function FieldWaypointNavigator() {
           }}>
             <div style={{
               position: "absolute",
-              top: 9,
+              top: 10,
               color: GOLD,
+              fontSize: 13,
               fontWeight: 800,
             }}>
-              {heading !== null ? "AHEAD" : "N"}
+              {nearby ? "ARRIVED" : "AHEAD"}
             </div>
 
-            <div style={{
-              fontSize: 92,
-              lineHeight: 1,
-              color: GOLD,
-              transform: `rotate(${relativeAngle ?? values?.bearing ?? 0}deg)`,
-              transition: "transform .35s ease",
-            }}>
-              ↑
-            </div>
+            {usable && relative !== null ? (
+              <div style={{
+                fontSize: 90,
+                lineHeight: 1,
+                color: GOLD,
+                transform: `rotate(${relative}deg)`,
+                transition: "transform .3s ease",
+              }}>
+                ↑
+              </div>
+            ) : (
+              <div style={{
+                fontSize: 54,
+                color: GOLD,
+              }}>
+                {nearby && fresh ? "✓" : "◎"}
+              </div>
+            )}
           </div>
-
-          {heading === null && (
-            <p style={{ fontSize: 12, color: "#E8CA83" }}>
-              Device compass unavailable. Arrow shows bearing
-              relative to north, not your phone's direction.
-            </p>
-          )}
 
           <div style={{
             display: "grid",
@@ -323,19 +439,31 @@ export default function FieldWaypointNavigator() {
             gap: 10,
           }}>
             <div>
-              <div style={{ fontSize: 11, color: "#B9C8BA" }}>
+              <div style={{
+                fontSize: 11,
+                color: "#B9C8BA",
+              }}>
                 STRAIGHT-LINE DISTANCE
               </div>
-              <strong style={{ fontSize: 26, color: GOLD }}>
-                {values ? formatDistance(values.meters) : "—"}
+              <strong style={{
+                fontSize: 26,
+                color: GOLD,
+              }}>
+                {values ? distanceText(values.meters) : "—"}
               </strong>
             </div>
 
             <div>
-              <div style={{ fontSize: 11, color: "#B9C8BA" }}>
+              <div style={{
+                fontSize: 11,
+                color: "#B9C8BA",
+              }}>
                 TRUE BEARING
               </div>
-              <strong style={{ fontSize: 26, color: GOLD }}>
+              <strong style={{
+                fontSize: 26,
+                color: GOLD,
+              }}>
                 {values
                   ? `${Math.round(values.bearing)}° ${cardinal(values.bearing)}`
                   : "—"}
@@ -350,25 +478,62 @@ export default function FieldWaypointNavigator() {
           borderRadius: 14,
           marginTop: 12,
           fontSize: 13,
-          lineHeight: 1.7,
+          lineHeight: 1.8,
         }}>
           <div>
             <strong>Destination:</strong>{" "}
-            {destination.lat.toFixed(6)}, {destination.lng.toFixed(6)}
+            {destination.lat.toFixed(6)},{" "}
+            {destination.lng.toFixed(6)}
           </div>
+
           <div>
             <strong>GPS accuracy:</strong>{" "}
-            {fix ? `±${Math.round(fix.accuracy)} m` : "Waiting"}
+            {fix
+              ? `±${Math.round(fix.accuracy)} m`
+              : "Waiting"}
           </div>
+
           <div>
             <strong>Phone heading:</strong>{" "}
-            {heading === null ? "Unavailable" : `${Math.round(heading)}°`}
+            {heading === null
+              ? "Unavailable"
+              : `${Math.round(heading)}°`}
           </div>
-          {error && <div style={{ color: "#E9A6A6" }}>{error}</div>}
+
+          {nearby && fresh && (
+            <div style={{ color: GOLD }}>
+              You are within approximately 30 feet
+              of this saved location. Check your surroundings.
+            </div>
+          )}
+
+          {uncertain && !nearby && (
+            <div style={{ color: GOLD }}>
+              GPS uncertainty is significant at this distance.
+              Move to an open area before trusting the direction.
+            </div>
+          )}
+
+          {heading === null && (
+            <div style={{ color: GOLD }}>
+              Compass unavailable. Use the numeric bearing
+              with a separate compass.
+            </div>
+          )}
+
+          {error && (
+            <div style={{ color: "#E9A6A6" }}>
+              {error}
+            </div>
+          )}
         </div>
 
         <button
-          style={{ ...button, width: "100%", marginTop: 12 }}
+          style={{
+            ...button,
+            width: "100%",
+            marginTop: 12,
+          }}
           onClick={() => {
             window.dispatchEvent(new CustomEvent(
               "grace-field-focus-waypoint",
@@ -398,16 +563,18 @@ export default function FieldWaypointNavigator() {
         </button>
 
         <p style={{
-          color: "#B9C8BA",
           fontSize: 11,
+          color: "#B9C8BA",
           lineHeight: 1.6,
           marginTop: 15,
         }}>
-          Navigation uses straight-line GPS calculations, not a safe
-          walking route. Bearing is relative to true north. Device
-          compass readings may be inaccurate or unavailable. Do not
-          rely on this alone for wilderness navigation, hazardous
-          terrain, or emergencies. Carry an offline map and backup compass.
+          This is straight-line guidance, not a verified
+          walking route. Arrival and GPS accuracy are
+          estimates, not proof of reaching the exact spot.
+          Compass readings may be affected by nearby metal,
+          magnetic interference, and sensor calibration.
+          Never rely on this as your only wilderness
+          navigation or emergency tool.
         </p>
       </section>
     </div>
