@@ -8,6 +8,7 @@ import FieldWeekendKit from "@/components/field/FieldWeekendKit";
 import FieldMission from "@/components/field/FieldMission";
 import FieldExpeditionPack from "@/components/field/FieldExpeditionPack";
 import FieldOutdoorUtilities from "@/components/field/FieldOutdoorUtilities";
+import FieldWaypointLibrary from "@/components/field/FieldWaypointLibrary";
 
 const FieldMap = dynamic(
   () => import("@/components/field/FieldMap"),
@@ -94,6 +95,7 @@ export default function GraceField() {
         <FieldMission />
  <FieldExpeditionPack />
  <FieldOutdoorUtilities />
+ <FieldWaypointLibrary />
       </div>
 
      
@@ -288,6 +290,7 @@ export default function GraceField() {
           ["ASK GRACE","grace-field-open-scout"],
           ["GUARDIAN ANGEL","grace-field-open-mission"],
  ["OUTDOOR UTILITIES","grace-field-open-utilities"],
+ ["WAYPOINT LIBRARY","grace-field-open-waypoint-library"],
  ["EXPEDITION PACK","grace-field-open-expedition"]
         ].map(([label,event]) => (
           <button key={event} type="button"

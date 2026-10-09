@@ -292,7 +292,39 @@ export default function FieldMap({
   const [navigationTarget, setNavigationTarget] =
     useState<FieldSpot | null>(null);
 
-  const [mapCommand, setMapCommand] =
+ 
+  // Unified waypoint library: focus the existing map without
+  // changing saved markers, cloud records, or tracking.
+  useEffect(() => {
+    const focus = (event: Event) => {
+      const detail = (event as CustomEvent<{
+        lat: number;
+        lng: number;
+      }>).detail;
+
+      if (!detail) return;
+
+      const lat = Number(detail.lat);
+      const lng = Number(detail.lng);
+
+      if (!Number.isFinite(lat) || !Number.isFinite(lng) ||
+          Math.abs(lat) > 90 || Math.abs(lng) > 180) return;
+
+      setMapCommand({
+        id: Date.now(),
+        lat,
+        lng,
+        zoom: 16,
+      });
+    };
+
+    window.addEventListener("grace-field-focus-waypoint", focus);
+    return () => window.removeEventListener(
+      "grace-field-focus-waypoint", focus
+    );
+  }, []);
+
+ const [mapCommand, setMapCommand] =
     useState<{
       id: number;
       lat: number;
