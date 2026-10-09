@@ -6,6 +6,7 @@ import type { FieldMode } from "@/components/field/FieldMap";
 import FieldScoutPanel from "@/components/field/FieldScoutPanel";
 import FieldWeekendKit from "@/components/field/FieldWeekendKit";
 import FieldMission from "@/components/field/FieldMission";
+import FieldExpeditionPack from "@/components/field/FieldExpeditionPack";
 import FieldOutdoorUtilities from "@/components/field/FieldOutdoorUtilities";
 
 const FieldMap = dynamic(
@@ -91,6 +92,7 @@ export default function GraceField() {
         <FieldScoutPanel mode={mode} />
 <FieldWeekendKit />
         <FieldMission />
+ <FieldExpeditionPack />
  <FieldOutdoorUtilities />
       </div>
 
@@ -285,7 +287,8 @@ export default function GraceField() {
           ["MAP LAYERS","grace-field-open-layers"],
           ["ASK GRACE","grace-field-open-scout"],
           ["GUARDIAN ANGEL","grace-field-open-mission"],
- ["OUTDOOR UTILITIES","grace-field-open-utilities"]
+ ["OUTDOOR UTILITIES","grace-field-open-utilities"],
+ ["EXPEDITION PACK","grace-field-open-expedition"]
         ].map(([label,event]) => (
           <button key={event} type="button"
             onClick={() => {
