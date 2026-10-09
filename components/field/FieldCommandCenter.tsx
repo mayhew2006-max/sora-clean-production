@@ -215,6 +215,23 @@ export default function FieldCommandCenter() {
   const [media, setMedia] = useState<File | null>(null);
 
   useEffect(() => {
+    const openCommand = () => {
+      setWaypoints(loadWaypoints());
+      setOpen(true);
+    };
+
+    window.addEventListener(
+      "grace-field-open-command",
+      openCommand
+    );
+
+    return () => window.removeEventListener(
+      "grace-field-open-command",
+      openCommand
+    );
+  }, []);
+
+ useEffect(() => {
     setCameras(read(CAM_KEY, []));
     setObservations(read(OBS_KEY, []));
     setTrip(read(TRIP_KEY, blankTrip));
@@ -482,24 +499,7 @@ export default function FieldCommandCenter() {
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => {
-          setWaypoints(loadWaypoints());
-          setOpen(true);
-        }}
-        style={{
-          position: "fixed",
-          bottom: 86,
-          right: 12,
-          zIndex: 1200,
-          ...button,
-          background: "#173c2a",
-          boxShadow: "0 4px 20px #0008"
-        }}
-      >
-        🌲 Field Command
-      </button>
+     
 
       {open && (
         <div style={{

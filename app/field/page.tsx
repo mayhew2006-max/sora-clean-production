@@ -295,7 +295,8 @@ export default function GraceField() {
           ["GUARDIAN ANGEL","grace-field-open-mission"],
  ["OUTDOOR UTILITIES","grace-field-open-utilities"],
  ["WAYPOINT LIBRARY","grace-field-open-waypoint-library"],
- ["EXPEDITION PACK","grace-field-open-expedition"]
+ ["EXPEDITION PACK","grace-field-open-expedition"],
+ ["FIELD COMMAND","grace-field-open-command"]
         ].map(([label,event]) => (
           <button key={event} type="button"
             onClick={() => {
