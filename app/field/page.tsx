@@ -1,5 +1,6 @@
 "use client";
 
+import FieldCommandCenter from "@/components/field/FieldCommandCenter";
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import type { FieldMode } from "@/components/field/FieldMap";
@@ -97,6 +98,7 @@ export default function GraceField() {
  <FieldExpeditionPack />
  <FieldOutdoorUtilities />
  <FieldWaypointLibrary />
+ <FieldCommandCenter />
  <FieldWaypointNavigator />
       </div>
 
