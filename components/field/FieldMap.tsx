@@ -1478,7 +1478,25 @@ export default function FieldMap({
     setNotes("");
   }
 
-  function deleteSpot(id: string) {
+  async function deleteSpot(id: string) {
+    if (!userId || !fieldCloudReady) {
+      setLocationStatus(
+        "Cloud memory is not ready. Marker was NOT deleted."
+      );
+      return;
+    }
+
+    setLocationStatus("Deleting marker from cloud...");
+
+    const deleted = await deleteFieldSpotFromCloud(id);
+
+    if (!deleted) {
+      setLocationStatus(
+        "Cloud deletion failed. Marker was kept."
+      );
+      return;
+    }
+
     setSpots((current) =>
       current.filter((spot) => spot.id !== id)
     );
@@ -1486,6 +1504,8 @@ export default function FieldMap({
     if (navigationTarget?.id === id) {
       setNavigationTarget(null);
     }
+
+    setLocationStatus("Marker deleted from cloud and device.");
   }
 
   useEffect(() => {
@@ -2872,9 +2892,13 @@ window.location.href = "/chat";
                       </button>
 
                       <button
-                        onClick={() =>
-                          deleteSpot(spot.id)
-                        }
+                        onClick={() => {
+                          if (window.confirm(
+                            `Permanently delete "${spot.name}" from Grace Field?`
+                          )) {
+                            void deleteSpot(spot.id);
+                          }
+                        }}
                       >
                         Delete
                       </button>
