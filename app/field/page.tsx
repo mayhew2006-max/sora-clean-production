@@ -9,6 +9,7 @@ import FieldMission from "@/components/field/FieldMission";
 import FieldExpeditionPack from "@/components/field/FieldExpeditionPack";
 import FieldOutdoorUtilities from "@/components/field/FieldOutdoorUtilities";
 import FieldWaypointLibrary from "@/components/field/FieldWaypointLibrary";
+import FieldWaypointNavigator from "@/components/field/FieldWaypointNavigator";
 
 const FieldMap = dynamic(
   () => import("@/components/field/FieldMap"),
@@ -96,6 +97,7 @@ export default function GraceField() {
  <FieldExpeditionPack />
  <FieldOutdoorUtilities />
  <FieldWaypointLibrary />
+ <FieldWaypointNavigator />
       </div>
 
      

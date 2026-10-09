@@ -143,6 +143,20 @@ export default function FieldWaypointLibrary() {
     setOpen(false);
   }
 
+  function navigate(p: Point) {
+    window.dispatchEvent(new CustomEvent(
+      "grace-field-navigate-waypoint",
+      {
+        detail: {
+          name: p.name,
+          lat: p.lat,
+          lng: p.lng,
+        },
+      }
+    ));
+    setOpen(false);
+  }
+
   async function copy(p: Point) {
     try {
       await navigator.clipboard.writeText(`${p.lat}, ${p.lng}`);
@@ -326,6 +340,17 @@ export default function FieldWaypointLibrary() {
                 </button>
                 <button style={control} onClick={() => void copy(p)}>
                   COPY GPS
+                </button>
+                <button
+                  style={{
+                    ...control,
+                    gridColumn: "1 / -1",
+                    background: "#C8AE79",
+                    color: "#142017",
+                  }}
+                  onClick={() => navigate(p)}
+                >
+                  🧭 NAVIGATE TO THIS LOCATION
                 </button>
               </div>
             </article>
