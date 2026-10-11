@@ -13,6 +13,7 @@ import {
 import L from "leaflet";
 import { supabase } from "@/lib/supabaseClient";
 import "leaflet/dist/leaflet.css";
+import { markerOptions, markerSvg, markerColor } from "./FieldPremiumMarkers";
 
 export type FieldMode = "hunt" | "fish";
 
@@ -128,26 +129,13 @@ const fishTypes = [
 ];
 
 function makeIcon(symbol: string, border = "#C8AE79") {
-  return L.divIcon({
-    className: "",
-    html: `
-      <div style="
-        width:38px;
-        height:38px;
-        border-radius:50%;
-        background:#172019;
-        border:2px solid ${border};
-        display:flex;
-        align-items:center;
-        justify-content:center;
-        font-size:21px;
-        box-shadow:0 3px 10px rgba(0,0,0,.45);
-      ">${symbol}</div>
-    `,
-    iconSize: [38, 38],
-    iconAnchor: [19, 19],
-    popupAnchor: [0, -20],
-  });
+  const type = symbol;
+  const isYou = type === "my-location";
+  const html = isYou
+    ? `<div style="width:22px;height:22px;border:3px solid #fff;border-radius:50%;background:#1889ef;box-shadow:0 0 0 7px #159af83b,0 2px 12px #000a"></div>`
+    : markerSvg(type, 45);
+  return L.divIcon({className:"grace-premium-pin",html,
+    iconSize:isYou?[22,22]:[45,51],iconAnchor:isYou?[11,11]:[22,48],popupAnchor:[0,-43]});
 }
 
 function MapController({
@@ -282,6 +270,7 @@ export default function FieldMap({
 
   const [name, setName] = useState("");
   const [notes, setNotes] = useState("");
+  const [editingSpotId, setEditingSpotId] = useState<string | null>(null);
 
   const [locationStatus, setLocationStatus] =
     useState("Finding your location...");
@@ -400,7 +389,7 @@ export default function FieldMap({
   const freeLeft = Math.max(FREE_LIMIT - accountFreeUsed, 0);
   const fieldLocked = authReady && !paid && freeLeft <= 0;
 
-  const types = mode === "hunt" ? huntTypes : fishTypes;
+  const types = [...huntTypes, ...fishTypes];
 
   useEffect(() => {
     let cancelled = false;
@@ -551,7 +540,7 @@ export default function FieldMap({
       `Location locked • ±${reportedAccuracy} m`
     );
 
-    if (trackingActiveRef.current) {
+    if (trackingActiveRef.current && reportedAccuracy <= 40) {
       setTrail((current) => {
         const last = current[current.length - 1];
 
@@ -561,7 +550,9 @@ export default function FieldMap({
             next
           );
 
-          if (moved < 4) return current;
+          if (moved < 5) return current;
+          const elapsed = Math.max(1,(Date.now()-new Date(last.time).getTime())/1000);
+          if (moved > Math.max(45, elapsed * 6 + reportedAccuracy * 2)) return current;
         }
 
         return [
@@ -1233,6 +1224,7 @@ export default function FieldMap({
 
     setName("");
     setNotes("");
+    setEditingSpotId(null);
 
     setLocationStatus(
       "📌 Current location selected — add a name or notes below."
@@ -1475,31 +1467,31 @@ export default function FieldMap({
     if (!pending) return;
     if (!(await useFieldAction())) return;
 
-    const selected =
-      types.find(([key]) => key === selectedType) ||
-      types[0];
+    const selected = markerOptions.find((item) => item.type === selectedType);
+    const selectedLabel = selected?.label || types.find(([key]) => key === selectedType)?.[2] || "Saved Spot";
 
     const spot: FieldSpot = {
-      id:
-        typeof crypto !== "undefined" &&
-        "randomUUID" in crypto
-          ? crypto.randomUUID()
-          : String(Date.now()),
+      id: editingSpotId || makeFieldId(),
       lat: pending.lat,
       lng: pending.lng,
-      mode,
+      mode: ["hole","catch","dock","ramp","water","current","weed","dropoff","structure"].includes(selectedType) ? "fish" : "hunt",
       type: selectedType,
-      name: name.trim() || selected[2],
+      name: name.trim() || selectedLabel,
       notes: notes.trim(),
-      createdAt: new Date().toISOString(),
+      createdAt: editingSpotId ? (spots.find(s => s.id === editingSpotId)?.createdAt || new Date().toISOString()) : new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       syncPending: true,
     };
 
-    setSpots((current) => [...current, spot]);
+    setSpots((current) => editingSpotId ? current.map(s => s.id === editingSpotId ? spot : s) : [...current, spot]);
     setPending(null);
     setName("");
     setNotes("");
+    setEditingSpotId(null);
+    void saveFieldSpotToCloud(spot).then(ok => {
+      if (ok) setSpots(current => current.map(s => s.id === spot.id && s.updatedAt === spot.updatedAt ? {...s,syncPending:false} : s));
+      else setFieldSyncStatus("Saved on device. Cloud sync pending; reconnect to sync.");
+    });
   }
 
   async function deleteSpot(id: string) {
@@ -1546,10 +1538,7 @@ export default function FieldMap({
     }
   }, [spots]);
 
-  const visibleSpots = useMemo(
-    () => spots.filter((spot) => spot.mode === mode),
-    [spots, mode]
-  );
+  const visibleSpots = spots;
 
   const truckSpot = useMemo(
     () =>
@@ -2495,12 +2484,13 @@ window.location.href = "/chat";
       <div
         style={{
           position: "absolute",
-          top: 72,
+          top: 80,
           left: 12,
+          right: 107,
           zIndex: 850,
-          maxWidth: "calc(100% - 24px)",
-          padding: "7px 10px",
-          borderRadius: 999,
+          maxWidth: 360,
+          padding: "6px 9px",
+          borderRadius: 12,
           background: "rgba(17,24,20,.82)",
           fontSize: 12,
           opacity: 0.9,
@@ -2602,7 +2592,7 @@ window.location.href = "/chat";
                   cursor: "pointer",
                 }}
               >
-                {layer.symbol} {layer.label}
+                {layer.label}
               </button>
             ))}
           </div>
@@ -2703,8 +2693,7 @@ window.location.href = "/chat";
                 opacity: 0.72,
               }}
             >
-              Follow your recorded breadcrumb trail back.
-              Grace is showing your original route on the map.
+              Your recorded trail is visible on the map. This compass points directly to the starting location; follow the trail line to retrace your route.
             </div>
           )}
 
@@ -2793,6 +2782,7 @@ window.location.href = "/chat";
               setPending({ lat, lng });
               setName("");
               setNotes("");
+              setEditingSpotId(null);
               setLocationStatus(
                 "📌 Map location selected — add a name or notes below."
               );
@@ -2811,7 +2801,7 @@ window.location.href = "/chat";
           {pending && (
             <Marker
               position={[pending.lat, pending.lng]}
-              icon={makeIcon("📌", "#ff9f43")}
+              icon={makeIcon("custom", "#ff9f43")}
             >
               <Popup>
                 New marker location
@@ -2835,7 +2825,7 @@ window.location.href = "/chat";
           {position && (
             <Marker
               position={position}
-              icon={makeIcon("📍", "#5ee7ff")}
+              icon={makeIcon("my-location", "#5ee7ff")}
             >
               <Popup>
                 <strong>You are here.</strong>
@@ -2849,25 +2839,14 @@ window.location.href = "/chat";
           )}
 
           {visibleSpots.map((spot) => {
-            const info =
-              spot.type === "truck"
-                ? ["truck", "🚙", "My Truck"]
-                : spot.type === "trail-start"
-                ? ["trail-start", "👣", "Trail Start"]
-                : types.find(
-                    ([key]) => key === spot.type
-                  ) || types[0];
+            const info = markerOptions.find(o => o.type === spot.type);
+
 
             return (
               <Marker
                 key={spot.id}
                 position={[spot.lat, spot.lng]}
-                icon={makeIcon(
-                  info[1],
-                  spot.type === "truck"
-                    ? "#5ee7ff"
-                    : "#C8AE79"
-                )}
+                icon={makeIcon(spot.type, markerColor(spot.type))}
               >
                 <Popup>
                   <div style={{ minWidth: 190 }}>
@@ -2915,6 +2894,11 @@ window.location.href = "/chat";
                         🧭 Navigate
                       </button>
 
+                      <button onClick={() => {
+                        setPending({lat:spot.lat,lng:spot.lng});
+                        setName(spot.name);setNotes(spot.notes);
+                        setSelectedType(spot.type);setEditingSpotId(spot.id);
+                      }}>Edit</button>
                       <button
                         onClick={() => {
                           if (window.confirm(
@@ -2945,7 +2929,7 @@ window.location.href = "/chat";
             fontWeight: 800,
           }}
         >
-          👣 Recording breadcrumb trail • {trail.length} GPS
+          Recording trail • {trail.length} GPS
           points
         </div>
       )}
@@ -2957,8 +2941,10 @@ window.location.href = "/chat";
             position: "absolute",
             left: 12,
             right: 12,
-            bottom: 76,
-            zIndex: 970,
+            bottom: "calc(env(safe-area-inset-bottom, 0px) + 115px)",
+            zIndex: 1900,
+            maxHeight: "min(66dvh, 650px)",
+            overflowY: "auto",
             maxWidth: 520,
             margin: "0 auto",
             padding: 16,
@@ -2968,7 +2954,17 @@ window.location.href = "/chat";
             boxShadow: "0 8px 30px rgba(0,0,0,.6)",
           }}
         >
-          <strong>Save this spot</strong>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
+            <strong style={{color:"#e1c48c",fontSize:17}}>{editingSpotId ? "EDIT SAVED SPOT" : "SAVE LOCATION"}</strong>
+            <button type="button" aria-label="Close save location" onClick={()=>{setPending(null);setEditingSpotId(null);}} style={{background:"#1a2b21",border:"1px solid #806f51",color:"#fff",borderRadius:20,padding:"5px 12px"}}>✕</button>
+          </div>
+          <div style={{color:"#b4c6b4",fontSize:12,marginTop:6}}>Choose a professional marker, then name your location.</div>
+          <div style={{display:"flex",gap:7,overflowX:"auto",padding:"10px 0 6px"}}>
+            {(["Hunting","Fishing","Camping & Base","Other"] as const).map(category=><button key={category} type="button" onClick={()=>{const first=markerOptions.find(m=>m.category===category);if(first)setSelectedType(first.type);}} style={{background:markerOptions.find(m=>m.type===selectedType)?.category===category?"#405b3e":"#14251b",color:"#f8e8cb",border:"1px solid #917a50",borderRadius:999,padding:"8px 11px",fontSize:12,whiteSpace:"nowrap"}}>{category}</button>)}
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",gap:7,margin:"8px 0 12px"}}>
+            {markerOptions.filter(o=>o.category===(markerOptions.find(m=>m.type===selectedType)?.category||"Hunting")).map(option=><button key={option.type} type="button" onClick={()=>setSelectedType(option.type)} style={{minHeight:82,background:selectedType===option.type?"#35503b":"#192920",border:selectedType===option.type?"2px solid #e0bd7c":"1px solid #465b46",borderRadius:12,color:"#f6f1e6",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4,padding:4}}><span dangerouslySetInnerHTML={{__html:markerSvg(option.type,40)}}/><span style={{fontSize:10,lineHeight:1.15,textAlign:"center"}}>{option.label}</span></button>)}
+          </div>
 
           <div
             style={{
@@ -2985,9 +2981,7 @@ window.location.href = "/chat";
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder={
-              mode === "hunt"
-                ? "Name — Ridge Stand"
-                : "Name — The Honey Hole 😂"
+              "Name — Ridge Stand, Creek Hole, Camera 3..."
             }
             style={{
               width: "100%",
@@ -3002,9 +2996,7 @@ window.location.href = "/chat";
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             placeholder={
-              mode === "hunt"
-                ? "Notes — buck trail, NW wind, morning stand..."
-                : "Notes — bass, 8 ft deep, green pumpkin worm..."
+              "Notes — wind direction, access trail, water depth..."
             }
             rows={3}
             style={{
@@ -3033,11 +3025,11 @@ window.location.href = "/chat";
                 cursor: "pointer",
               }}
             >
-              Save Spot
+              {editingSpotId ? "Update Spot" : "Save Spot"}
             </button>
 
             <button
-              onClick={() => setPending(null)}
+              onClick={() => {setPending(null);setEditingSpotId(null);}}
               style={{
                 padding: 12,
                 borderRadius: 10,
