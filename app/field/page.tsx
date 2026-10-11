@@ -80,6 +80,9 @@ export default function GraceField() {
       .grace-field-v3 .leaflet-popup-tip{background:#0c1915}
       .grace-field-v3 .leaflet-popup-content button{background:#283b2e;color:#f8eddb;border:1px solid #b69a69;border-radius:8px;padding:8px 10px;margin-top:2px}
       .grace-field-v3 .leaflet-marker-icon.grace-premium-pin{filter:drop-shadow(0 4px 6px #000d)}
+      /* Keep fixed map instruments from obscuring open FieldMap sheets. */
+      .grace-field-v3:has([data-grace-field-overlay="true"]) .gf-sidebar,
+      .grace-field-v3:has([data-grace-field-overlay="true"]) .gf-quicktools{visibility:hidden!important;opacity:0!important;pointer-events:none!important}
       .gf-panel{background:linear-gradient(145deg,#081511f6,#11221bee);border:1px solid #ad9060;box-shadow:0 8px 22px #000a}
       .gf-header{position:absolute;z-index:1200;top:calc(env(safe-area-inset-top,0px) + 9px);left:9px;right:9px;height:63px;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 9px;border-radius:15px;pointer-events:auto}
       .gf-brand{display:flex;gap:8px;align-items:center;min-width:0}

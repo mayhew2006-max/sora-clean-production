@@ -1726,21 +1726,22 @@ export default function FieldMap({
       )}
 
       {fieldPanel && (
-        <div
+        <div data-grace-field-overlay="true"
           style={{
             position: "absolute",
-            left: 12,
-            right: 12,
-            bottom:
-              "calc(env(safe-area-inset-bottom, 0px) + 76px)",
-            zIndex: 968,
+            left: 14,
+            right: 14,
+            top: 118,
+            bottom: "calc(env(safe-area-inset-bottom, 0px) + 108px)",
+            zIndex: 3200,
             maxWidth: 520,
             margin: "0 auto",
             padding: 16,
             borderRadius: 18,
             background: "linear-gradient(160deg,rgba(17,31,24,.99),rgba(8,17,14,.99))",
             border: "1px solid rgba(200,174,121,.55)",
-            boxShadow: "0 8px 30px rgba(0,0,0,.65)",
+            boxShadow: "0 12px 40px rgba(0,0,0,.72)",
+            overflowY: "auto",
           }}
         >
           <div
@@ -1994,22 +1995,22 @@ export default function FieldMap({
         </div>
       )}
 
-      {historyOpen && (
-        <div
+            {historyOpen && (
+        <div data-grace-field-overlay="true"
           style={{
             position: "absolute",
-            left: 12,
-            right: 12,
-            top: 82,
-            bottom: 72,
-            zIndex: 965,
+            left: 14,
+            right: 14,
+            top: 118,
+            bottom: "calc(env(safe-area-inset-bottom, 0px) + 108px)",
+            zIndex: 3200,
             maxWidth: 620,
             margin: "0 auto",
             padding: 14,
             borderRadius: 18,
             background: "linear-gradient(160deg,rgba(17,31,24,.99),rgba(8,17,14,.99))",
             border: "1px solid rgba(244,210,122,.7)",
-            boxShadow: "0 8px 30px rgba(0,0,0,.65)",
+            boxShadow: "0 12px 40px rgba(0,0,0,.72)",
             overflow: "hidden",
             display: "flex",
             flexDirection: "column",
