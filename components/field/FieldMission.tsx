@@ -34,6 +34,12 @@ function readStored():TripPlan {
 function addRecord(plan:TripPlan,kind:RecordItem["kind"],text:string,fix:Fix|null):TripPlan {return {...plan,records:[{id:`${Date.now()}-${Math.random().toString(36).slice(2,6)}`,time:new Date().toISOString(),kind,text,lat:fix?.lat??null,lng:fix?.lng??null,accuracy:fix?.accuracy},...plan.records].slice(0,1000)};}
 function localDateTime(value:string){const d=new Date(value);return Number.isNaN(d.getTime())?"":d.toLocaleString();}
 
+type GuardianGlyphName="shield"|"warning"|"location"|"clock"|"person"|"compass";
+function GuardianGlyph({name,size=22}:{name:GuardianGlyphName,size?:number}){
+ const paths:Record<GuardianGlyphName,string>={shield:"M12 2 21 6v6c0 5-4 9-9 10-5-1-9-5-9-10V6zM8 12l3 3 5-6",warning:"M12 2 23 21H1zM12 9v5m0 4v.2",location:"M12 22s-8-7-8-13a8 8 0 0 1 16 0c0 6-8 13-8 13zm0-17a4 4 0 1 0 .1 0",clock:"M12 2a10 10 0 1 0 .1 0M12 7v6l4 2",person:"M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21c0-8 16-8 16 0",compass:"M12 2a10 10 0 1 0 .1 0M15 9l-2 5-4 1 2-5z"};
+ return <svg aria-hidden="true" viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="#e8c58c" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d={paths[name]}/></svg>;
+}
+
 export default function FieldMission(){
  const [open,setOpen]=useState(false);
  const [tab,setTab]=useState<"safety"|"navigate"|"records">("safety");
@@ -41,6 +47,7 @@ export default function FieldMission(){
  const [ready,setReady]=useState(false);
  const [fix,setFix]=useState<Fix|null>(null);
  const [gpsError,setGpsError]=useState("Acquiring GPS…");
+ const [mapTracking,setMapTracking]=useState(false);
  const [now,setNow]=useState(Date.now());
  const [message,setMessage]=useState("");
  const [note,setNote]=useState("");
@@ -55,7 +62,13 @@ export default function FieldMission(){
  useEffect(()=>{setPlan(readStored());setReady(true);},[]);
  useEffect(()=>{if(!ready)return;try{localStorage.setItem(KEY,JSON.stringify(plan));}catch{setMessage("Device storage unavailable. Export your trip records now.");}},[plan,ready]);
  useEffect(()=>{const id=window.setInterval(()=>setNow(Date.now()),1000);return()=>window.clearInterval(id);},[]);
- useEffect(()=>{const show=()=>{setOpen(true);setTab("safety");};window.addEventListener("grace-field-open-mission",show);return()=>window.removeEventListener("grace-field-open-mission",show);},[]);
+ useEffect(()=>{
+  const show=()=>{setOpen(true);setTab("safety");};
+  const tracking=(event:Event)=>setMapTracking(!!(event as CustomEvent<{tracking:boolean}>).detail?.tracking);
+  window.addEventListener("grace-field-open-mission",show);
+  window.addEventListener("grace-field-tracking-state",tracking);
+  return()=>{window.removeEventListener("grace-field-open-mission",show);window.removeEventListener("grace-field-tracking-state",tracking);};
+ },[]);
  useEffect(()=>{
    if(!open&&!plan.startedAt)return;
    if(!navigator.geolocation){setGpsError("GPS not supported on this device.");return;}
@@ -110,11 +123,12 @@ export default function FieldMission(){
    if(!plan.returnAt||!Number.isFinite(new Date(plan.returnAt).getTime())||new Date(plan.returnAt).getTime()<=Date.now()){setMessage("Choose a future planned return time before starting Guardian Angel.");return;}
    if(!plan.contactName.trim()||!plan.contactPhone.trim()){setMessage("Enter the name and phone number of your emergency contact.");return;}
    setPlan(old=>{const started=Date.now();return addRecord({...old,startedAt:started,nextCheckAt:started+old.checkInterval*60000,lastCheckAt:null},"event","Guardian Angel trip started. Share your trip plan with your contact.",fix);});
-   setMessage("Trip active on this device. IMPORTANT: Share your plan with your contact before entering the field.");
+   window.dispatchEvent(new Event("grace-field-v2-start-track"));
+   setMessage("Guardian trip started. Requested breadcrumb recording; verify the green TRACKING status before leaving. You must separately share your trip plan with your contact.");
    if(typeof Notification!=="undefined"&&Notification.permission==="default")void Notification.requestPermission().catch(()=>{});
  }
  function stopTrip(){if(!window.confirm("Finish Guardian Angel trip? Check-in reminders will stop. Confirm your safe return with your contact."))return;
-   setPlan(old=>addRecord({...old,startedAt:null,nextCheckAt:null},"event","Guardian Angel trip ended. Confirm safe return with your contact.",fix));setMessage("Trip ended. Send your contact a safe-return message.");}
+   setPlan(old=>addRecord({...old,startedAt:null,nextCheckAt:null},"event","Guardian Angel trip ended. Confirm safe return with your contact.",fix));setMessage("Guardian reminders ended. If your map is still recording, press STOP TRACK. Contact your trusted person to confirm safe return.");}
  function setDestination(){const lat=Number(newLat),lng=Number(newLng);if(!newLat.trim()||!newLng.trim()||!Number.isFinite(lat)||!Number.isFinite(lng)||Math.abs(lat)>90||Math.abs(lng)>180){setMessage("Enter valid latitude and longitude.");return;}const dest={lat,lng,name:newDestName.trim()||"Destination"};setPlan(p=>({...p,destination:dest,destinationName:dest.name}));setMessage("Destination set. Bearing is straight-line, not trail-safe routing.");}
  function exportRecords(){const blob=new Blob([JSON.stringify({exportedAt:new Date().toISOString(),trip:plan},null,2)],{type:"application/json"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="grace-field-guardian-records.json";a.click();window.setTimeout(()=>URL.revokeObjectURL(url),1000);setMessage("Records exported to your device.");}
  function addObservation(){if(!note.trim())return;setPlan(old=>addRecord(old,"observation",note.trim(),fresh?fix:null));setNote("");setMessage("Observation saved locally.");}
@@ -125,68 +139,83 @@ export default function FieldMission(){
  if(!open)return null;
  const missedCount=checkDue&&plan.nextCheckAt?1+Math.floor(Math.max(0,now-plan.nextCheckAt)/(Math.max(1,plan.checkInterval)*60000)):0;
  const contactNumber=plan.contactPhone.replace(/[^\d+]/g,"");
- const action:React.CSSProperties={...btn,minHeight:48,fontSize:12,letterSpacing:.25,borderRadius:10};
- const card:React.CSSProperties={...box,marginTop:8,padding:"12px 12px",borderRadius:11,borderColor:"#665c42",background:"linear-gradient(110deg,#0b1a15,#11241b)"};
- const eyebrow:React.CSSProperties={...label,fontSize:10,letterSpacing:1.1};
- const val:React.CSSProperties={fontSize:14,fontWeight:780,color:"#fff2d9"};
- const pair:React.CSSProperties={display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:7};
- return <div role="presentation" style={{position:"fixed",inset:0,zIndex:22000,background:"#020805dc",display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
-  <section role="dialog" aria-modal="true" aria-label="Guardian Angel" style={{width:"100%",maxWidth:610,maxHeight:"min(95dvh,1000px)",overflowY:"auto",overscrollBehavior:"contain",background:"linear-gradient(175deg,#07140f,#091711 58%,#030b08)",color:"#f8ecdb",border:"1px solid #bf9b62",borderRadius:"20px 20px 0 0",boxShadow:"0 -14px 55px #000d",padding:"16px 11px calc(env(safe-area-inset-bottom,0px) + 23px)",fontFamily:"system-ui,-apple-system,Segoe UI,sans-serif"}}>
-   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:9,padding:"1px 4px 9px",borderBottom:"1px solid #4f533f"}}>
-    <div><div style={{...eyebrow,color:"#f3d198"}}>GRACE FIELD / SAFETY</div><h2 style={{margin:"2px 0 0",fontFamily:"Georgia,serif",fontSize:25,fontWeight:500,color:"#f3d198",letterSpacing:1}}>GUARDIAN ANGEL</h2></div>
-    <button aria-label="Close Guardian Angel" style={{...action,minHeight:40,padding:"8px 13px"}} onClick={()=>setOpen(false)}>✕</button>
+ const action:React.CSSProperties={...btn,minHeight:44,fontSize:12,letterSpacing:.3,borderRadius:9,background:"linear-gradient(135deg,#172c22,#0a1913)",borderColor:"#9d855f",color:"#f3e9d6"};
+ const card:React.CSSProperties={...box,marginTop:10,padding:"13px 12px",borderRadius:11,borderColor:"#806b4a",background:"linear-gradient(135deg,#0e2119,#07140e)"};
+ const eyebrow:React.CSSProperties={...label,fontSize:10,letterSpacing:1.4};
+ const val:React.CSSProperties={fontSize:14,fontWeight:800,color:"#fff2d9"};
+ const pair:React.CSSProperties={display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:8};
+ const caption:React.CSSProperties={fontSize:11,color:"#c1cbb9",lineHeight:1.55,marginTop:6};
+ const kpi:React.CSSProperties={border:"1px solid #7a7154",borderRadius:9,padding:"10px 8px",background:"#071810",minWidth:0};
+ const isLate = !!overdue || missedCount>1;
+ return <div role="presentation" style={{position:"fixed",inset:0,zIndex:22000,background:"#020805e8",display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+  <section role="dialog" aria-modal="true" aria-label="Guardian Angel" style={{width:"100%",maxWidth:610,maxHeight:"min(97dvh,1000px)",overflowY:"auto",overscrollBehavior:"contain",background:"linear-gradient(165deg,#0b1f17,#07120e 70%,#030a07)",color:"#f8ecdb",border:"1px solid #c6a36a",borderRadius:"18px 18px 0 0",boxShadow:"0 -18px 55px #000d",padding:"15px 12px calc(env(safe-area-inset-bottom,0px) + 24px)",fontFamily:"system-ui,-apple-system,Segoe UI,sans-serif"}}>
+   <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:9,paddingBottom:12,borderBottom:"1px solid #6a6547"}}>
+    <div style={{display:"flex",gap:12,alignItems:"center"}}><span aria-hidden="true" style={{height:42,width:42,display:"grid",placeItems:"center",background:"#152c20",border:"1px solid #bfa16f",borderRadius:11}}><GuardianGlyph name="shield" size={27}/></span><div><div style={{...eyebrow,letterSpacing:2.2}}>GRACE FIELD / STAY SAFE</div><h2 style={{margin:"3px 0 0",fontFamily:"Georgia,serif",letterSpacing:1,fontSize:24,fontWeight:500,color:"#f0d198"}}>GUARDIAN ANGEL</h2></div></div>
+    <button type="button" aria-label="Close Guardian Angel" style={{...action,width:43,minWidth:43,padding:0,fontSize:24}} onClick={()=>setOpen(false)}>×</button>
    </div>
-   <div style={{...card,display:"flex",gap:10,alignItems:"center",borderColor:active?"#72b987":"#bd9f6b"}}>
-    <div aria-hidden="true" style={{fontSize:31,color:active?"#90dda5":"#e1bd78",lineHeight:1}}>♢</div>
-    <div style={{flex:1}}><div style={eyebrow}>TRIP STATUS</div><div style={{...val,color:active?(overdue?"#ff9d87":"#a6e5b0"):"#e6c88f",fontSize:16}}>{!active?"READY TO START":overdue?"OVERDUE RETURN":missedCount>=2?"MISSED CHECK-INS":checkDue?"CHECK-IN DUE":"GUARDIAN ACTIVE"}</div><div style={{fontSize:11,color:"#c1d0bc",marginTop:3}}>{active?`Elapsed ${clock(now-(plan.startedAt??now))} · ${missedCount} missed check-in(s)`:"Set a contact, return time and share your trip plan"}</div></div>
+   <div style={{...card,display:"flex",alignItems:"center",gap:11,borderColor:isLate?"#cb7457":active?"#8bce99":"#b49766"}}>
+    <GuardianGlyph name={isLate?"warning":"shield"} size={30}/>
+    <div style={{flex:1}}><div style={eyebrow}>TRIP STATUS</div><div style={{...val,fontSize:16,color:isLate?"#ffa58e":active?"#a0eab2":"#e9cb95"}}>{!active?"READY TO START":overdue?"RETURN TIME OVERDUE":missedCount>=2?"MISSED CHECK-INS":checkDue?"CHECK-IN DUE":"GUARDIAN ACTIVE"}</div><div style={caption}>{active?`Trip time ${clock(now-(plan.startedAt??now))} · ${missedCount} missed check-in(s)`:"Set your plan and tell a trusted person before you leave"}</div></div>
    </div>
-   {(overdue||checkDue)&&<div role="alert" style={{...card,borderColor:"#e8a86e",background:"#422b1a",color:"#ffe3b2",fontSize:13,fontWeight:850}}>{overdue?"EXPECTED RETURN TIME PASSED":`CHECK-IN OVERDUE · ${missedCount} MISSED`}<div style={{fontWeight:400,fontSize:11,marginTop:5}}>Device reminder only. Your trusted contact has NOT been automatically alerted. Open messaging or call them.</div></div>}
-   <div style={{display:"flex",gap:6,marginTop:9}}>{(["safety","navigate","records"] as const).map(t=><button key={t} style={{...action,flex:1,padding:"8px 3px",background:tab===t?"#5b472b":"#12231a",borderColor:tab===t?"#e3ba78":"#615c45"}} onClick={()=>setTab(t)}>{t==="safety"?"TRIP / SOS":t==="navigate"?"NAVIGATION":"FIELD LOG"}</button>)}</div>
+   {(overdue||checkDue)&&<div role="alert" style={{...card,borderColor:"#d89067",background:"#381f17",color:"#ffe0b6",fontSize:13,fontWeight:800}}>{overdue?"RETURN TIME PASSED":"CHECK-IN REMINDER OVERDUE"}<p style={{fontSize:11,fontWeight:400,margin:"5px 0 0"}}>These are reminders on your device only. NO automatic alert was delivered to your trusted contact.</p></div>}
+   <div style={{...pair,marginTop:9}}>
+    <div style={kpi}><div style={eyebrow}>GPS FIX</div><div style={{...val,color:fresh?"#a5e6b2":"#f1bb87",marginTop:5}}>{fresh?"● LIVE":"● WAITING"}</div><div style={caption}>{fix?`±${Math.round(fix.accuracy*3.28084)} ft · ${Math.max(0,Math.round((now-fix.time)/1000))}s old`:gpsError}</div></div>
+    <div style={kpi}><div style={eyebrow}>BREADCRUMB TRAIL</div><div style={{...val,color:mapTracking?"#a5e6b2":"#e7b887",marginTop:5}}>{mapTracking?"● TRACKING":"NOT RECORDING"}</div><div style={caption}>{active?"Started by Guardian only if GPS tracking is permitted":"Start Guardian to request tracking"}</div></div>
+   </div>
+   <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:6,marginTop:10}}>
+    {(["safety","navigate","records"] as const).map(t=><button type="button" key={t} style={{...action,background:tab===t?"#584429":"#0d2118",borderColor:tab===t?"#e0b87b":"#746346",padding:"9px 2px",fontSize:11}} onClick={()=>setTab(t)}>{t==="safety"?"TRIP & SOS":t==="navigate"?"NAVIGATION":"FIELD LOG"}</button>)}
+   </div>
    {tab==="safety"&&<>
     <div style={card}>
-     <div style={eyebrow}>TRUSTED CONTACT</div>
-     <div style={pair}>
-      <label style={{fontSize:11,color:"#d6d5c6"}}>Name<input style={field} autoComplete="name" placeholder="Trusted person" value={plan.contactName} onChange={e=>setPlan(p=>({...p,contactName:e.target.value}))}/></label>
-      <label style={{fontSize:11,color:"#d6d5c6"}}>Mobile number<input style={field} type="tel" autoComplete="tel" placeholder="(555) 123-4567" value={plan.contactPhone} onChange={e=>setPlan(p=>({...p,contactPhone:e.target.value}))}/></label>
-     </div>
+     <div style={{display:"flex",gap:8,alignItems:"center"}}><GuardianGlyph name="person"/><div style={eyebrow}>TRUSTED CONTACT</div></div>
+     <div style={{...pair,marginTop:7}}><label style={caption}>Contact name<input style={field} autoComplete="name" placeholder="Who knows you're out there?" value={plan.contactName} onChange={e=>setPlan(v=>({...v,contactName:e.target.value}))}/></label><label style={caption}>Phone number<input type="tel" autoComplete="tel" style={field} placeholder="Mobile number" value={plan.contactPhone} onChange={e=>setPlan(v=>({...v,contactPhone:e.target.value}))}/></label></div>
+     <div style={caption}>Your contact is not automatically monitored or notified. Share your trip plan before heading out.</div>
     </div>
     <div style={card}>
-     <div style={eyebrow}>TRIP PLAN</div>
-     <label style={{fontSize:11,color:"#d6d5c6"}}>Destination<input style={field} placeholder="Ridge Top Stand / Camp / Creek" value={plan.destinationName} onChange={e=>setPlan(p=>({...p,destinationName:e.target.value}))}/></label>
-     <div style={{...pair,marginTop:9}}>
-      <label style={{fontSize:11,color:"#d6d5c6"}}>Expected return<input type="datetime-local" style={{...field,colorScheme:"dark",fontSize:12}} value={plan.returnAt} onChange={e=>setPlan(p=>({...p,returnAt:e.target.value}))}/></label>
-      <label style={{fontSize:11,color:"#d6d5c6"}}>Check-in reminder<select style={{...field,fontSize:12}} value={plan.checkInterval} onChange={e=>setPlan(p=>({...p,checkInterval:Number(e.target.value),nextCheckAt:p.startedAt?Date.now()+Number(e.target.value)*60000:null}))}>{[10,15,30,45,60,90,120].map(v=><option key={v} value={v}>Every {v} min</option>)}</select></label>
-     </div>
-     <div style={{...pair,marginTop:10}}>
-      <div style={{background:"#07150f",padding:10,border:"1px solid #615b45",borderRadius:9}}><div style={eyebrow}>NEXT CHECK-IN</div><div style={{...val,fontVariantNumeric:"tabular-nums",marginTop:5}}>{!active?"Not started":checkDue?"DUE NOW":new Date(plan.nextCheckAt??now).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})}</div></div>
-      <div style={{background:"#07150f",padding:10,border:"1px solid #615b45",borderRadius:9}}><div style={eyebrow}>MISSED CHECK-INS</div><div style={{...val,marginTop:5,color:missedCount>=2?"#ffb382":"#f8e4c5"}}>{missedCount} · on-device warning</div></div>
-     </div>
+     <div style={{display:"flex",gap:8,alignItems:"center"}}><GuardianGlyph name="clock"/><div style={eyebrow}>TRIP PLAN & CHECK-IN SCHEDULE</div></div>
+     <label style={caption}>Destination<input style={field} placeholder="Ridge stand / Campsite / Creek" value={plan.destinationName} onChange={e=>setPlan(v=>({...v,destinationName:e.target.value}))}/></label>
+     <div style={{...pair,marginTop:9}}><label style={caption}>Expected return<input type="datetime-local" style={{...field,colorScheme:"dark"}} value={plan.returnAt} onChange={e=>setPlan(v=>({...v,returnAt:e.target.value}))}/></label><label style={caption}>Check-in reminder<select style={field} value={plan.checkInterval} onChange={e=>setPlan(v=>({...v,checkInterval:Number(e.target.value),nextCheckAt:v.startedAt?Date.now()+Number(e.target.value)*60000:null}))}>{[10,15,30,45,60,90,120].map(v=><option key={v} value={v}>Every {v} min</option>)}</select></label></div>
+     <div style={{...pair,marginTop:9}}><div style={kpi}><div style={eyebrow}>NEXT REMINDER</div><div style={{...val,marginTop:5}}>{!active?"NOT STARTED":checkDue?"DUE NOW":new Date(plan.nextCheckAt??now).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})}</div></div><div style={kpi}><div style={eyebrow}>MISSED CHECK-INS</div><div style={{...val,marginTop:5,color:missedCount>=2?"#ff9b84":"#f5d8ac"}}>{missedCount} · LOCAL ONLY</div></div></div>
     </div>
     <div style={card}>
-     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}><div style={eyebrow}>LIVE GPS FIX</div><span style={{color:fresh?"#86d7a3":"#ffbd83",fontSize:11}}>{fresh?"● CURRENT FIX":"● WAITING FOR GPS"}</span></div>
-     <div style={{...val,fontVariantNumeric:"tabular-nums",marginTop:4,overflowWrap:"anywhere"}}>{coords}</div>
-     <div style={{fontSize:11,color:"#b8c6b6",marginTop:4}}>{fix?`Accuracy ±${Math.round(fix.accuracy)} m · ${Math.round(Math.max(0,now-fix.time)/1000)} seconds old`:gpsError}</div>
-     <div style={{...pair,marginTop:10}}><button style={{...action,background:"#185431",borderColor:"#92bd93"}} disabled={!fresh} onClick={()=>void sendCheckIn()}>SEND GPS CHECK-IN</button><button style={action} disabled={!fresh} onClick={()=>void share(`Guardian Angel location (${new Date().toLocaleString()}): ${coords} | Accuracy ${fix?Math.round(fix.accuracy):"?"} m | ${gpsLink}`,"Grace Field GPS location")}>SHARE GPS POSITION</button></div>
-     <div style={{fontSize:10,color:"#bfc2b1",marginTop:7}}>Share opens your device share options. You must choose a recipient and send. It is not a continuously updating live link.</div>
+     <div style={{display:"flex",gap:8,alignItems:"center"}}><GuardianGlyph name="location"/><div style={eyebrow}>CURRENT GPS POSITION</div></div>
+     <div style={{...val,fontVariantNumeric:"tabular-nums",marginTop:10,overflowWrap:"anywhere"}}>{coords}</div><div style={caption}>{fresh?`Accuracy ±${Math.round(fix!.accuracy)} meters`:"A fresh accurate GPS reading is required before sharing your location."}</div>
+     <div style={{...pair,marginTop:9}}><button style={{...action,background:"#145132",borderColor:"#83be8f"}} disabled={!fresh} onClick={()=>void sendCheckIn()}>PREPARE CHECK-IN</button><button style={action} disabled={!fresh} onClick={()=>void share(`Guardian Angel GPS position: ${coords} | ${gpsLink} | Accuracy ±${fix?Math.round(fix.accuracy):"?"} m`,"Grace Field position")}>SHARE GPS POSITION</button></div>
+     <div style={caption}>Manual sharing opens the phone's share menu. Select a recipient and press Send; this is NOT a continuously updating live location link.</div>
     </div>
-    <div style={{...pair,marginTop:9}}>
-     <div style={{...card,marginTop:0,textAlign:"center"}}><div style={eyebrow}>TRIP CLOCK</div><div style={{fontSize:21,color:"#f3d49e",fontWeight:900,fontVariantNumeric:"tabular-nums",marginTop:5}}>{active?clock(now-(plan.startedAt??now)):"00:00:00"}</div></div>
-     <div style={{...card,marginTop:0,textAlign:"center"}}><div style={eyebrow}>RETURN TIME</div><div style={{fontSize:15,color:overdue?"#ffb094":"#f3d49e",fontWeight:850,marginTop:9}}>{plan.returnAt?new Date(plan.returnAt).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"}):"Not set"}</div></div>
+    <div style={{...pair,marginTop:10}}><div style={{...kpi,textAlign:"center"}}><div style={eyebrow}>TRIP CLOCK</div><div style={{...val,fontSize:21,marginTop:6,fontVariantNumeric:"tabular-nums"}}>{active?clock(now-(plan.startedAt??now)):"00:00:00"}</div></div><div style={{...kpi,textAlign:"center"}}><div style={eyebrow}>RETURN TIME</div><div style={{...val,fontSize:15,marginTop:9}}>{plan.returnAt?localDateTime(plan.returnAt):"NOT SET"}</div></div></div>
+    <div style={{...pair,marginTop:10}}><button style={action} onClick={()=>void share(planText,"Grace Field Guardian trip plan")}>SHARE TRIP PLAN</button><button style={action} onClick={()=>setTab("navigate")}>DESTINATION / TRAIL BACK</button></div>
+    <button style={{...action,width:"100%",minHeight:51,marginTop:10,fontSize:13,fontWeight:900,background:active?"linear-gradient(145deg,#6b2d24,#341712)":"linear-gradient(145deg,#f1ce90,#bc8745)",color:active?"#fff1e8":"#132017",borderColor:"#f3d08c"}} onClick={active?stopTrip:startTrip}>{active?"END GUARDIAN SESSION · CONFIRM SAFE RETURN":"START GUARDIAN SESSION + REQUEST GPS TRACK"}</button>
+    <div style={{...card,borderColor:"#b6594e",background:"linear-gradient(145deg,#311611,#170a08)"}}>
+     <div style={{display:"flex",gap:8,alignItems:"center",color:"#ffd0b5"}}><GuardianGlyph name="warning"/><div style={{...eyebrow,color:"#ffd0b5"}}>EMERGENCY SOS</div></div>
+     <div style={caption}>Prepares an SOS message with your last verified coordinates, or opens emergency calling. Grace cannot send without confirmation.</div>
+     <div style={{...pair,marginTop:9}}><button type="button" style={{...action,background:"#6c2822",borderColor:"#d38c78"}} onClick={smsContact}>PREPARE SOS TEXT</button><a href="tel:911" style={{...action,display:"grid",placeItems:"center",textDecoration:"none",background:"#58201e",borderColor:"#df9484"}}>CALL 911</a></div>
+     {contactNumber&&<a href={`tel:${contactNumber}`} style={{...action,display:"grid",placeItems:"center",marginTop:8,textDecoration:"none"}}>CALL {plan.contactName||"TRUSTED CONTACT"}</a>}
     </div>
-    <div style={{...pair,marginTop:9}}><button style={action} onClick={()=>void share(planText,"Grace Field Guardian trip plan")}>SHARE TRIP PLAN</button><button style={action} onClick={()=>{setTab("navigate");}}>BEARING / TRAIL BACK</button></div>
-    <button style={{...action,width:"100%",marginTop:9,background:active?"linear-gradient(160deg,#652b21,#341811)":"linear-gradient(160deg,#be975c,#e8bf78)",color:active?"#fff3e6":"#112016",borderColor:"#f1cf93",fontWeight:900,fontSize:13}} onClick={active?stopTrip:startTrip}>{active?"END TRIP · CONFIRM SAFE RETURN":"START GUARDIAN SESSION"}</button>
-    <div style={{...card,borderColor:"#a25443",marginTop:12,background:"linear-gradient(160deg,#2b1010,#130b0b)"}}><div style={{...eyebrow,color:"#ffc2ad"}}>EMERGENCY SOS</div><div style={{fontSize:11,color:"#ffdbca",margin:"5px 0 9px"}}>Open emergency texting or call emergency services. Sending must be confirmed on your phone.</div><div style={pair}><button style={{...action,borderColor:"#da8179",background:"#822e28"}} onClick={smsContact}>PREPARE SOS TEXT</button><a style={{...action,textAlign:"center",textDecoration:"none",borderColor:"#e9a98a",background:"#5d211c"}} href="tel:911">CALL 911</a></div>{contactNumber&&<a style={{...action,display:"block",textAlign:"center",textDecoration:"none",marginTop:8}} href={`tel:${contactNumber}`}>CALL {plan.contactName||"TRUSTED CONTACT"}</a>}</div>
    </>}
    {tab==="navigate"&&<>
-    <div style={card}><div style={eyebrow}>DESTINATION BEARING / NAVIGATION</div><input style={field} placeholder="Destination name" value={newDestName} onChange={e=>setNewDestName(e.target.value)}/><div style={{...pair,marginTop:8}}><input style={field} placeholder="Latitude" value={newLat} inputMode="decimal" aria-label="Destination latitude" onChange={e=>setNewLat(e.target.value)}/><input style={field} placeholder="Longitude" value={newLng} inputMode="decimal" aria-label="Destination longitude" onChange={e=>setNewLng(e.target.value)}/></div><button style={{...action,width:"100%",marginTop:8}} onClick={setDestination}>SET DESTINATION</button>{plan.destination&&<div style={{marginTop:12,color:"#f0d39c",fontWeight:850}}>{plan.destination.name}{fresh&&fix&&<div style={{fontSize:26}}>{Math.round(bearing(fix,plan.destination))}° · {(distance(fix,plan.destination)/1609.344).toFixed(2)} mi</div>}</div>}<div style={{fontSize:11,color:"#bfcbbd",marginTop:8}}>Bearing is straight-line true north. It is not obstacle-aware trail routing.</div></div>
-    <div style={card}><div style={eyebrow}>FIELD NAVIGATION</div><button style={{...action,width:"100%",marginTop:8}} onClick={()=>{setOpen(false);window.dispatchEvent(new Event("grace-field-v2-trail-back"));}}>FOLLOW RECORDED TRAIL BACK</button><button style={{...action,width:"100%",marginTop:7}} onClick={()=>{setOpen(false);window.dispatchEvent(new Event("grace-field-open-waypoint-library"));}}>SAVED LOCATIONS / STANDS</button><div style={{fontSize:11,color:"#b9cbb8",marginTop:8}}>Trail Back requires a recorded GPS trail. Always carry backup navigation.</div></div>
+    <div style={card}><div style={{display:"flex",gap:8,alignItems:"center"}}><GuardianGlyph name="compass"/><div style={eyebrow}>DESTINATION BEARING</div></div>
+     <label style={caption}>Destination name<input style={field} placeholder="Ridge Top Stand" value={newDestName} onChange={e=>setNewDestName(e.target.value)}/></label>
+     <div style={{...pair,marginTop:7}}><input style={field} inputMode="decimal" aria-label="Destination latitude" placeholder="Latitude" value={newLat} onChange={e=>setNewLat(e.target.value)}/><input style={field} inputMode="decimal" aria-label="Destination longitude" placeholder="Longitude" value={newLng} onChange={e=>setNewLng(e.target.value)}/></div>
+     <button style={{...action,width:"100%",marginTop:10}} onClick={setDestination}>SET DESTINATION</button>
+     {plan.destination&&<div style={{color:"#f6d9a4",marginTop:10,fontWeight:800}}>{plan.destination.name}{fresh&&fix&&<div style={{fontSize:26}}>{Math.round(bearing(fix,plan.destination))}° · {(distance(fix,plan.destination)/1609.344).toFixed(2)} mi</div>}</div>}
+     <div style={caption}>Straight-line true-north bearing only. Not trail-aware routing or obstacle avoidance.</div>
+    </div>
+    <div style={card}><div style={eyebrow}>FIELD NAVIGATION</div>
+     <button style={{...action,width:"100%",marginTop:9}} onClick={()=>{setOpen(false);window.dispatchEvent(new Event("grace-field-v2-trail-back"));}}>FOLLOW RECORDED TRAIL BACK</button>
+     <button style={{...action,width:"100%",marginTop:8}} onClick={()=>{setOpen(false);window.dispatchEvent(new Event("grace-field-open-waypoint-library"));}}>OPEN SAVED STANDS & LOCATIONS</button>
+     <div style={caption}>The app displays your recorded GPS breadcrumb line. Trail Back is only as accurate as GPS and is not an emergency rescue service.</div>
+    </div>
    </>}
    {tab==="records"&&<>
-    <div style={card}><div style={eyebrow}>TRIP OBSERVATION NOTES</div><textarea style={{...field,minHeight:92,resize:"vertical"}} placeholder="Weather, wildlife, hazards, trail notes..." value={note} onChange={e=>setNote(e.target.value)}/><div style={{...pair,marginTop:8}}><button style={action} onClick={addObservation}>SAVE NOTE</button><button style={action} onClick={exportRecords}>EXPORT TRIP LOG</button></div></div>
-    <div style={card}><div style={eyebrow}>CHECK-INS / FIELD HISTORY · {plan.records.length}</div>{plan.records.length===0?<p style={{fontSize:12}}>Records appear as you check in and save observations.</p>:plan.records.slice(0,60).map(r=><div key={r.id} style={{borderTop:"1px solid #4a553f",padding:"9px 0",marginTop:8,fontSize:12}}><div style={{color:"#e7c181",fontSize:10}}>{r.kind.toUpperCase()} · {new Date(r.time).toLocaleString()}</div><div style={{marginTop:3}}>{r.text}</div>{r.lat!==null&&r.lng!==null&&<div style={{color:"#b6cabc",fontSize:11}}>{r.lat.toFixed(5)}, {r.lng.toFixed(5)}</div>}</div>)}</div>
+    <div style={card}><div style={eyebrow}>FIELD NOTES & OBSERVATIONS</div><textarea style={{...field,minHeight:90,resize:"vertical"}} placeholder="Wildlife, weather, hazards, access notes…" value={note} onChange={e=>setNote(e.target.value)}/>
+     <div style={{...pair,marginTop:9}}><button style={action} onClick={addObservation}>SAVE NOTE</button><button style={action} onClick={exportRecords}>EXPORT TRIP LOG</button></div></div>
+    <div style={card}><div style={eyebrow}>CHECK-IN & TRIP HISTORY · {plan.records.length}</div>
+     {plan.records.length===0?<p style={caption}>Check-ins and notes appear here after you record them.</p>:plan.records.slice(0,80).map(r=><div key={r.id} style={{borderTop:"1px solid #495a46",marginTop:10,paddingTop:10,fontSize:12}}><div style={{color:"#e4c08a",fontSize:10}}>{r.kind.toUpperCase()} · {new Date(r.time).toLocaleString()}</div><div style={{marginTop:4}}>{r.text}</div>{r.lat!==null&&r.lng!==null&&<div style={caption}>{r.lat.toFixed(5)}, {r.lng.toFixed(5)}</div>}</div>)}
+    </div>
    </>}
-   {message&&<div role="status" style={{...card,background:"#2c3828",borderColor:"#a78b5c",fontSize:12,color:"#f5dea9"}}>{message}</div>}
-   <div style={{fontSize:10,lineHeight:1.55,color:"#b7c6b6",marginTop:13,padding:"0 3px"}}>Guardian Angel provides GPS, trip recording, planned check-ins, in-app overdue reminders, manual position sharing and emergency call/text shortcuts. It cannot send unattended SMS, monitor after the app closes, or dispatch rescue without an independently configured and tested backend alert service. Do not rely on this feature as your only wilderness emergency system.</div>
+   {message&&<div role="status" style={{...card,borderColor:"#b9a275",background:"#23382a",fontSize:12,color:"#f2dda9"}}>{message}</div>}
+   <p style={{...caption,marginTop:15,padding:"0 3px"}}>SAFETY LIMIT: GPS tracking and reminders depend on Grace running with permissions and power. Automatic emergency SMS, closed-app monitoring, and actual live-location links are NOT provided. Tell a trusted person your route and return time; carry a separate navigation and emergency backup.</p>
   </section>
  </div>;
 }

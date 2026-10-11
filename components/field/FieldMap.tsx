@@ -146,6 +146,12 @@ function makeIcon(symbol: string, border = "#C8AE79", iconStyle = "realistic") {
     iconSize:isYou?[22,22]:[45,59],iconAnchor:isYou?[11,11]:[22,59],popupAnchor:[0,-55]});
 }
 
+type FieldToolName = "location" | "save" | "truck" | "track" | "return" | "history" | "weather" | "offline" | "guardian";
+function FieldToolIcon({name}:{name:string}){
+ const d:Record<FieldToolName,string>={location:"M12 2v5m0 10v5M2 12h5m10 0h5M12 7a5 5 0 1 0 .01 0",save:"M12 21S5 15 5 10a7 7 0 0 1 14 0c0 5-7 11-7 11Zm0-14v6m-3-3h6",truck:"M2 7h12v10H2zM14 11h4l4 4v2h-8zM5 18a2 2 0 1 0 4 0m8 0a2 2 0 1 0 4 0",track:"M3 19c3-13 8-14 11-7s7 7 7-4M3 19l3-3m-3 3 4 1",return:"m12 5-7 7 7 7M5 12h14",history:"M4 6h16v14H4zM7 10h10M7 14h10",weather:"M5 17a4 4 0 1 1 2-8 6 6 0 0 1 11 2 3 3 0 0 1-1 6zm3 2-1 3m6-3-1 3",offline:"M4 8V3h16v5M5 15l7 6 7-6m-7 6V8",guardian:"m12 2 8 4v5c0 6-4 9-8 11-4-2-8-5-8-11V6zM8 12l3 3 5-6"};
+ return <svg aria-hidden="true" width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="#dab980" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d={d[name as FieldToolName]||d.location}/></svg>;
+}
+
 function MapController({
   command,
   onComplete,
@@ -309,6 +315,9 @@ export default function FieldMap({
     useState("Finding your location...");
 
   const [tracking, setTracking] = useState(false);
+  const [lastTrailGpsAt,setLastTrailGpsAt] = useState<number|null>(null);
+  const [heartbeat,setHeartbeat] = useState(Date.now());
+  useEffect(()=>{const timer=window.setInterval(()=>setHeartbeat(Date.now()),10000);return()=>window.clearInterval(timer);},[]);
   const [trail, setTrail] = useState<TrailPoint[]>([]);
   const trackingActiveRef = useRef(false);
 
@@ -580,6 +589,7 @@ export default function FieldMap({
     );
 
     if (trackingActiveRef.current && reportedAccuracy <= 40) {
+      setLastTrailGpsAt(result.timestamp);
       setTrail((current) => {
         const last = current[current.length - 1];
 
@@ -599,7 +609,7 @@ export default function FieldMap({
           {
             lat: next[0],
             lng: next[1],
-            time: new Date().toISOString(),
+            time: new Date(result.timestamp).toISOString(),
           },
         ];
       });
@@ -610,6 +620,14 @@ export default function FieldMap({
 
   function locationError(error: GeolocationPositionError) {
     console.error("Grace Field GPS error:", error);
+    if (error.code === 1 && trackingActiveRef.current) {
+      trackingActiveRef.current = false;
+      setTracking(false);
+      if (watchId.current !== null) {
+        navigator.geolocation.clearWatch(watchId.current);
+        watchId.current = null;
+      }
+    }
     window.dispatchEvent(new CustomEvent("grace-field-gps-info", {detail:{accuracy:null,altitude:null,status:`GPS error: ${error.message}`}}));
 
     if (error.code === 1) {
@@ -1162,14 +1180,29 @@ export default function FieldMap({
   }
 
   async function startTracking() {
+    if (trackingActiveRef.current) return;
     if (!(await useFieldAction())) return;
     if (!navigator.geolocation) return;
+    if (trail.length > 1) {
+      const wantsNew = window.confirm("Start a NEW breadcrumb trail? Your previous trail will be archived on this device. Press Cancel to continue the existing trail.");
+      if (wantsNew) {
+        try {
+          const saved = JSON.parse(localStorage.getItem("graceFieldTrackHistory") || "[]");
+          const archive = Array.isArray(saved) ? saved : [];
+          archive.unshift({savedAt:new Date().toISOString(),points:trail});
+          localStorage.setItem("graceFieldTrackHistory",JSON.stringify(archive.slice(0,25)));
+          setTrail([]);
+        } catch {setLocationStatus("Could not archive last trail. Continuing existing trail so nothing is lost.");}
+      }
+    }
 
     if (watchId.current !== null) {
       navigator.geolocation.clearWatch(watchId.current);
     }
 
+    if (trackingActiveRef.current) return;
     trackingActiveRef.current = true;
+    setLastTrailGpsAt(null);
     setTracking(true);
     setLocationStatus("Live GPS tracking started...");
 
@@ -1236,6 +1269,23 @@ export default function FieldMap({
     setNavigationTarget(null);
     setReturningToStart(false);
     setLocationStatus("Navigation stopped.");
+  }
+
+  function exportTrailHistory() {
+    try {
+      const archived = JSON.parse(localStorage.getItem("graceFieldTrackHistory") || "[]");
+      const exportData = { exportedAt: new Date().toISOString(), activeTrail: trail, archivedTrails: Array.isArray(archived) ? archived : [] };
+      const blob = new Blob([JSON.stringify(exportData, null, 2)], {type:"application/json"});
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "grace-field-trails.json";
+      link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setLocationStatus("Current and archived trails exported to device.");
+    } catch {
+      setLocationStatus("Trail export unavailable. No trail data was deleted.");
+    }
   }
 
   function clearTrail() {
@@ -1632,375 +1682,45 @@ export default function FieldMap({
       }}
     >
       {toolsOpen && (
-        <div
-          style={{
-            position: "absolute",
-            left: 10,
-            right: 10,
-            bottom: "calc(env(safe-area-inset-bottom, 0px) + 100px)",
-            zIndex: 920,
-            padding: 10,
-            borderRadius: 18,
-            background: "rgba(17,24,20,.96)",
-            border: "1px solid rgba(244,210,122,.55)",
-            boxShadow: "0 8px 28px rgba(0,0,0,.55)",
-            maxHeight: "min(43dvh, 370px)",
-            overflowY: "auto",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 10,
-              marginBottom: 8,
-            }}
-          >
-            <strong
-              style={{
-                fontSize: 15,
-                color: "#C8AE79",
-              }}
-            >
-              FIELD TOOLS
-            </strong>
-
-            <button
-              type="button"
-              onClick={() => setToolsOpen(false)}
-              style={{
-                width: 34,
-                height: 34,
-                borderRadius: "50%",
-                border: "1px solid #68736b",
-                background: "#18251F",
-                color: "white",
-                fontWeight: 900,
-                cursor: "pointer",
-              }}
-            >
-              ✕
-            </button>
+        <div role="dialog" aria-label="Outdoor field tools" className="gf-premium-sheet" style={{position:"absolute",zIndex:1600,left:10,right:10,bottom:"calc(env(safe-area-inset-bottom, 0px) + 94px)",maxWidth:510,margin:"auto",maxHeight:"min(70dvh, 600px)",overflowY:"auto",borderRadius:17,padding:"17px 14px 18px",background:"linear-gradient(150deg,rgba(7,20,16,.99),rgba(13,30,22,.99))",border:"1px solid #d3ac72",boxShadow:"0 15px 50px #000d",color:"#f3e6cd"}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:"1px solid #8c785766",paddingBottom:12}}>
+            <div><div style={{color:"#d5b57e",fontSize:10,letterSpacing:2.2}}>GRACE FIELD / NAVIGATION</div><h2 style={{fontFamily:"Georgia,serif",fontWeight:500,fontSize:24,letterSpacing:1.3,margin:"5px 0 0"}}>FIELD OPERATIONS</h2></div>
+            <button type="button" aria-label="Close outdoor field tools" onClick={()=>setToolsOpen(false)} style={{width:43,height:43,color:"#e7c28b",background:"#10241b",border:"1px solid #ad9269",borderRadius:10,fontSize:24}}>×</button>
           </div>
-
-          <div
-            style={{
-              fontSize: 11,
-              opacity: 0.65,
-              marginBottom: 6,
-              textTransform: "uppercase",
-              letterSpacing: 1,
-            }}
-          >
-            Marker
+          <div style={{color:"#afc6b2",fontSize:12,margin:"12px 0"}}>Clean map-first tools. Select a marker using Save Location; no emoji shortcuts.</div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:9}}>
+            {([
+              ["FIND MY LOCATION","location"],
+              ["SAVE LOCATION","save"],
+              [truckSpot?"NAVIGATE TO TRUCK":"MARK MY TRUCK","truck"],
+              [tracking?"STOP TRACK":"START TRACK","track"],
+              ["FOLLOW TRAIL BACK","return"],
+              ["SAVED SPOTS","history"],
+              ["WEATHER & WIND","weather"],
+              ["OFFLINE MAP STATUS","offline"],
+              ["GUARDIAN ANGEL","guardian"],
+            ] as [string,string][]).map(([title,kind])=><button key={kind} type="button" onClick={()=>{
+              setToolsOpen(false);
+              if(kind==="location")findMeNow();
+              if(kind==="save")markHere();
+              if(kind==="truck"){if(truckSpot)backToTruck();else void truckAction();}
+              if(kind==="track"){if(tracking)stopTracking();else void startTracking();}
+              if(kind==="return")returnToStart();
+              if(kind==="history")setHistoryOpen(true);
+              if(kind==="weather"){setFieldPanel("weather");void loadFieldWeather();}
+              if(kind==="offline")setFieldPanel("offline");
+              if(kind==="guardian")window.dispatchEvent(new Event("grace-field-open-mission"));
+            }} style={{minHeight:70,display:"flex",alignItems:"center",gap:9,textAlign:"left",padding:"11px 10px",borderRadius:11,background:"linear-gradient(140deg,#172e22,#0b1b14)",border:"1px solid #766c50",color:"#f8edda",fontWeight:800,fontSize:12,letterSpacing:.4}}>
+              <FieldToolIcon name={kind}/><span>{title}</span>
+            </button>)}
           </div>
-
-          <div
-            style={{
-              display: "flex",
-              gap: 8,
-              overflowX: "auto",
-              paddingBottom: 10,
-            }}
-          >
-        {types.map(([key, symbol, label]) => (
-          <button
-            key={key}
-            onClick={() => setSelectedType(key)}
-            style={{
-              whiteSpace: "nowrap",
-              padding: "9px 12px",
-              borderRadius: 999,
-              border:
-                selectedType === key
-                  ? "2px solid #C8AE79"
-                  : "1px solid #566158",
-              background:
-                selectedType === key
-                  ? "#344437"
-                  : "#18251F",
-              color: "white",
-              cursor: "pointer",
-            }}
-          >
-            {symbol} {label}
-          </button>
-        ))}
-      </div>
-
-      <div
-            style={{
-              fontSize: 11,
-              opacity: 0.65,
-              margin: "2px 0 6px",
-              textTransform: "uppercase",
-              letterSpacing: 1,
-            }}
-          >
-            Actions
-          </div>
-
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: 8,
-            }}
-          >
-        <button
-          onClick={findMeNow}
-          style={{
-            padding: "10px 14px",
-            borderRadius: 10,
-            border: "1px solid #68736b",
-            cursor: "pointer",
-            fontWeight: 700,
-          }}
-        >
-          ⌖ FIND ME
-        </button>
-
-        <button
-          onClick={markHere}
-          style={{
-            padding: "10px 14px",
-            borderRadius: 10,
-            border: "1px solid #68736b",
-            cursor: "pointer",
-            fontWeight: 700,
-          }}
-        >
-          ＋ SAVE LOCATION
-        </button>
-
- <button
-          onClick={() => {
-                  if (truckSpot) {
-                    backToTruck();
-                  } else {
-                    truckAction();
-                  }
-                }}
-          style={{
-            padding: "10px 14px",
-            borderRadius: 10,
-            border: "1px solid #68736b",
-            cursor: "pointer",
-            fontWeight: 700,
-          }}
-        >
-          🚙 {truckSpot ? "Back to Truck" : "Mark My Truck"}
-        </button>
-
-        {!tracking ? (
-          <button
-            onClick={startTracking}
-            style={{
-              padding: "10px 14px",
-              borderRadius: 10,
-              border: "1px solid #68736b",
-              cursor: "pointer",
-              fontWeight: 700,
-            }}
-          >
-            ◎ START TRACK
-          </button>
-        ) : (
-          <button
-            onClick={stopTracking}
-            style={{
-              padding: "10px 14px",
-              borderRadius: 10,
-              border: "2px solid #C8AE79",
-              background: "#344437",
-              color: "white",
-              cursor: "pointer",
-              fontWeight: 800,
-            }}
-          >
-            ⏹ Stop Track
-          </button>
-        )}
-
-        {trail.length > 0 && (
-          <button
-            onClick={returnToStart}
-            style={{
-              padding: "10px 14px",
-              borderRadius: 10,
-              border: "1px solid rgba(200,174,121,.55)",
-              background: "#344437",
-              color: "white",
-              cursor: "pointer",
-              fontWeight: 800,
-            }}
-          >
-            🧭 Return to Start
-          </button>
-        )}
-
-        {trail.length > 0 && (
-          <button
-            onClick={clearTrail}
-            style={{
-              padding: "10px 14px",
-              borderRadius: 10,
-              border: "1px solid #68736b",
-              cursor: "pointer",
-              fontWeight: 700,
-            }}
-          >
-            🧹 Clear Trail
-          </button>
-        )}
-      </div>
-
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-              gap: 8,
-              marginTop: 10,
-              paddingTop: 10,
-              borderTop: "1px solid rgba(255,255,255,.12)",
-            }}
-          >
-            <button
-              type="button"
-              onClick={() => {
-                setHistoryOpen(true);
-                setToolsOpen(false);
-              }}
-              style={{
-                padding: 11,
-                borderRadius: 11,
-                border: "1px solid rgba(200,174,121,.55)",
-                background: "#18251F",
-                color: "white",
-                fontWeight: 800,
-                cursor: "pointer",
-              }}
-            >
-              ▤ SAVED / HISTORY ({historySpots.length})
-            </button>
-
-            <button
-              type="button"
-              onClick={loadFieldWeather}
-              style={{
-                padding: 11,
-                borderRadius: 11,
-                border: "1px solid rgba(200,174,121,.55)",
-                background: "#18251F",
-                color: "white",
-                fontWeight: 800,
-                cursor: "pointer",
-              }}
-            >
-              🌦️ Weather / Wind
-            </button>
-
-            <button
-              type="button"
-              onClick={async () => {
-                let freshLocation: {
-                  latitude: number;
-                  longitude: number;
-                  accuracyMeters: number;
-                } | null = null;
-
-                try {
-                  const gps = await new Promise<GeolocationPosition>(
-                    (resolve, reject) => {
-                      navigator.geolocation.getCurrentPosition(
-                        resolve,
-                        reject,
-                        {
-                          enableHighAccuracy: true,
-                          maximumAge: 0,
-                          timeout: 15000,
-                        }
-                      );
-                    }
-                  );
-
-                  freshLocation = {
-                    latitude: gps.coords.latitude,
-                    longitude: gps.coords.longitude,
-                    accuracyMeters: gps.coords.accuracy,
-                  };
-                } catch {
-                  window.alert(
-                    "Grace couldn't get a fresh GPS location. " +
-                    "Check location permission and try again."
-                  );
-                  return;
-                }
-
-                
-                
-const fieldSnapshot = {
-  source: "Grace Field",
-  mode,
-  capturedAt: new Date().toISOString(),
-  location: freshLocation,
-  weather: weather
-    ? {
-        ...weather,
-        note: "Weather observation from the Field weather service; check fetchedAt for freshness.",
-      }
-    : null,
-  savedSpots: visibleSpots.slice(0, 30).map((spot) => ({
-    name: spot.name,
-    type: spot.type,
-    lat: spot.lat,
-    lng: spot.lng,
-    notes: spot.notes,
-    createdAt: spot.createdAt,
-  })),
-  instruction:
-    "Analyze this actual field context. Give practical location-specific scouting reasoning, distinguish verified data from inference, and identify missing environmental information. Do not invent water bodies, species, terrain, regulations, or public access.",
-};
-
-sessionStorage.setItem(
-  "graceFieldScoutContext",
-  JSON.stringify(fieldSnapshot)
-);
-
-window.location.href = "/chat";
-              }}
-              style={{
-                padding: 11,
-                borderRadius: 11,
-                border: "1px solid rgba(200,174,121,.55)",
-                background: "#18251F",
-                color: "white",
-                fontWeight: 800,
-                cursor: "pointer",
-              }}
-            >
-              ✦ GRACE SCOUT
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setFieldPanel("offline");
-                setToolsOpen(false);
-              }}
-              style={{
-                padding: 11,
-                borderRadius: 11,
-                border: "1px solid rgba(200,174,121,.55)",
-                background: "#18251F",
-                color: "white",
-                fontWeight: 800,
-                cursor: "pointer",
-              }}
-            >
-              ↓ OFFLINE MAPS
-            </button>
+          <div style={{marginTop:13,background:"#081510",border:"1px solid #5a644e",borderRadius:11,padding:"10px 12px",fontSize:11,lineHeight:1.5,color:"#ced5c4"}}>
+            <strong style={{color:tracking?"#a0e6b5":"#e8c991"}}>{tracking?"● RECORDING GPS TRAIL":"● TRAIL READY"}</strong>
+            <div>{trail.length} saved breadcrumb points. Blue lines show accepted GPS positions; inaccurate fixes are excluded.</div>
+            <div style={{display:"flex",gap:7,flexWrap:"wrap",marginTop:9}}>
+              <button type="button" onClick={exportTrailHistory} style={{padding:"9px 13px",border:"1px solid #9aab8f",borderRadius:8,background:"#19372a",color:"#f8e4cf",fontWeight:700}}>EXPORT TRAILS</button>
+              {trail.length>0&&<button type="button" onClick={clearTrail} style={{padding:"9px 13px",border:"1px solid #ad8b62",borderRadius:8,background:"#342419",color:"#f8e4cf",fontWeight:700}}>CLEAR TRAIL (CONFIRM)</button>}
+            </div>
           </div>
         </div>
       )}
@@ -2038,8 +1758,8 @@ window.location.href = "/chat";
               }}
             >
               {fieldPanel === "weather"
-                ? "🌦️ Weather / Wind"
-                : "↓ OFFLINE MAPS"}
+                ? "WEATHER & WIND"
+                : "OFFLINE MAP STATUS"}
             </strong>
 
             <button
@@ -2188,7 +1908,7 @@ window.location.href = "/chat";
                       </div>
 
                       <strong>
-                        🌅 {formatFieldTime(weather.sunrise)}
+                        {formatFieldTime(weather.sunrise)}
                       </strong>
                     </div>
 
@@ -2209,7 +1929,7 @@ window.location.href = "/chat";
                       </div>
 
                       <strong>
-                        🌇 {formatFieldTime(weather.sunset)}
+                        {formatFieldTime(weather.sunset)}
                       </strong>
                     </div>
                   </div>
@@ -2389,9 +2109,7 @@ window.location.href = "/chat";
                         alignItems: "flex-start",
                       }}
                     >
-                      <div style={{ fontSize: 25 }}>
-                        {info[1]}
-                      </div>
+                      <div style={{width:44,height:57,flexShrink:0}} dangerouslySetInnerHTML={{__html:markerSvg(spot.type,43,true,localSpotStyle(spot.id))}} />
 
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div
@@ -2484,7 +2202,7 @@ window.location.href = "/chat";
                               cursor: "pointer",
                             }}
                           >
-                            🧭 Navigate
+                            Navigate
                           </button>
 
                           <button
@@ -2572,7 +2290,7 @@ window.location.href = "/chat";
                   fontWeight:800
                 }}
               >
-                ✕ Close
+                CLOSE
               </button>
             </div>
             {(
@@ -2741,7 +2459,7 @@ window.location.href = "/chat";
                 cursor: "pointer",
               }}
             >
-              🎯 Target
+              TARGET
             </button>
 
             <button
@@ -2758,7 +2476,7 @@ window.location.href = "/chat";
                 cursor: "pointer",
               }}
             >
-              ✕ Stop
+              STOP
             </button>
           </div>
         </div>
@@ -2845,6 +2563,10 @@ window.location.href = "/chat";
             />
           )}
 
+          {returningToStart && trail.length>1 && (
+            <Polyline positions={[...trail].reverse().map(point=>[point.lat,point.lng] as [number,number])} pathOptions={{color:"#f2bc62",weight:3,opacity:.98,dashArray:"8 8",lineCap:"round"}} />
+          )}
+
           {position && (
             <Marker
               position={position}
@@ -2921,7 +2643,7 @@ window.location.href = "/chat";
                           setReturningToStart(false);
                         }}
                       >
-                        🧭 Navigate
+                        Navigate
                       </button>
 
                       <button onClick={() => {
@@ -2950,17 +2672,8 @@ window.location.href = "/chat";
       </div>
 
       {tracking && (
-        <div
-          style={{
-            marginTop: 10,
-            padding: 10,
-            borderRadius: 10,
-            background: "#344437",
-            fontWeight: 800,
-          }}
-        >
-          Recording trail • {trail.length} GPS
-          points
+        <div role="status" aria-live="polite" style={{position:"absolute",top:84,left:"50%",transform:"translateX(-50%)",zIndex:850,border:"1px solid #79c69a",background:"#082018ec",color:"#d8ffdc",padding:"6px 11px",borderRadius:9,fontSize:11,fontWeight:850,whiteSpace:"nowrap",boxShadow:"0 3px 10px #000a"}}>
+          {lastTrailGpsAt===null||heartbeat-lastTrailGpsAt>45000?"◌ GPS SIGNAL STALE":"● TRACKING"} · {trail.length} GPS points · {accuracy!==null?`±${Math.round(accuracy*3.28084)} ft`:"waiting for fix"}
         </div>
       )}
 
@@ -2990,7 +2703,7 @@ window.location.href = "/chat";
           </div>
           <div style={{color:"#b4c6b4",fontSize:12,marginTop:6}}>Choose a location type, then give it a name. Your spot stays on your map.</div>
           <div style={{display:"flex",gap:7,overflowX:"auto",padding:"10px 0 6px"}}>
-            {(["Hunting","Fishing","Camping & Base","Other"] as const).map(category=><button key={category} type="button" onClick={()=>{const first=markerOptions.find(m=>m.category===category);if(first)setSelectedType(first.type);}} style={{background:markerOptions.find(m=>m.type===selectedType)?.category===category?"#405b3e":"#14251b",color:"#f8e8cb",border:"1px solid #917a50",borderRadius:999,padding:"8px 11px",fontSize:12,whiteSpace:"nowrap"}}>{category}</button>)}
+            {(["Hunting","Fishing","Camping & Base","Other"] as const).map(category=><button key={category} type="button" onClick={()=>{const first=markerOptions.find(m=>m.category===category);if(first)setSelectedType(first.type);}} style={{background:markerOptions.find(m=>m.type===selectedType)?.category===category?"#405b3e":"#14251b",color:"#f8e8cb",border:"1px solid #917a50",borderRadius:9,padding:"9px 12px",fontSize:12,fontWeight:700,whiteSpace:"nowrap"}}>{category}</button>)}
           </div>
           <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:7,margin:"8px 0 12px"}}>
             {markerOptions.map(option=><button key={option.type} type="button" onClick={()=>setSelectedType(option.type)} style={{minHeight:100,background:selectedType===option.type?"#35503b":"#192920",border:selectedType===option.type?"2px solid #e0bd7c":"1px solid #465b46",borderRadius:11,color:"#f6f1e6",boxShadow:selectedType===option.type?"0 0 0 2px #d8b77940,inset 0 0 25px #e6c58914":"0 5px 12px #0005",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4,padding:4}}><span dangerouslySetInnerHTML={{__html:markerSvg(option.type,64)}}/><span style={{fontSize:11,fontWeight:700,lineHeight:1.15,textAlign:"center"}}>{option.label}</span></button>)}
@@ -3018,8 +2731,9 @@ window.location.href = "/chat";
               boxSizing: "border-box",
               padding: 13,
               borderRadius: 12,
-              background: "#edf0e8",
-              color: "#132119",
+              background: "#10241c",
+              color: "#fff1d8",
+              border: "1px solid #987a51",
               fontSize: 15,
               marginTop: 12,
             }}
@@ -3037,8 +2751,9 @@ window.location.href = "/chat";
               boxSizing: "border-box",
               padding: 13,
               borderRadius: 12,
-              background: "#edf0e8",
-              color: "#132119",
+              background: "#10241c",
+              color: "#fff1d8",
+              border: "1px solid #987a51",
               fontSize: 15,
               marginTop: 8,
             }}
