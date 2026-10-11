@@ -1,12 +1,35 @@
 // Grace Field 2.0: original, self-contained vector map markers.
 // No external icon servers or emoji fonts required.
-export type MarkerKind = "stand" | "blind" | "camera" | "deer" | "scrape" | "bedding" | "trail" | "food" | "water" | "kill" | "blood" | "hazard" | "parking" | "hole" | "catch" | "structure" | "weed" | "dropoff" | "dock" | "ramp" | "current" | "truck" | "camp" | "cabin" | "fire" | "custom" | "trail-start";
+export type MarkerKind = "stand" | "blind" | "camera" | "deer" | "scrape" | "bedding" | "trail" | "food" | "water" | "kill" | "blood" | "hazard" | "parking" | "hole" | "catch" | "structure" | "weed" | "dropoff" | "dock" | "ramp" | "current" | "truck" | "camp" | "cabin" | "fire" | "custom" | "trail-start" | "game" | "cave" | "saddle" | "scenic";
 export const markerOptions: {type: MarkerKind; label: string; category: "Hunting"|"Fishing"|"Camping & Base"|"Other"}[] = [
- {type:"stand",label:"Tree Stand",category:"Hunting"},{type:"blind",label:"Ground Blind",category:"Hunting"},{type:"camera",label:"Trail Camera",category:"Hunting"},{type:"deer",label:"Deer Sign",category:"Hunting"},{type:"trail",label:"Game Trail",category:"Hunting"},{type:"food",label:"Food Plot",category:"Hunting"},
- {type:"hole",label:"Fishing Hole",category:"Fishing"},{type:"catch",label:"Catch",category:"Fishing"},{type:"dock",label:"Dock",category:"Fishing"},{type:"ramp",label:"Boat Ramp",category:"Fishing"},{type:"water",label:"Water Source",category:"Fishing"},
- {type:"truck",label:"My Truck",category:"Camping & Base"},{type:"camp",label:"Campsite",category:"Camping & Base"},{type:"cabin",label:"Cabin",category:"Camping & Base"},{type:"fire",label:"Campfire",category:"Camping & Base"},
- {type:"parking",label:"Parking",category:"Other"},{type:"hazard",label:"Hazard",category:"Other"},{type:"custom",label:"Custom Spot",category:"Other"},
+ {type:"deer",label:"Deer Stand",category:"Hunting"},
+ {type:"camera",label:"Trail Camera",category:"Hunting"},
+ {type:"hole",label:"Fishing Hole",category:"Fishing"},
+ {type:"blind",label:"Ground Blind",category:"Hunting"},
+ {type:"stand",label:"Tree Stand",category:"Hunting"},
+ {type:"trail",label:"Hunting Spot",category:"Hunting"},
+ {type:"camp",label:"Campsite",category:"Camping & Base"},
+ {type:"cabin",label:"Cabin",category:"Camping & Base"},
+ {type:"fire",label:"Fire Location",category:"Camping & Base"},
+ {type:"truck",label:"My Truck",category:"Camping & Base"},
+ {type:"ramp",label:"Boat Launch",category:"Fishing"},
+ {type:"water",label:"Water Source",category:"Fishing"},
+ {type:"game",label:"Game Sign",category:"Hunting"},
+ {type:"cave",label:"Cave",category:"Other"},
+ {type:"saddle",label:"Saddle",category:"Hunting"},
+ {type:"custom",label:"Custom Spot",category:"Other"},
+ {type:"scenic",label:"Scenic View",category:"Other"},
+ {type:"food",label:"Food Plot",category:"Hunting"},
+ // Historical marker types remain supported by markerSvg for existing saved spots.
 ];
+const PREMIUM_IMAGE: Record<string,string> = {
+ deer:"deer",stand:"stand",camera:"camera",blind:"blind",hole:"hole",catch:"hole",
+ trail:"trail",game:"game",scrape:"deer",bedding:"trail",food:"food",water:"water",
+ truck:"truck",parking:"truck",camp:"camp",cabin:"cabin",fire:"fire",ramp:"ramp",
+ dock:"ramp",current:"water",weed:"food",dropoff:"saddle",structure:"saddle",
+ hazard:"custom",kill:"game",blood:"game",custom:"custom",cave:"cave",saddle:"saddle",
+ scenic:"scenic","trail-start":"trail"
+};
 const icons: Record<string,string> = {
  stand:'<path d="M9 17h22l-3-9H12z"/><path d="M13 17 9 39m18-22 4 22M9 29h22M11 35h18"/><path d="M13 8 20 3l8 5"/>',
  blind:'<path d="M5 20 20 8l15 12v17H5z"/><path d="M14 37V25h12v12M10 19h5m10 0h5"/>',
@@ -55,6 +78,14 @@ const premiumArt: Record<string,string> = {
  water:`<path d="M20 3C14 12 8 20 8 27a12 12 0 0 0 24 0c0-7-6-15-12-24z" fill="#4589b0" stroke="#c0e5ed" stroke-width="1.8"/><path d="M14 27c0 5 3 7 7 8" fill="none" stroke="#c4e9ef" stroke-width="2.2"/>`,
 };
 export function markerSvg(type:string, size=44, withPin=true, style="realistic"){
+ // Original illustrated assets from the approved Grace Field design, bundled locally.
+ // Non-realistic styles retain independent SVG versions for user choice.
+ if(style==="realistic"){
+   const file=PREMIUM_IMAGE[type]||"custom";
+   const height=Math.round(size*99/76);
+   return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${height}" viewBox="0 0 76 99" role="img" aria-label="${type.replace(/[^a-z-]/g,"")}"><image href="/field-markers/${file}.png" width="76" height="99"/></svg>`;
+ }
+
  const original=markerColor(type);
  const c=style==="tactical"?"#e7e2cb":style==="topo"?"#e5c58e":style==="modern"?"#b5dbb4":original;
  const art=premiumArt[type];

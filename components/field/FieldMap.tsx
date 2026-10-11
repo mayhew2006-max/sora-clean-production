@@ -143,7 +143,7 @@ function makeIcon(symbol: string, border = "#C8AE79", iconStyle = "realistic") {
     ? `<div style="width:22px;height:22px;border:3px solid #fff;border-radius:50%;background:#1889ef;box-shadow:0 0 0 7px #159af83b,0 2px 12px #000a"></div>`
     : markerSvg(type, 45, true, iconStyle);
   return L.divIcon({className:"grace-premium-pin",html,
-    iconSize:isYou?[22,22]:[45,51],iconAnchor:isYou?[11,11]:[22,48],popupAnchor:[0,-43]});
+    iconSize:isYou?[22,22]:[45,59],iconAnchor:isYou?[11,11]:[22,59],popupAnchor:[0,-55]});
 }
 
 function MapController({
@@ -2878,7 +2878,7 @@ window.location.href = "/chat";
                     <strong style={{display:"block",fontSize:17,color:"#efd29e",marginBottom:6}}>{spot.name}</strong>
                     {photo && <img src={photo} alt={`Saved view at ${spot.name}`} style={{width:"100%",maxHeight:152,objectFit:"cover",borderRadius:9,border:"1px solid #97835c",marginBottom:8}}/>}
                     <label style={{display:"block",textAlign:"center",background:"#23392b",border:"1px solid #927850",padding:8,borderRadius:9,fontWeight:800,cursor:"pointer",fontSize:11,marginBottom:8}}>
-                      📷 {photo?"CHANGE PHOTO":"ADD SPOT PHOTO"}
+                      {photo?"CHANGE PHOTO":"ADD SPOT PHOTO"}
                       <input type="file" accept="image/*" capture="environment" style={{display:"none"}} onChange={e=>{const f=e.currentTarget.files?.[0];if(f)void attachLocalSpotPhoto(spot.id,f);e.currentTarget.value="";}}/>
                     </label>
                     <div style={{fontSize:10,color:"#cdb58c",letterSpacing:1,marginBottom:5}}>MARKER APPEARANCE</div>
@@ -2993,7 +2993,7 @@ window.location.href = "/chat";
             {(["Hunting","Fishing","Camping & Base","Other"] as const).map(category=><button key={category} type="button" onClick={()=>{const first=markerOptions.find(m=>m.category===category);if(first)setSelectedType(first.type);}} style={{background:markerOptions.find(m=>m.type===selectedType)?.category===category?"#405b3e":"#14251b",color:"#f8e8cb",border:"1px solid #917a50",borderRadius:999,padding:"8px 11px",fontSize:12,whiteSpace:"nowrap"}}>{category}</button>)}
           </div>
           <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:7,margin:"8px 0 12px"}}>
-            {markerOptions.filter(o=>o.category===(markerOptions.find(m=>m.type===selectedType)?.category||"Hunting")).map(option=><button key={option.type} type="button" onClick={()=>setSelectedType(option.type)} style={{minHeight:112,background:selectedType===option.type?"#35503b":"#192920",border:selectedType===option.type?"2px solid #e0bd7c":"1px solid #465b46",borderRadius:16,color:"#f6f1e6",boxShadow:selectedType===option.type?"0 0 0 2px #d8b77940,inset 0 0 25px #e6c58914":"0 5px 12px #0005",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4,padding:4}}><span dangerouslySetInnerHTML={{__html:markerSvg(option.type,64)}}/><span style={{fontSize:11,fontWeight:700,lineHeight:1.15,textAlign:"center"}}>{option.label}</span></button>)}
+            {markerOptions.map(option=><button key={option.type} type="button" onClick={()=>setSelectedType(option.type)} style={{minHeight:100,background:selectedType===option.type?"#35503b":"#192920",border:selectedType===option.type?"2px solid #e0bd7c":"1px solid #465b46",borderRadius:11,color:"#f6f1e6",boxShadow:selectedType===option.type?"0 0 0 2px #d8b77940,inset 0 0 25px #e6c58914":"0 5px 12px #0005",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4,padding:4}}><span dangerouslySetInnerHTML={{__html:markerSvg(option.type,64)}}/><span style={{fontSize:11,fontWeight:700,lineHeight:1.15,textAlign:"center"}}>{option.label}</span></button>)}
           </div>
 
           <div
