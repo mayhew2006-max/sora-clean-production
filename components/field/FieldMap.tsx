@@ -1977,7 +1977,7 @@ window.location.href = "/chat";
             margin: "0 auto",
             padding: 16,
             borderRadius: 18,
-            background: "rgba(17,24,20,.98)",
+            background: "linear-gradient(160deg,rgba(17,31,24,.99),rgba(8,17,14,.99))",
             border: "1px solid rgba(200,174,121,.55)",
             boxShadow: "0 8px 30px rgba(0,0,0,.65)",
           }}
@@ -2246,7 +2246,7 @@ window.location.href = "/chat";
             margin: "0 auto",
             padding: 14,
             borderRadius: 18,
-            background: "rgba(17,24,20,.98)",
+            background: "linear-gradient(160deg,rgba(17,31,24,.99),rgba(8,17,14,.99))",
             border: "1px solid rgba(244,210,122,.7)",
             boxShadow: "0 8px 30px rgba(0,0,0,.65)",
             overflow: "hidden",
@@ -2943,27 +2943,27 @@ window.location.href = "/chat";
             right: 12,
             bottom: "calc(env(safe-area-inset-bottom, 0px) + 115px)",
             zIndex: 1900,
-            maxHeight: "min(66dvh, 650px)",
+            maxHeight: "min(74dvh, 720px)",
             overflowY: "auto",
             maxWidth: 520,
             margin: "0 auto",
             padding: 16,
-            borderRadius: 16,
-            background: "rgba(17,24,20,.98)",
+            borderRadius: 22,
+            background: "linear-gradient(160deg,rgba(17,31,24,.99),rgba(8,17,14,.99))",
             border: "1px solid rgba(200,174,121,.55)",
-            boxShadow: "0 8px 30px rgba(0,0,0,.6)",
+            boxShadow: "0 16px 50px rgba(0,0,0,.85)",
           }}
         >
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
             <strong style={{color:"#e1c48c",fontSize:17}}>{editingSpotId ? "EDIT SAVED SPOT" : "SAVE LOCATION"}</strong>
             <button type="button" aria-label="Close save location" onClick={()=>{setPending(null);setEditingSpotId(null);}} style={{background:"#1a2b21",border:"1px solid #806f51",color:"#fff",borderRadius:20,padding:"5px 12px"}}>✕</button>
           </div>
-          <div style={{color:"#b4c6b4",fontSize:12,marginTop:6}}>Choose a professional marker, then name your location.</div>
+          <div style={{color:"#b4c6b4",fontSize:12,marginTop:6}}>Choose a location type, then give it a name. Your spot stays on your map.</div>
           <div style={{display:"flex",gap:7,overflowX:"auto",padding:"10px 0 6px"}}>
             {(["Hunting","Fishing","Camping & Base","Other"] as const).map(category=><button key={category} type="button" onClick={()=>{const first=markerOptions.find(m=>m.category===category);if(first)setSelectedType(first.type);}} style={{background:markerOptions.find(m=>m.type===selectedType)?.category===category?"#405b3e":"#14251b",color:"#f8e8cb",border:"1px solid #917a50",borderRadius:999,padding:"8px 11px",fontSize:12,whiteSpace:"nowrap"}}>{category}</button>)}
           </div>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",gap:7,margin:"8px 0 12px"}}>
-            {markerOptions.filter(o=>o.category===(markerOptions.find(m=>m.type===selectedType)?.category||"Hunting")).map(option=><button key={option.type} type="button" onClick={()=>setSelectedType(option.type)} style={{minHeight:82,background:selectedType===option.type?"#35503b":"#192920",border:selectedType===option.type?"2px solid #e0bd7c":"1px solid #465b46",borderRadius:12,color:"#f6f1e6",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4,padding:4}}><span dangerouslySetInnerHTML={{__html:markerSvg(option.type,40)}}/><span style={{fontSize:10,lineHeight:1.15,textAlign:"center"}}>{option.label}</span></button>)}
+          <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:7,margin:"8px 0 12px"}}>
+            {markerOptions.filter(o=>o.category===(markerOptions.find(m=>m.type===selectedType)?.category||"Hunting")).map(option=><button key={option.type} type="button" onClick={()=>setSelectedType(option.type)} style={{minHeight:112,background:selectedType===option.type?"#35503b":"#192920",border:selectedType===option.type?"2px solid #e0bd7c":"1px solid #465b46",borderRadius:16,color:"#f6f1e6",boxShadow:selectedType===option.type?"0 0 0 2px #d8b77940,inset 0 0 25px #e6c58914":"0 5px 12px #0005",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4,padding:4}}><span dangerouslySetInnerHTML={{__html:markerSvg(option.type,64)}}/><span style={{fontSize:11,fontWeight:700,lineHeight:1.15,textAlign:"center"}}>{option.label}</span></button>)}
           </div>
 
           <div
@@ -2986,8 +2986,11 @@ window.location.href = "/chat";
             style={{
               width: "100%",
               boxSizing: "border-box",
-              padding: 12,
-              borderRadius: 10,
+              padding: 13,
+              borderRadius: 12,
+              background: "#edf0e8",
+              color: "#132119",
+              fontSize: 15,
               marginTop: 12,
             }}
           />
@@ -3002,8 +3005,11 @@ window.location.href = "/chat";
             style={{
               width: "100%",
               boxSizing: "border-box",
-              padding: 12,
-              borderRadius: 10,
+              padding: 13,
+              borderRadius: 12,
+              background: "#edf0e8",
+              color: "#132119",
+              fontSize: 15,
               marginTop: 8,
             }}
           />
