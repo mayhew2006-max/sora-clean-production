@@ -288,6 +288,7 @@ export default function FieldMap({
 
   const [tracking, setTracking] = useState(false);
   const [trail, setTrail] = useState<TrailPoint[]>([]);
+  const trackingActiveRef = useRef(false);
 
   const [navigationTarget, setNavigationTarget] =
     useState<FieldSpot | null>(null);
@@ -510,6 +511,7 @@ export default function FieldMap({
     } catch {}
   }, [trail]);
 
+  const firstGpsFix = useRef(true);
   function acceptPosition(result: GeolocationPosition) {
     const reportedAccuracy = Math.round(
       result.coords.accuracy
@@ -539,13 +541,17 @@ export default function FieldMap({
     ];
 
     setPosition(next);
+    if (firstGpsFix.current) {
+      firstGpsFix.current = false;
+      setMapCommand({id: Date.now(), lat: next[0], lng: next[1], zoom: 16});
+    }
     setAccuracy(reportedAccuracy);
 
     setLocationStatus(
       `Location locked • ±${reportedAccuracy} m`
     );
 
-    if (tracking) {
+    if (trackingActiveRef.current) {
       setTrail((current) => {
         const last = current[current.length - 1];
 
@@ -625,6 +631,22 @@ export default function FieldMap({
       }
     };
   }, []);
+
+  // Grace Field 2.0 UI bridge: reuses existing GPS, tracking and saved-spot logic.
+  useEffect(() => {
+    const commands: Array<[string, () => void]> = [
+      ["grace-field-v2-locate", () => { if (!navigator.geolocation) return; navigator.geolocation.getCurrentPosition((p) => { if (acceptPosition(p)) centerMapOn(p.coords.latitude, p.coords.longitude, 16); }, locationError, {enableHighAccuracy:true,timeout:30000,maximumAge:0}); }],
+      ["grace-field-v2-save-spot", () => markHere()],
+      ["grace-field-v2-start-track", () => { void startTracking(); }],
+      ["grace-field-v2-stop-track", () => stopTracking()],
+      ["grace-field-v2-trail-back", () => returnToStart()],
+    ];
+    commands.forEach(([name, handler]) => window.addEventListener(name, handler));
+    return () => commands.forEach(([name, handler]) => window.removeEventListener(name, handler));
+  });
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent("grace-field-tracking-state", {detail:{tracking}}));
+  }, [tracking]);
 
   function validUuid(value: string) {
     return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
@@ -1115,6 +1137,7 @@ export default function FieldMap({
       navigator.geolocation.clearWatch(watchId.current);
     }
 
+    trackingActiveRef.current = true;
     setTracking(true);
     setLocationStatus("Live GPS tracking started...");
 
@@ -1139,6 +1162,7 @@ export default function FieldMap({
       watchId.current = null;
     }
 
+    trackingActiveRef.current = false;
     setTracking(false);
     setLocationStatus("Live tracking stopped.");
   }

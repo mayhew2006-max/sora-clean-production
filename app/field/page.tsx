@@ -1,109 +1,31 @@
 "use client";
-
-import FieldCommandCenter from "@/components/field/FieldCommandCenter";
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
-import type { FieldMode } from "@/components/field/FieldMap";
-import FieldScoutPanel from "@/components/field/FieldScoutPanel";
-import FieldWeekendKit from "@/components/field/FieldWeekendKit";
 import FieldMission from "@/components/field/FieldMission";
-import FieldExpeditionPack from "@/components/field/FieldExpeditionPack";
-import FieldOutdoorUtilities from "@/components/field/FieldOutdoorUtilities";
 import FieldWaypointLibrary from "@/components/field/FieldWaypointLibrary";
 import FieldWaypointNavigator from "@/components/field/FieldWaypointNavigator";
-
-const FieldMap = dynamic(
-  () => import("@/components/field/FieldMap"),
-  {
-    ssr: false,
-    loading: () => (
-      <div style={{
-        height: "100%",
-        display: "grid",
-        placeItems: "center",
-        background: "#0C1411",
-        color: "#e9eee8"
-      }}>
-        Loading Grace Field...
-      </div>
-    )
-  }
-);
-
-export default function GraceField() {
-  const [mode, setMode] = useState<FieldMode>("hunt");
-  const [menuOpen, setMenuOpen] = useState(false);
-
-  useEffect(() => {
-    const closeMenu = () => setMenuOpen(false);
-    window.addEventListener("grace-field-open-scout", closeMenu);
-    return () => window.removeEventListener("grace-field-open-scout", closeMenu);
-  }, []);
- const [heading, setHeading] = useState<number | null>(null);
-
-  useEffect(() => {
-    function onOrientation(event: DeviceOrientationEvent) {
-      const e = event as DeviceOrientationEvent & {
-        webkitCompassHeading?: number;
-      };
-
-      if (typeof e.webkitCompassHeading === "number") {
-        setHeading((e.webkitCompassHeading + 360) % 360);
-      } else if (typeof event.alpha === "number" && event.absolute) {
-        setHeading((360 - event.alpha) % 360);
-      }
-    }
-
-    window.addEventListener("deviceorientationabsolute", onOrientation);
-    window.addEventListener("deviceorientation", onOrientation);
-
-    return () => {
-      window.removeEventListener("deviceorientationabsolute", onOrientation);
-      window.removeEventListener("deviceorientation", onOrientation);
-    };
-  }, []);
-
-  const buttonStyle: React.CSSProperties = {
-    border: "1px solid rgba(225,234,220,.24)",
-    borderRadius: 13,
-    background: "rgba(12,20,16,.94)",
-    color: "#E8EDE7",
-    padding: "10px 12px",
-    fontWeight: 800,
-    cursor: "pointer",
-    backdropFilter: "blur(14px)",
-    boxShadow: "0 5px 18px rgba(0,0,0,.32)"
-  };
-
-  const cardinal = heading === null
-    ? "—"
-    : ["N", "NE", "E", "SE", "S", "SW", "W", "NW"][
-        Math.round(heading / 45) % 8
-      ];
-
-  return (
-    <main style={{
-      position: "fixed",
-      inset: 0,
-      overflow: "hidden",
-      background: "#0C1411",
-      color: "#E8EDE7",
-      fontFamily: "Arial, sans-serif"
-    }}>
-      <div style={{ position: "absolute", inset: 0 }}>
-        <FieldMap mode={mode} />
-        <FieldScoutPanel mode={mode} />
-<FieldWeekendKit />
-        <FieldMission />
- <FieldExpeditionPack />
- <FieldOutdoorUtilities />
- <FieldWaypointLibrary />
- <FieldCommandCenter />
- <FieldWaypointNavigator />
-      </div>
-
-     
-
+import type { FieldMode } from "@/components/field/FieldMap";
+const FieldMap = dynamic(() => import("@/components/field/FieldMap"), {ssr:false,loading:()=> <div style={{height:"100%",background:"#0C1411",color:"#E9EEE8",display:"grid",placeItems:"center"}}>Locating you...</div>});
+const send = (name:string) => window.dispatchEvent(new Event(name));
+export default function GraceField(){
+ const [heading,setHeading]=useState<number|null>(null);
+ const [tracking,setTracking]=useState(false);
+ const [more,setMore]=useState(false);
+ const [mode,setMode]=useState<FieldMode>("hunt");
+ useEffect(()=>{
+  function orientation(event:DeviceOrientationEvent){const e=event as DeviceOrientationEvent & {webkitCompassHeading?:number};if(typeof e.webkitCompassHeading==="number")setHeading((e.webkitCompassHeading+360)%360);else if(typeof event.alpha==="number" && event.absolute)setHeading((360-event.alpha)%360);}
+  const track=(e:Event)=>setTracking(Boolean((e as CustomEvent<{tracking:boolean}>).detail?.tracking));
+  window.addEventListener("deviceorientationabsolute",orientation);window.addEventListener("deviceorientation",orientation);window.addEventListener("grace-field-tracking-state",track);
+  return ()=>{window.removeEventListener("deviceorientationabsolute",orientation);window.removeEventListener("deviceorientation",orientation);window.removeEventListener("grace-field-tracking-state",track);};
+ },[]);
+ const cardinal=heading===null?"—":["N","NE","E","SE","S","SW","W","NW"][Math.round(heading/45)%8];
+ const action:React.CSSProperties={background:"rgba(12,22,17,.96)",color:"#F7F0E3",border:"1px solid #A48C5B",borderRadius:14,padding:"13px 8px",fontSize:12,fontWeight:850,cursor:"pointer",boxShadow:"0 4px 18px #0009"};
+ return <main style={{position:"fixed",inset:0,overflow:"hidden",background:"#0C1411",color:"#E8EDE7",fontFamily:"Arial,sans-serif"}}>
+  <div style={{position:"absolute",inset:0}}><FieldMap mode={mode}/><FieldMission/><FieldWaypointLibrary/><FieldWaypointNavigator/></div>
+  <div style={{position:"fixed",zIndex:1200,top:"calc(env(safe-area-inset-top, 0px) + 12px)",left:12,right:12,display:"flex",justifyContent:"space-between",alignItems:"center",pointerEvents:"none"}}>
+   <div style={{background:"#101B16E8",border:"1px solid #A48C5B",borderRadius:13,padding:"9px 12px",boxShadow:"0 5px 20px #0008"}}><div style={{fontSize:10,color:"#D9C394",letterSpacing:2}}>GRACE FIELD 2.0</div><strong style={{fontSize:14}}>EXPLORE · MARK · TRACK</strong></div>
+   <div style={{display:"flex",gap:7,pointerEvents:"auto"}}><button type="button" aria-label="Center map on my location" onClick={()=>send("grace-field-v2-locate")} style={action}>⌖ GPS</button><button type="button" aria-label="Map layers" onClick={()=>send("grace-field-open-layers")} style={action}>▧ MAP</button></div>
+  </div>
       <div style={{
         position: "absolute",
         zIndex: 1190,
@@ -210,127 +132,21 @@ export default function GraceField() {
         </div>
       </div>
     
-  {/* Grace Field unified controls */}
-  <div style={{
-    position:"fixed",
-    bottom:"calc(env(safe-area-inset-bottom, 0px) + 22px)",
-    left:0,right:0,
-    zIndex:9999,
-    display:"flex",
-    justifyContent:"center",
-    pointerEvents:"none"
-  }}>
-    <button type="button"
-      onClick={() => {
-        window.dispatchEvent(new Event("grace-field-close-scout"));
-        setMenuOpen(v => !v);
-    }}
-      style={{
-        pointerEvents:"auto",
-        padding:"13px 23px",
-        borderRadius:999,
-        background:menuOpen?"#C8AE79":"#0C1411",
-        color:menuOpen?"#0C1411":"#D9C394",
-        border:"1px solid rgba(200,174,121,.72)",
-        fontWeight:900,
-        fontSize:13,
-        boxShadow:"0 5px 22px rgba(0,0,0,.6)"
-      }}>
-      ☰ {menuOpen ? "CLOSE" : "FIELD MENU"}
-    </button>
+
+  <div style={{position:"fixed",bottom:"calc(env(safe-area-inset-bottom, 0px) + 16px)",left:10,right:10,zIndex:1300,maxWidth:580,margin:"auto",display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:8}}>
+   <button type="button" onClick={()=>send(tracking?"grace-field-v2-stop-track":"grace-field-v2-start-track")} style={{...action,background:tracking?"#6D2826":"#285A37",borderColor:tracking?"#F5B4A8":"#7EB989"}}>{tracking?"■ STOP TRACK":"◉ START TRACK"}</button>
+   <button type="button" onClick={()=>send("grace-field-v2-save-spot")} style={action}>⌖ SAVE SPOT</button>
+   <button type="button" onClick={()=>send("grace-field-open-mission")} style={action}>♢ GUARDIAN</button>
+   <button type="button" onClick={()=>send("grace-field-open-waypoint-library")} style={{...action,gridColumn:"span 2"}}>⌖ SAVED LOCATIONS / NAVIGATE</button>
+   <button type="button" onClick={()=>setMore(v=>!v)} style={action}>⋯ MORE</button>
   </div>
-
-  {menuOpen && (
-    <div style={{
-      position:"fixed",
-      bottom:"calc(env(safe-area-inset-bottom, 0px) + 94px)",
-      left:12,right:12,
-      zIndex:9998,
-      maxWidth:520,
-      maxHeight:"55dvh",
-      overflowY:"auto",
-      margin:"0 auto",
-      padding:15,
-      borderRadius:18,
-      background:"rgba(10,18,14,.97)",
-      border:"1px solid #C8AE79",
-      boxShadow:"0 8px 35px rgba(0,0,0,.7)"
-    }}>
-      <div style={{
-        color:"#C8AE79",
-        fontWeight:900,
-        letterSpacing:1,
-        marginBottom:12
-      }}>
-        GRACE FIELD
-      </div>
-
-      <div style={{
-        display:"grid",
-        gridTemplateColumns:"1fr 1fr",
-        gap:9
-      }}>
-        {(["hunt","fish"] as const).map(value => (
-          <button key={value} type="button"
-            onClick={() => {
-              setMode(value);
-              setMenuOpen(false);
-            }}
-            style={{
-              padding:14,
-              borderRadius:12,
-              border:"1px solid #C8AE79",
-              background:mode===value?"#C8AE79":"#1C2C24",
-              color:mode===value?"#101A15":"white",
-              fontWeight:900
-            }}>
-            {value==="hunt"?"HUNT":"FISH"}
-          </button>
-        ))}
-
-        {[
-          ["FIELD TOOLS","grace-field-open-tools"],
-          ["MAP LAYERS","grace-field-open-layers"],
-          ["ASK GRACE","grace-field-open-scout"],
-          ["GUARDIAN ANGEL","grace-field-open-mission"],
- ["OUTDOOR UTILITIES","grace-field-open-utilities"],
- ["WAYPOINT LIBRARY","grace-field-open-waypoint-library"],
- ["EXPEDITION PACK","grace-field-open-expedition"],
- ["FIELD COMMAND","grace-field-open-command"]
-        ].map(([label,event]) => (
-          <button key={event} type="button"
-            onClick={() => {
-              setMenuOpen(false);
-              window.dispatchEvent(new Event(event));
-            }}
-            style={{
-              padding:14,
-              borderRadius:12,
-              border:"1px solid #C8AE79",
-              background:"#1C2C24",
-              color:"white",
-              fontWeight:900
-            }}>
-            {label}
-          </button>
-        ))}
-
-        <button type="button"
-          onClick={() => window.location.href="/chat"}
-          style={{
-            padding:14,
-            borderRadius:12,
-            border:"1px solid #C8AE79",
-            background:"#1C2C24",
-            color:"white",
-            fontWeight:900
-          }}>
-          ← Back to Grace
-        </button>
-      </div>
-    </div>
-  )}
-
-</main>
-  );
+  {more&&<div style={{position:"fixed",zIndex:1400,bottom:"calc(env(safe-area-inset-bottom, 0px) + 140px)",left:12,right:12,maxWidth:580,margin:"auto",background:"#101B16F7",border:"1px solid #B9A071",borderRadius:18,padding:14,boxShadow:"0 10px 30px #000A"}}><strong style={{color:"#D9C394"}}>FIELD OPTIONS</strong><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:12}}>
+  <button type="button" style={action} onClick={()=>{setMore(false);send("grace-field-v2-trail-back")}}>FOLLOW TRAIL BACK</button>
+  <button type="button" style={action} onClick={()=>{setMore(false);send("grace-field-open-tools")}}>MARKER TYPES & TOOLS</button>
+  <button type="button" style={action} onClick={()=>{setMore(false);send("grace-field-open-layers")}}>MAP LAYERS</button>
+  <button type="button" style={action} onClick={()=>{setMore(false);send("grace-field-v2-locate")}}>MY LOCATION</button>
+  <button type="button" style={action} onClick={()=>{setMode(mode==="hunt"?"fish":"hunt");setMore(false)}}>SPOT CATEGORY: {mode.toUpperCase()}</button>
+  <button type="button" style={action} onClick={()=>setMore(false)}>CLOSE</button>
+  </div></div>}
+ </main>;
 }
