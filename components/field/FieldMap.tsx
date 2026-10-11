@@ -397,8 +397,20 @@ export default function FieldMap({
  const [historyOpen, setHistoryOpen] =
     useState(false);
 
+  const [navigationCompact, setNavigationCompact] = useState(false);
+
   const [fieldPanel, setFieldPanel] =
     useState<"weather" | "offline" | null>(null);
+
+  useEffect(() => {
+    const open = Boolean(fieldPanel || historyOpen || toolsOpen || layersOpen || pending || (navigationTarget && !navigationCompact));
+    window.dispatchEvent(new CustomEvent("grace-field-overlay-state", {detail: {open}}));
+    return () => { window.dispatchEvent(new CustomEvent("grace-field-overlay-state", {detail: {open: false}})); };
+  }, [fieldPanel, historyOpen, toolsOpen, layersOpen, pending, navigationTarget, navigationCompact]);
+
+  useEffect(() => {
+    setNavigationCompact(false);
+  }, [navigationTarget?.id]);
 
   const [weather, setWeather] =
     useState<FieldWeather | null>(null);
@@ -2335,153 +2347,87 @@ export default function FieldMap({
       )}
 
       {navigationTarget && navigation && (
-        <div
-          style={{
-            position: "absolute",
-            top: 112,
-            left: 12,
-            right: 12,
-            zIndex: 960,
-            maxWidth: 520,
-            margin: "0 auto",
-            padding: 14,
-            borderRadius: 18,
-            background: "rgba(17,24,20,.94)",
-            border: "2px solid #C8AE79",
-            boxShadow: "0 8px 28px rgba(0,0,0,.6)",
-            textAlign: "center",
-          }}
-        >
-          <div
-            style={{
-              fontSize: 11,
-              opacity: 0.65,
-              textTransform: "uppercase",
-              letterSpacing: 1.5,
-            }}
-          >
-            {returningToStart
-              ? "RETURN TO START"
-              : "NAVIGATING TO"}
+        navigationCompact ? (
+          <div role="status" aria-label="Active navigation" style={{
+            position:"absolute", zIndex:3200, left:12, right:12,
+            bottom:"calc(env(safe-area-inset-bottom, 0px) + 90px)",
+            margin:"0 auto", maxWidth:460, padding:"9px 10px", borderRadius:13,
+            border:"1px solid #c9a16c", background:"#0c2019f5",
+            display:"flex", alignItems:"center", gap:8, boxShadow:"0 10px 30px #000a"
+          }}>
+            <button type="button" onClick={()=>setNavigationCompact(false)} style={{
+              flex:1,minWidth:0,textAlign:"left",border:0,background:"transparent",color:"#f5dec0",padding:5
+            }}>
+              <div style={{fontSize:9,letterSpacing:1.3,color:"#d9b77d"}}>NAVIGATION · TAP TO EXPAND</div>
+              <div style={{fontSize:14,fontWeight:800,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                {navigationTarget.name} · {formatDistance(navigation.distance)} · {navigation.direction} {Math.round(navigation.bearing)}°
+              </div>
+            </button>
+            <button type="button" onClick={stopNavigation} aria-label="Stop navigation" style={{
+              padding:"9px 12px",borderRadius:9,border:"1px solid #bb826c",background:"#3b211d",color:"#f8e2d8",fontWeight:800
+            }}>STOP</button>
           </div>
-
-          <div
+        ) : (
+          <div data-grace-field-navigation="true" role="dialog" aria-label={returningToStart ? "Return to trail start" : "Navigate to saved location"}
             style={{
-              marginTop: 4,
-              fontSize: 19,
-              fontWeight: 900,
-            }}
-          >
-            {returningToStart ? "👣 " : "🧭 "}
-            {navigationTarget.name}
-          </div>
-
-          <div
-            style={{
-              height: 92,
-              display: "grid",
-              placeItems: "center",
-            }}
-          >
-            <div
-              style={{
-                fontSize: 64,
-                lineHeight: 1,
-                transform: `rotate(${navigation.bearing}deg)`,
-                transition: "transform .25s ease",
-                transformOrigin: "center",
-                filter:
-                  "drop-shadow(0 3px 6px rgba(0,0,0,.55))",
-              }}
-            >
-              ↑
+              position:"absolute", zIndex:3200,
+              top:"calc(env(safe-area-inset-top, 0px) + 88px)", left:12, right:12,
+              maxWidth:520, maxHeight:"calc(100dvh - 205px)", overflowY:"auto",
+              margin:"0 auto", padding:"15px", borderRadius:17,
+              background:"linear-gradient(155deg,#0a1d16fa,#10251bfa)",
+              border:"1px solid #d2ab73",boxShadow:"0 15px 40px #000d", color:"#f6ebd9"
+            }}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10}}>
+              <div style={{minWidth:0}}>
+                <div style={{fontSize:10,letterSpacing:2,color:"#d4b47f"}}>
+                  {returningToStart ? "RETURN TO START" : "NAVIGATE TO SAVED SPOT"}
+                </div>
+                <div style={{fontSize:22,fontFamily:"Georgia,serif",marginTop:7,overflowWrap:"anywhere"}}>{navigationTarget.name}</div>
+              </div>
+              <button type="button" onClick={()=>setNavigationCompact(true)} aria-label="Minimize navigation panel" style={{
+                flexShrink:0, padding:"9px 11px",fontSize:11,fontWeight:800,
+                color:"#f2dbb0",border:"1px solid #ad9163",borderRadius:9,background:"#193126"
+              }}>VIEW MAP ↓</button>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10,marginTop:14}}>
+              <div style={{padding:13,borderRadius:12,border:"1px solid #8c7755",background:"#0b1a14"}}>
+                <div style={{fontSize:9,letterSpacing:1.3,color:"#c4ac84"}}>DIRECT BEARING</div>
+                <div style={{fontWeight:800,fontSize:24,color:"#f3d49d",marginTop:6,whiteSpace:"nowrap"}}>
+                  {navigation.direction} · {Math.round(navigation.bearing)}°
+                </div>
+                <div style={{fontSize:11,color:"#c6cfc0",marginTop:3}}>True north · not turn-by-turn</div>
+              </div>
+              <div style={{padding:13,borderRadius:12,border:"1px solid #8c7755",background:"#0b1a14"}}>
+                <div style={{fontSize:9,letterSpacing:1.3,color:"#c4ac84"}}>DIRECT DISTANCE</div>
+                <div style={{fontWeight:800,fontSize:25,color:"#f3d49d",marginTop:6}}>
+                  {formatDistance(navigation.distance)}
+                </div>
+                <div style={{fontSize:11,color:"#c6cfc0",marginTop:3}}>Straight-line distance</div>
+              </div>
+            </div>
+            <div style={{marginTop:12,padding:"10px 11px",borderRadius:10,
+              background:accuracy !== null && navigation.distance <= accuracy ? "#402b18" : "#162f22",
+              border:"1px solid #88714c",fontSize:12,lineHeight:1.5}}>
+              {accuracy === null ? "GPS accuracy unavailable. Confirm your position using landmarks."
+                : navigation.distance <= accuracy
+                  ? `GPS accuracy ±${Math.round(accuracy * 3.28084)} ft: the target is within your location uncertainty. Distance and bearing may jump even when you are standing still.`
+                  : `GPS accuracy ±${Math.round(accuracy * 3.28084)} ft. Check terrain and landmarks before moving.`}
+            </div>
+            {returningToStart && (
+              <div style={{fontSize:12,lineHeight:1.6,color:"#cdd7c8",marginTop:10}}>
+                {trail.length > 1
+                  ? "Use the recorded blue breadcrumb trail on the map to retrace your path. The bearing above points directly to the start, not around obstacles."
+                  : "No usable breadcrumb trail is recorded. Do not rely on a straight-line bearing to avoid cliffs, water, or other obstacles."}
+              </div>
+            )}
+            <div style={{display:"flex",gap:9,marginTop:14}}>
+              <button type="button" onClick={()=>setNavigationCompact(true)} style={{flex:1,padding:"12px 9px",border:"1px solid #9e926e",borderRadius:10,color:"#f4e5c8",background:"#1c3829",fontWeight:800}}>VIEW MAP</button>
+              <button type="button" onClick={stopNavigation} style={{flex:1,padding:"12px 9px",border:"1px solid #c08879",borderRadius:10,color:"#ffe4d9",background:"#452420",fontWeight:800}}>STOP NAVIGATION</button>
             </div>
           </div>
-
-          <div
-            style={{
-              fontSize: 30,
-              fontWeight: 900,
-              color: "#C8AE79",
-            }}
-          >
-            {formatDistance(navigation.distance)}
-          </div>
-
-          <div
-            style={{
-              marginTop: 2,
-              fontSize: 16,
-              fontWeight: 800,
-            }}
-          >
-            {navigation.direction} •{" "}
-            {Math.round(navigation.bearing)}°
-          </div>
-
-          {returningToStart && (
-            <div
-              style={{
-                marginTop: 7,
-                fontSize: 12,
-                opacity: 0.72,
-              }}
-            >
-              Your recorded trail is visible on the map. This compass points directly to the starting location; follow the trail line to retrace your route.
-            </div>
-          )}
-
-          <div
-            style={{
-              display: "flex",
-              gap: 8,
-              marginTop: 12,
-            }}
-          >
-            <button
-              type="button"
-              onClick={() => {
-                if (!navigationTarget) return;
-
-                setLocationStatus(
-                  `🧭 ${navigationTarget.name} • ${formatDistance(
-                    navigation.distance
-                  )} • ${navigation.direction}`
-                );
-              }}
-              style={{
-                flex: 1,
-                padding: "10px 8px",
-                borderRadius: 10,
-                border: "1px solid #68736b",
-                background: "#18251F",
-                color: "white",
-                fontWeight: 800,
-                cursor: "pointer",
-              }}
-            >
-              TARGET
-            </button>
-
-            <button
-              type="button"
-              onClick={stopNavigation}
-              style={{
-                flex: 1,
-                padding: "10px 8px",
-                borderRadius: 10,
-                border: "1px solid #7b4d4d",
-                background: "#2b2020",
-                color: "white",
-                fontWeight: 800,
-                cursor: "pointer",
-              }}
-            >
-              STOP
-            </button>
-          </div>
-        </div>
+        )
       )}
+
 
  <div
         style={{

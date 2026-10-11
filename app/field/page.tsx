@@ -39,6 +39,7 @@ export default function GraceField() {
   const [heading, setHeading] = useState<number | null>(null);
   const [tracking, setTracking] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [mapOverlayOpen, setMapOverlayOpen] = useState(false);
   const [gps, setGps] = useState<GpsInfo>({accuracy: null, altitude: null, status: "Acquiring precise GPS…"});
   const [mode] = useState<FieldMode>("hunt");
   useEffect(() => {
@@ -63,9 +64,17 @@ export default function GraceField() {
       window.removeEventListener("grace-field-gps-info", updateGps);
     };
   }, []);
+  useEffect(() => {
+    const onOverlayChange = (event: Event) => {
+      const state = (event as CustomEvent<{open: boolean}>).detail;
+      setMapOverlayOpen(Boolean(state?.open));
+    };
+    window.addEventListener("grace-field-overlay-state", onOverlayChange);
+    return () => window.removeEventListener("grace-field-overlay-state", onOverlayChange);
+  }, []);
   const cardinal = heading === null ? "NO SENSOR" : ["N", "NE", "E", "SE", "S", "SW", "W", "NW"][Math.round(heading / 45) % 8];
   const doMenuAction = (event: string) => { setMenuOpen(false); send(event); };
-  return <main className="grace-field-v3">
+  return <main className={`grace-field-v3${mapOverlayOpen ? " gf-map-overlay-open" : ""}`}>
     <style>{`
       .grace-field-v3{position:fixed;inset:0;z-index:10000;overflow:hidden;background:#0a1513;color:#f2e9d7;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;isolation:isolate}
       .grace-field-v3 *{box-sizing:border-box}
@@ -83,6 +92,11 @@ export default function GraceField() {
       /* Keep fixed map instruments from obscuring open FieldMap sheets. */
       .grace-field-v3:has([data-grace-field-overlay="true"]) .gf-sidebar,
       .grace-field-v3:has([data-grace-field-overlay="true"]) .gf-quicktools{visibility:hidden!important;opacity:0!important;pointer-events:none!important}
+      /* Foreground navigation hides fixed widgets without deleting or stopping GPS recording. */
+      .gf-map-overlay-open .gf-sidebar,.gf-map-overlay-open .gf-quicktools,.gf-map-overlay-open .gf-bottom{visibility:hidden!important;pointer-events:none!important}
+      .grace-field-v3:has([data-grace-field-navigation="true"]) .gf-sidebar,
+      .grace-field-v3:has([data-grace-field-navigation="true"]) .gf-quicktools,
+      .grace-field-v3:has([data-grace-field-navigation="true"]) .gf-bottom{visibility:hidden!important;pointer-events:none!important}
       .gf-panel{background:linear-gradient(145deg,#081511f6,#11221bee);border:1px solid #ad9060;box-shadow:0 8px 22px #000a}
       .gf-header{position:absolute;z-index:1200;top:calc(env(safe-area-inset-top,0px) + 9px);left:9px;right:9px;height:63px;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 9px;border-radius:15px;pointer-events:auto}
       .gf-brand{display:flex;gap:8px;align-items:center;min-width:0}
