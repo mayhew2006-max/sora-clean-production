@@ -54,10 +54,23 @@ const premiumArt: Record<string,string> = {
  food:`<path d="M20 38V8" stroke="#c9df9e" stroke-width="2.4"/><path d="M20 20C8 19 7 12 9 7c8 1 11 6 11 13zM20 28c12-1 13-8 11-13-8 1-11 6-11 13z" fill="#7fa66d" stroke="#d2e3a3" stroke-width="1.5"/>`,
  water:`<path d="M20 3C14 12 8 20 8 27a12 12 0 0 0 24 0c0-7-6-15-12-24z" fill="#4589b0" stroke="#c0e5ed" stroke-width="1.8"/><path d="M14 27c0 5 3 7 7 8" fill="none" stroke="#c4e9ef" stroke-width="2.2"/>`,
 };
-export function markerSvg(type:string, size=44, withPin=true){
- const c=markerColor(type);const art=premiumArt[type];
- const base=withPin?`<path d="M20 1.5C9.5 1.5 2.5 9 2.5 19c0 12 17.5 26 17.5 26S37.5 31 37.5 19C37.5 9 30.5 1.5 20 1.5z" fill="url(#pinbg)" stroke="${c}" stroke-width="1.6"/>`:`<circle cx="20" cy="21" r="18" fill="url(#pinbg)" stroke="${c}" stroke-width="1.6"/>`;
- const interior=art||`<g transform="translate(4 5) scale(.8)" fill="none" stroke="${c}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">${icons[type]||icons.custom}</g>`;
- const artGroup=art?`<g transform="translate(5 5) scale(.75)">${art}</g>`:interior;
- return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 40 46" role="img" aria-label="${type.replace(/[^a-z-]/g,'')}"><defs><linearGradient id="pinbg" x1="0" y1="0" x2=".85" y2="1"><stop stop-color="#263e30"/><stop offset=".55" stop-color="#111e17"/><stop offset="1" stop-color="#050b09"/></linearGradient></defs>${base}<path d="M8 15c3-9 15-13 23-5" fill="none" stroke="#ffffff" stroke-opacity=".12" stroke-width="2"/>${artGroup}</svg>`;
+export function markerSvg(type:string, size=44, withPin=true, style="realistic"){
+ const original=markerColor(type);
+ const c=style==="tactical"?"#e7e2cb":style==="topo"?"#e5c58e":style==="modern"?"#b5dbb4":original;
+ const art=premiumArt[type];
+ const isMinimal=style==="minimal";
+ const base=style==="tactical"
+   ? `<path d="M20 2 36 11v19L20 44 4 30V11z" fill="url(#pinbg)" stroke="${c}" stroke-width="1.7"/>`
+   : style==="topo"
+   ? `<circle cx="20" cy="20" r="18" fill="url(#pinbg)" stroke="${c}" stroke-width="1.8"/>`
+   : isMinimal
+   ? `<circle cx="20" cy="20" r="16" fill="#0b1612" fill-opacity=".78" stroke="${c}" stroke-width="1.2"/>`
+   : withPin
+   ? `<path d="M20 1.5C9.5 1.5 2.5 9 2.5 19c0 12 17.5 26 17.5 26S37.5 31 37.5 19C37.5 9 30.5 1.5 20 1.5z" fill="url(#pinbg)" stroke="${c}" stroke-width="1.7"/>`
+   : `<circle cx="20" cy="21" r="18" fill="url(#pinbg)" stroke="${c}" stroke-width="1.6"/>`;
+ const outline=`<g transform="translate(5 5) scale(.75)" fill="none" stroke="${c}" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">${icons[type]||icons.custom}</g>`;
+ const interior=(isMinimal||style==="tactical")?outline:art?`<g transform="translate(5 5) scale(.75)">${art}</g>`:outline;
+ const top=style==="topo"?"#816638":style==="modern"?"#2a4436":"#263e30";
+ const bottom=style==="topo"?"#352818":style==="modern"?"#0e2620":"#050b09";
+ return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 40 46" role="img" aria-label="${type.replace(/[^a-z-]/g,'')}"><defs><linearGradient id="pinbg" x1="0" y1="0" x2=".85" y2="1"><stop stop-color="${top}"/><stop offset=".55" stop-color="#111e17"/><stop offset="1" stop-color="${bottom}"/></linearGradient></defs>${base}<path d="M8 15c3-9 15-13 23-5" fill="none" stroke="#ffffff" stroke-opacity=".12" stroke-width="2"/>${interior}</svg>`;
 }

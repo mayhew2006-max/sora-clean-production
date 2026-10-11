@@ -49,7 +49,7 @@ type FieldWeather = {
   fetchedAt: string;
 };
 
-type MapLayer = "standard" | "satellite" | "topo" | "terrain";
+type MapLayer = "standard" | "satellite" | "topo" | "terrain" | "hybrid";
 
 const mapLayers: Record<
   MapLayer,
@@ -86,6 +86,14 @@ const mapLayers: Record<
     attribution:
       "Map data &copy; OpenStreetMap contributors, SRTM | Map style &copy; OpenTopoMap",
     maxZoom: 17,
+  },
+
+  hybrid: {
+    label: "Hybrid",
+    symbol: "◈",
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    attribution: "Imagery &copy; Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community",
+    maxZoom: 19,
   },
 
   terrain: {
@@ -128,12 +136,12 @@ const fishTypes = [
   ["parking", "🅿️", "Parking"],
 ];
 
-function makeIcon(symbol: string, border = "#C8AE79") {
+function makeIcon(symbol: string, border = "#C8AE79", iconStyle = "realistic") {
   const type = symbol;
   const isYou = type === "my-location";
   const html = isYou
     ? `<div style="width:22px;height:22px;border:3px solid #fff;border-radius:50%;background:#1889ef;box-shadow:0 0 0 7px #159af83b,0 2px 12px #000a"></div>`
-    : markerSvg(type, 45);
+    : markerSvg(type, 45, true, iconStyle);
   return L.divIcon({className:"grace-premium-pin",html,
     iconSize:isYou?[22,22]:[45,51],iconAnchor:isYou?[11,11]:[22,48],popupAnchor:[0,-43]});
 }
@@ -271,6 +279,31 @@ export default function FieldMap({
   const [name, setName] = useState("");
   const [notes, setNotes] = useState("");
   const [editingSpotId, setEditingSpotId] = useState<string | null>(null);
+  const [spotAppearanceVersion, setSpotAppearanceVersion] = useState(0);
+  function photoKey(id: string){return `grace-field-photo-v1-${id}`;}
+  function styleKey(id: string){return `grace-field-style-v1-${id}`;}
+  function localSpotPhoto(id: string){try{return localStorage.getItem(photoKey(id))||"";}catch{return "";}}
+  function localSpotStyle(id: string){try{return localStorage.getItem(styleKey(id))||"realistic";}catch{return "realistic";}}
+  function setLocalSpotStyle(id:string,style:string){try{localStorage.setItem(styleKey(id),style);setSpotAppearanceVersion(n=>n+1);}catch{setLocationStatus("Cannot store marker style on this device.");}}
+  async function attachLocalSpotPhoto(id: string,file:File){
+    if(!file.type.startsWith("image/")){setLocationStatus("Choose an image file.");return;}
+    if(file.size>20*1024*1024){setLocationStatus("Photo too large (maximum 20 MB before resize).");return;}
+    const url=URL.createObjectURL(file);
+    try{
+      const photo=new Image();
+      await new Promise<void>((resolve,reject)=>{photo.onload=()=>resolve();photo.onerror=()=>reject(new Error("Image could not load"));photo.src=url;});
+      const scale=Math.min(1,900/Math.max(photo.width,photo.height));
+      const canvas=document.createElement("canvas");canvas.width=Math.max(1,Math.round(photo.width*scale));canvas.height=Math.max(1,Math.round(photo.height*scale));
+      const context=canvas.getContext("2d");if(!context)throw new Error("Image processing unavailable");
+      context.drawImage(photo,0,0,canvas.width,canvas.height);
+      const resized=canvas.toDataURL("image/jpeg",0.7);
+      localStorage.setItem(photoKey(id),resized);
+      setSpotAppearanceVersion(n=>n+1);
+      setLocationStatus("Spot photo saved on this device.");
+    }catch{setLocationStatus("Could not save photo. Device storage may be full.");}
+    finally{URL.revokeObjectURL(url);}
+  }
+
 
   const [locationStatus, setLocationStatus] =
     useState("Finding your location...");
@@ -520,6 +553,7 @@ export default function FieldMap({
       setLocationStatus(
         `Location rejected — accuracy is only about ${reportedAccuracy} m.`
       );
+      window.dispatchEvent(new CustomEvent("grace-field-gps-info", {detail:{accuracy:reportedAccuracy,altitude:null,status:`Location rejected — ±${reportedAccuracy} m is too inaccurate`}}));
 
       return false;
     }
@@ -530,6 +564,11 @@ export default function FieldMap({
     ];
 
     setPosition(next);
+    window.dispatchEvent(new CustomEvent("grace-field-gps-info", {detail: {
+      accuracy: reportedAccuracy,
+      altitude: Number.isFinite(result.coords.altitude ?? NaN) ? result.coords.altitude : null,
+      status: `Location locked • ±${reportedAccuracy} m`,
+    }}));
     if (firstGpsFix.current) {
       firstGpsFix.current = false;
       setMapCommand({id: Date.now(), lat: next[0], lng: next[1], zoom: 16});
@@ -571,6 +610,7 @@ export default function FieldMap({
 
   function locationError(error: GeolocationPositionError) {
     console.error("Grace Field GPS error:", error);
+    window.dispatchEvent(new CustomEvent("grace-field-gps-info", {detail:{accuracy:null,altitude:null,status:`GPS error: ${error.message}`}}));
 
     if (error.code === 1) {
       setLocationStatus(
@@ -598,6 +638,7 @@ export default function FieldMap({
     }
 
     setLocationStatus("Finding precise location...");
+    window.dispatchEvent(new CustomEvent("grace-field-gps-info", {detail:{accuracy:null,altitude:null,status:"Acquiring fresh precise GPS…"}}));
 
     navigator.geolocation.getCurrentPosition(
       acceptPosition,
@@ -2481,33 +2522,7 @@ window.location.href = "/chat";
         </div>
       )}
 
-      <div
-        style={{
-          position: "absolute",
-          top: 80,
-          left: 12,
-          right: 107,
-          zIndex: 850,
-          maxWidth: 360,
-          padding: "6px 9px",
-          borderRadius: 12,
-          background: "rgba(17,24,20,.82)",
-          fontSize: 12,
-          opacity: 0.9,
-          pointerEvents: "none",
-        }}
-      >
-        {locationStatus}
-        {accuracy !== null && (
-          <>
-            {" "}
-            • accuracy ±
-            {accuracy < 305
-              ? `${Math.round(accuracy * 3.28084)} ft`
-              : `${accuracy} m`}
-          </>
-        )}
-      </div>
+      {/* GPS status and live accuracy are displayed in the compact main map instruments. */}
 
       {/* Grace Outdoors map layers */}
       {layersOpen && !navigationTarget && (
@@ -2771,6 +2786,11 @@ window.location.href = "/chat";
             url={activeLayer.url}
             maxZoom={activeLayer.maxZoom}
           />
+          {mapLayer === "hybrid" && <TileLayer
+            attribution="Labels &copy; Esri"
+            url="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"
+            maxZoom={19}
+          />}
 
           <MapController
             command={mapCommand}
@@ -2816,8 +2836,11 @@ window.location.href = "/chat";
                 point.lng,
               ])}
               pathOptions={{
+                color: "#20a7f7",
                 weight: 5,
-                opacity: 0.85,
+                opacity: 0.93,
+                lineCap: "round",
+                lineJoin: "round",
               }}
             />
           )}
@@ -2840,25 +2863,32 @@ window.location.href = "/chat";
 
           {visibleSpots.map((spot) => {
             const info = markerOptions.find(o => o.type === spot.type);
-
-
+            const photo = localSpotPhoto(spot.id);
+            const spotStyle = localSpotStyle(spot.id);
+            void info;
+            void spotAppearanceVersion;
             return (
               <Marker
                 key={spot.id}
                 position={[spot.lat, spot.lng]}
-                icon={makeIcon(spot.type, markerColor(spot.type))}
+                icon={makeIcon(spot.type, markerColor(spot.type), spotStyle)}
               >
                 <Popup>
                   <div style={{ minWidth: 190 }}>
-                    <strong>{spot.name}</strong>
+                    <strong style={{display:"block",fontSize:17,color:"#efd29e",marginBottom:6}}>{spot.name}</strong>
+                    {photo && <img src={photo} alt={`Saved view at ${spot.name}`} style={{width:"100%",maxHeight:152,objectFit:"cover",borderRadius:9,border:"1px solid #97835c",marginBottom:8}}/>}
+                    <label style={{display:"block",textAlign:"center",background:"#23392b",border:"1px solid #927850",padding:8,borderRadius:9,fontWeight:800,cursor:"pointer",fontSize:11,marginBottom:8}}>
+                      📷 {photo?"CHANGE PHOTO":"ADD SPOT PHOTO"}
+                      <input type="file" accept="image/*" capture="environment" style={{display:"none"}} onChange={e=>{const f=e.currentTarget.files?.[0];if(f)void attachLocalSpotPhoto(spot.id,f);e.currentTarget.value="";}}/>
+                    </label>
+                    <div style={{fontSize:10,color:"#cdb58c",letterSpacing:1,marginBottom:5}}>MARKER APPEARANCE</div>
+                    <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:8}}>
+                      {(["realistic","modern","tactical","topo","minimal"] as const).map(style=><button type="button" key={style} onClick={()=>setLocalSpotStyle(spot.id,style)} style={{fontSize:10,padding:"5px 7px",background:spotStyle===style?"#5d4926":"#1c3027",borderColor:spotStyle===style?"#e9c788":"#5b6b57"}}>{style}</button>)}
+                    </div>
+                    {spot.notes && <p style={{whiteSpace:"pre-wrap"}}>{spot.notes}</p>}
 
-                    {spot.notes && <p>{spot.notes}</p>}
-
-                    <small>
-                      Saved{" "}
-                      {new Date(
-                        spot.createdAt
-                      ).toLocaleString()}
+                    <small style={{display:"block",marginTop:6,color:"#c6bea8"}}>
+                      Saved {new Date(spot.createdAt).toLocaleString()} · Photo/style saved on this device
                     </small>
 
                     {position && (
