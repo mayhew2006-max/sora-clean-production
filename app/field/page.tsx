@@ -92,6 +92,15 @@ export default function GraceField() {
       /* Keep fixed map instruments from obscuring open FieldMap sheets. */
       .grace-field-v3:has([data-grace-field-overlay="true"]) .gf-sidebar,
       .grace-field-v3:has([data-grace-field-overlay="true"]) .gf-quicktools{visibility:hidden!important;opacity:0!important;pointer-events:none!important}
+      /* Leaflet saved-spot popups otherwise render beneath compass and quick tools.
+         Hide overlays ONLY during an open popup; GPS recording continues. */
+      .grace-field-v3:has(.leaflet-popup) .gf-sidebar,
+      .grace-field-v3:has(.leaflet-popup) .gf-quicktools,
+      .grace-field-v3:has(.leaflet-popup) .gf-bottom{visibility:hidden!important;opacity:0!important;pointer-events:none!important}
+      .grace-field-v3 .leaflet-popup-content{max-width:calc(100vw - 56px)!important;overflow-wrap:anywhere}
+      .grace-field-v3 .leaflet-popup-content-wrapper{max-height:calc(100dvh - 190px);overflow-y:auto;border-radius:14px}
+      .grace-field-v3 .leaflet-popup-content button{white-space:nowrap;min-width:0}
+      .grace-field-v3 .leaflet-popup-close-button{z-index:2}
       /* Foreground navigation hides fixed widgets without deleting or stopping GPS recording. */
       .gf-map-overlay-open .gf-sidebar,.gf-map-overlay-open .gf-quicktools,.gf-map-overlay-open .gf-bottom{visibility:hidden!important;pointer-events:none!important}
       .grace-field-v3:has([data-grace-field-navigation="true"]) .gf-sidebar,
@@ -101,6 +110,7 @@ export default function GraceField() {
       .gf-header{position:absolute;z-index:1200;top:calc(env(safe-area-inset-top,0px) + 9px);left:9px;right:9px;height:63px;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 9px;border-radius:15px;pointer-events:auto}
       .gf-brand{display:flex;gap:8px;align-items:center;min-width:0}
       .gf-brand svg{color:#edc887;flex-shrink:0}
+      .gf-brand-logo{width:49px;height:49px;object-fit:cover;border-radius:11px;border:1px solid #a88a52;flex-shrink:0}
       .gf-brand-title{font-family:Georgia,'Times New Roman',serif;font-size:clamp(18px,5.5vw,28px);letter-spacing:1.7px;color:#f2d7a2;line-height:1}
       .gf-brand-sub{font-size:clamp(7px,1.9vw,10px);letter-spacing:1.05px;white-space:nowrap;color:#e4e2d3;margin-top:6px}
       .gf-icon-button{display:grid;place-items:center;width:43px;height:43px;min-width:43px;background:linear-gradient(150deg,#162920,#08130e);border:1px solid #a68a5e;border-radius:11px;color:#e9cca0}
@@ -130,7 +140,7 @@ export default function GraceField() {
     `}</style>
     <div style={{position:"absolute",inset:0}}><FieldMap mode={mode}/><FieldMission/><FieldWaypointLibrary/><FieldWaypointNavigator/></div>
     <header className="gf-header gf-panel">
-      <div className="gf-brand"><Icon name="mountain" size={49}/><div><div className="gf-brand-title">GRACE FIELD</div><div className="gf-brand-sub">EXPLORE · MARK · TRACK · GET BACK</div></div></div>
+      <div className="gf-brand"><img className="gf-brand-logo" src="/grace-field-logo.webp" alt="Grace Field" width={49} height={49}/><div><div className="gf-brand-title">GRACE FIELD</div><div className="gf-brand-sub">EXPLORE · MARK · TRACK · GET BACK</div></div></div>
       <button className="gf-icon-button" aria-label="Open Grace Field menu" onClick={()=>setMenuOpen(v=>!v)}><Icon name={menuOpen?"x":"menu"} size={25}/></button>
     </header>
     <aside className="gf-sidebar" aria-label="Navigation instruments">

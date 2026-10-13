@@ -263,6 +263,18 @@ function formatDistance(meters: number) {
   return `${(meters / 1609.344).toFixed(2)} mi`;
 }
 
+type GraceNativeTrailBridge = {
+  startTracking: (freshTrail: boolean) => boolean;
+  stopTracking: () => void;
+  isTracking: () => boolean;
+  getTrailSnapshot: () => string;
+  clearTrail: () => boolean;
+};
+function graceNativeTrail(): GraceNativeTrailBridge | null {
+  if (typeof window === "undefined") return null;
+  return (window as Window & { GraceTrailNative?: GraceNativeTrailBridge }).GraceTrailNative || null;
+}
+
 export default function FieldMap({
   mode,
 }: {
@@ -320,6 +332,52 @@ export default function FieldMap({
   useEffect(()=>{const timer=window.setInterval(()=>setHeartbeat(Date.now()),10000);return()=>window.clearInterval(timer);},[]);
   const [trail, setTrail] = useState<TrailPoint[]>([]);
   const trackingActiveRef = useRef(false);
+  // Android location foreground service records while the WebView is locked.
+  // Restore only verified native points; this does not upload live positions.
+  useEffect(() => {
+    const native = graceNativeTrail();
+    if (!native) return;
+    let lastSnapshot = "";
+    const sync = () => {
+      try {
+        const active = native.isTracking();
+        trackingActiveRef.current = active;
+        setTracking(active);
+        const raw = native.getTrailSnapshot();
+        if (!raw || raw === lastSnapshot) return;
+        const parsed: unknown = JSON.parse(raw);
+        if (!Array.isArray(parsed) || !parsed.length) return;
+        const valid: TrailPoint[] = parsed.filter((p: unknown) => {
+          if (!p || typeof p !== "object") return false;
+          const point = p as Record<string, unknown>;
+          return typeof point.lat === "number" && Number.isFinite(point.lat) &&
+            typeof point.lng === "number" && Number.isFinite(point.lng) &&
+            Math.abs(point.lat) <= 90 && Math.abs(point.lng) <= 180 &&
+            typeof point.time === "string" && Number.isFinite(Date.parse(point.time));
+        }).map((p: TrailPoint) => ({lat:p.lat,lng:p.lng,time:p.time}));
+        if (valid.length === 0) return;
+        lastSnapshot = raw;
+        setTrail(valid);
+        const finalPoint = valid[valid.length - 1];
+        setPosition([finalPoint.lat, finalPoint.lng]);
+        setLastTrailGpsAt(Date.parse(finalPoint.time));
+      } catch {
+        setLocationStatus("Android trail restore failed. Local trail has not been erased.");
+      }
+    };
+    const onResume = () => { if (document.visibilityState === "visible") sync(); };
+    const initial = window.setTimeout(sync, 750);
+    const interval = window.setInterval(sync, 10000);
+    document.addEventListener("visibilitychange", onResume);
+    window.addEventListener("pageshow", onResume);
+    return () => {
+      window.clearTimeout(initial);
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", onResume);
+      window.removeEventListener("pageshow", onResume);
+    };
+  }, []);
+
 
   const [navigationTarget, setNavigationTarget] =
     useState<FieldSpot | null>(null);
@@ -600,7 +658,7 @@ export default function FieldMap({
       `Location locked • ±${reportedAccuracy} m`
     );
 
-    if (trackingActiveRef.current && reportedAccuracy <= 40) {
+    if (trackingActiveRef.current && !graceNativeTrail() && reportedAccuracy <= 40) {
       setLastTrailGpsAt(result.timestamp);
       setTrail((current) => {
         const last = current[current.length - 1];
@@ -632,7 +690,7 @@ export default function FieldMap({
 
   function locationError(error: GeolocationPositionError) {
     console.error("Grace Field GPS error:", error);
-    if (error.code === 1 && trackingActiveRef.current) {
+    if (error.code === 1 && trackingActiveRef.current && !graceNativeTrail()) {
       trackingActiveRef.current = false;
       setTracking(false);
       if (watchId.current !== null) {
@@ -1194,7 +1252,9 @@ export default function FieldMap({
   async function startTracking() {
     if (trackingActiveRef.current) return;
     if (!(await useFieldAction())) return;
-    if (!navigator.geolocation) return;
+    const native = graceNativeTrail();
+    if (!native && !navigator.geolocation) return;
+    let newNativeTrail = false;
     if (trail.length > 1) {
       const wantsNew = window.confirm("Start a NEW breadcrumb trail? Your previous trail will be archived on this device. Press Cancel to continue the existing trail.");
       if (wantsNew) {
@@ -1204,8 +1264,20 @@ export default function FieldMap({
           archive.unshift({savedAt:new Date().toISOString(),points:trail});
           localStorage.setItem("graceFieldTrackHistory",JSON.stringify(archive.slice(0,25)));
           setTrail([]);
+          newNativeTrail = true;
         } catch {setLocationStatus("Could not archive last trail. Continuing existing trail so nothing is lost.");}
       }
+    }
+
+    if (native) {
+      if (!native.startTracking(newNativeTrail)) {
+        setLocationStatus("Allow precise Android location, then press START TRACK again.");
+        return;
+      }
+      trackingActiveRef.current = true;
+      setTracking(true);
+      setLocationStatus("Android background GPS requested. Check the ongoing tracking notification.");
+      return;
     }
 
     if (watchId.current !== null) {
@@ -1231,6 +1303,8 @@ export default function FieldMap({
   }
 
   function stopTracking() {
+    const native = graceNativeTrail();
+    if (native) native.stopTracking();
     if (
       watchId.current !== null &&
       navigator.geolocation
@@ -1307,7 +1381,11 @@ export default function FieldMap({
     ) {
       return;
     }
-
+    const native = graceNativeTrail();
+    if (native && !native.clearTrail()) {
+      setLocationStatus("Stop native tracking before clearing the trail.");
+      return;
+    }
     setTrail([]);
   }
 
@@ -2542,7 +2620,7 @@ export default function FieldMap({
                 position={[spot.lat, spot.lng]}
                 icon={makeIcon(spot.type, markerColor(spot.type), spotStyle)}
               >
-                <Popup>
+                <Popup maxWidth={320} autoPanPaddingTopLeft={[15, 105]} autoPanPaddingBottomRight={[15, 125]}>
                   <div style={{ minWidth: 190 }}>
                     <strong style={{display:"block",fontSize:17,color:"#efd29e",marginBottom:6}}>{spot.name}</strong>
                     {photo && <img src={photo} alt={`Saved view at ${spot.name}`} style={{width:"100%",maxHeight:152,objectFit:"cover",borderRadius:9,border:"1px solid #97835c",marginBottom:8}}/>}
