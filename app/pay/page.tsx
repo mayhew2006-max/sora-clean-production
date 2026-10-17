@@ -54,7 +54,7 @@ export default function Pay() {
         <h1 className="text-4xl font-black mb-4">Unlock Grace Pro</h1>
 
         <p className="text-zinc-600 mb-8">
-          Unlimited conversations, voice, memory, tools, reports, PDFs, and more.
+          Conversations, voice, memory, tools, reports, PDFs, and more. Subscription renews monthly. Cancel anytime.
         </p>
 
         <button
