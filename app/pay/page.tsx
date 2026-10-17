@@ -62,7 +62,7 @@ export default function Pay() {
           onClick={subscribe}
           className="block w-full bg-zinc-950 text-white py-4 rounded-2xl font-black disabled:opacity-60"
         >
-          {busy ? "Opening secure checkout..." : "Subscribe Now — $4.99/mo"}
+          {busy ? "Opening secure checkout..." : "Subscribe Now — $14.99/mo"}
         </button>
 
         {message && (
