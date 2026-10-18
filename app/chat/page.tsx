@@ -1313,6 +1313,12 @@ Only use business/report fields when the user specifically requests a report or 
           toolType: activeTool,
           userPrompt: buildEnhancedPrompt(request),
           images: attachedImages,
+          // Recent text turns only: enough to avoid repeated suggestions,
+          // without resending old image data or the entire chat history.
+          conversationHistory: nextMessages.slice(0, -1)
+            .filter((msg) => (msg.role === "user" || msg.role === "assistant") && typeof msg.content === "string" && msg.content.trim())
+            .slice(-10)
+            .map((msg) => ({ role: msg.role, content: (msg.content || "").slice(0, 900) })),
         }),
       });
 
@@ -3383,7 +3389,11 @@ function isMarketplaceQuery(text: string) {
                       />
 
                       <div className="text-[#2f2723] px-1 py-2 whitespace-pre-wrap leading-7 max-w-3xl">
-                        {message.content}
+                        {(message.content || "").split(/(\*\*[^*\n]+\*\*)/g).map((part, i) =>
+                          part.startsWith("**") && part.endsWith("**")
+                            ? <strong key={i}>{part.slice(2, -2)}</strong>
+                            : <span key={i}>{part}</span>
+                        )}
                       </div>
                     </>
                   ) : (
