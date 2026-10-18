@@ -1177,10 +1177,13 @@ export default function GraceChat() {
   }
 
  async function handleImages(files: FileList | null) {
-    if (!files) return;
+    if (!files || files.length === 0) {
+      setImageStatus("Camera did not return a photo. Please retry.");
+      return;
+    }
 
     const selected = Array.from(files)
-      .filter((file) => file.type.startsWith("image/"))
+      .filter((file) => file.type.startsWith("image/") || /\.(jpe?g|png|webp|heic|heif)$/i.test(file.name))
       .slice(0, 4);
 
     if (selected.length === 0) {
@@ -1217,12 +1220,18 @@ export default function GraceChat() {
       messagesRef.current = nextChat;
       setMessages(nextChat);
 
-      // Upload only. Do not analyze until the user presses Send.
-      setImageStatus("Photo attached — ask Grace what you want to know.");
-    } catch {
-      setImageStatus(
-        "Grace could not prepare that image. Try a different photo."
-      );
+      setImageStatus("Photo received — Grace is analyzing it...");
+      // Use the freshly captured images from the ref, avoiding stale React state.
+      // One analysis per camera/gallery selection; do not wait for another Send.
+      if (!loadingRef.current && !locked) {
+        await runGraceTool("Tell me what is in this picture. Identify the main subject and give useful, specific observations.", "Photo Analysis");
+        setImageStatus("Photo analyzed. Ask Grace a follow-up anytime.");
+      } else {
+        setImageStatus("Photo attached — press Send when Grace is ready.");
+      }
+    } catch (error) {
+      console.error("Grace photo processing failed:", error);
+      setImageStatus("Could not open that camera photo. Try Gallery or retake the picture.");
     }
   }
 
@@ -3117,7 +3126,7 @@ function isMarketplaceQuery(text: string) {
         type="file"
         accept="image/*"
         capture="environment"
-        onChange={(e) => handleImages(e.target.files)}
+        onChange={(e) => { const files = e.currentTarget.files; void handleImages(files); e.currentTarget.value = ""; }}
         className="hidden"
       />
 
@@ -3130,6 +3139,11 @@ function isMarketplaceQuery(text: string) {
         className="hidden"
       />
 
+      {imageStatus && (
+        <div role="status" aria-live="polite" className="absolute top-20 left-4 right-4 z-50 rounded-xl bg-white border border-[#efb99f] px-3 py-2 text-sm text-[#6f3b2a] shadow-lg">
+          {imageStatus}
+        </div>
+      )}
       <section className="flex-1 overflow-hidden pb-32">
         <div className="relative h-full px-5 pt-4 overflow-hidden">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(251,146,60,0.22),transparent_42%),radial-gradient(circle_at_bottom_left,rgba(244,114,182,0.12),transparent_40%)] pointer-events-none" />
