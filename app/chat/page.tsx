@@ -1206,29 +1206,9 @@ export default function GraceChat() {
       imagesRef.current = activeImages;
       setImages(activeImages);
 
-      // Only add the newly uploaded pictures to the visible chat.
-      const imageMessages: Message[] = converted.map((image) => ({
-        role: "user-image",
-        image,
-      }));
-
-      const nextChat = [
-        ...messagesRef.current,
-        ...imageMessages,
-      ];
-
-      messagesRef.current = nextChat;
-      setMessages(nextChat);
-
-      setImageStatus("Photo received — Grace is analyzing it...");
-      // Use the freshly captured images from the ref, avoiding stale React state.
-      // One analysis per camera/gallery selection; do not wait for another Send.
-      if (!loadingRef.current && !locked) {
-        await runGraceTool("Tell me what is in this picture. Identify the main subject and give useful, specific observations.", "Photo Analysis");
-        setImageStatus("Photo analyzed. Ask Grace a follow-up anytime.");
-      } else {
-        setImageStatus("Photo attached — press Send when Grace is ready.");
-      }
+      // Keep the photo as a draft until the user sends a question.
+      // No automatic analysis or fabricated user message.
+      setImageStatus("Photo attached — type your question and press Send.");
     } catch (error) {
       console.error("Grace photo processing failed:", error);
       setImageStatus("Could not open that camera photo. Try Gallery or retake the picture.");
@@ -1307,11 +1287,17 @@ Only use business/report fields when the user specifically requests a report or 
         ? "Analyze this photo."
         : activeTool);
 
+    // Put the photo and the user's actual question into the same turn.
+    // Previously sent photos remain in chat and are not duplicated.
+    const pendingPhotoMessages: Message[] = attachedImages
+      .filter((image) => !messagesRef.current.some((msg) => msg.role === "user-image" && msg.image === image))
+      .map((image) => ({ role: "user-image", image }));
     const nextMessages: Message[] = [
       ...messagesRef.current,
+      ...pendingPhotoMessages,
       { role: "user", content: userLabel },
     ];
-
+    messagesRef.current = nextMessages;
     setMessages(nextMessages);
     setInput("");
 
@@ -2336,6 +2322,9 @@ function isMarketplaceQuery(text: string) {
     if (!hasAttachedPhoto) return false;
 
     const clean = text.trim().toLowerCase();
+    // If the user has just attached an unsent photo, their next question
+    // always goes to vision, even if it does not contain a photo keyword.
+    if (imagesRef.current.some((image) => !messagesRef.current.some((msg) => msg.role === "user-image" && msg.image === image))) return true;
     if (!clean) return true;
 
     // Use an attached photo when the user's message actually appears
@@ -3581,6 +3570,16 @@ function isMarketplaceQuery(text: string) {
               </span>
             </button>
           </div>
+        </div>
+      )}
+
+ {images.length > 0 && images.some((image) => !messages.some((msg) => msg.role === "user-image" && msg.image === image)) && (
+        <div className="fixed bottom-[6.5rem] left-4 right-4 z-40 flex gap-2 items-center rounded-2xl border border-[#efb99f] bg-white p-2 shadow-lg">
+          {images.filter((image) => !messages.some((msg) => msg.role === "user-image" && msg.image === image)).map((image, index) => (
+            <img key={index} src={image} alt="Photo ready to send" className="h-16 w-16 rounded-xl object-cover" />
+          ))}
+          <span className="text-xs text-[#6f3b2a]">Photo ready. Ask your question and tap Send.</span>
+          <button type="button" onClick={() => { imagesRef.current = []; setImages([]); setImageStatus(""); }} aria-label="Remove attached photo" className="ml-auto px-2 text-xl">×</button>
         </div>
       )}
 
