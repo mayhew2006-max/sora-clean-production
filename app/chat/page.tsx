@@ -1241,6 +1241,7 @@ Answer the user's actual question first.
 Do not automatically turn answers into reports, checklists, plans, summaries, or formal sections.
 Only use report, checklist, plan, proposal, scope, or PDF-style formatting when the user explicitly asks for it.
 For ordinary photo questions, answer conversationally and include only the details that actually help.
+For pet naming requests, suggest distinctive names suited to visible traits and the user’s preferences; avoid generic lists such as Cocoa, Mocha, Teddy, Rusty, and Bear unless specifically requested. Ask about gender only if essential. No unrelated pet-care advice.
 If a photo is included, use what is visibly relevant to the user's question.
 Do not mention OTG.
 Only use business/report fields when the user specifically requests a report or document.
@@ -1366,7 +1367,7 @@ Only use business/report fields when the user specifically requests a report or 
 
     // Keep the newest uploaded screenshots/photos active.
     // The next upload replaces this context automatically.
-    setImageStatus("Photo is active for follow-up questions.");
+    setImageStatus("");
 
     loadingRef.current = false;
     setToolLoading(false);
@@ -3151,8 +3152,8 @@ function isMarketplaceQuery(text: string) {
         className="hidden"
       />
 
-      {imageStatus && (
-        <div role="status" aria-live="polite" className="absolute top-20 left-4 right-4 z-50 rounded-xl bg-white border border-[#efb99f] px-3 py-2 text-sm text-[#6f3b2a] shadow-lg">
+      {imageStatus && /could not|failed|retry|valid image|did not return/i.test(imageStatus) && (
+        <div role="alert" className="absolute top-20 left-4 right-4 z-50 rounded-xl bg-white border border-[#efb99f] px-3 py-2 text-sm text-[#6f3b2a] shadow-lg">
           {imageStatus}
         </div>
       )}
@@ -3573,18 +3574,18 @@ function isMarketplaceQuery(text: string) {
         </div>
       )}
 
- {images.length > 0 && images.some((image) => !messages.some((msg) => msg.role === "user-image" && msg.image === image)) && (
-        <div className="fixed bottom-[6.5rem] left-4 right-4 z-40 flex gap-2 items-center rounded-2xl border border-[#efb99f] bg-white p-2 shadow-lg">
-          {images.filter((image) => !messages.some((msg) => msg.role === "user-image" && msg.image === image)).map((image, index) => (
-            <img key={index} src={image} alt="Photo ready to send" className="h-16 w-16 rounded-xl object-cover" />
-          ))}
-          <span className="text-xs text-[#6f3b2a]">Photo ready. Ask your question and tap Send.</span>
-          <button type="button" onClick={() => { imagesRef.current = []; setImages([]); setImageStatus(""); }} aria-label="Remove attached photo" className="ml-auto px-2 text-xl">×</button>
-        </div>
-      )}
-
  <footer className="grace-input-bar fixed bottom-0 left-0 right-0 z-30 px-3 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] bg-gradient-to-t from-[#fff7f1] via-[#fff7f1]/98 to-transparent">
-        <div className="mx-auto max-w-3xl rounded-[1.6rem] border border-[#efb99f] bg-white p-2 shadow-xl flex gap-2 items-end">
+        <div className="mx-auto max-w-3xl rounded-[1.6rem] border border-[#efb99f] bg-white p-2 shadow-xl">
+          {images.length > 0 && images.some((image) => !messages.some((msg) => msg.role === "user-image" && msg.image === image)) && (
+            <div className="mb-2 flex gap-2 items-center rounded-xl bg-[#fff7f1] p-2">
+              {images.filter((image) => !messages.some((msg) => msg.role === "user-image" && msg.image === image)).map((image, index) => (
+                <img key={index} src={image} alt="Photo ready to send" className="h-12 w-12 rounded-lg object-cover" />
+              ))}
+              <span className="text-xs text-[#6f3b2a]">Photo attached</span>
+              <button type="button" onClick={() => { imagesRef.current = []; setImages([]); setImageStatus(""); }} aria-label="Remove attached photo" className="ml-auto px-2 text-xl">×</button>
+            </div>
+          )}
+          <div className="flex gap-2 items-end">
         <button
           onClick={() => setToolsOpen((v) => !v)}
           disabled={locked || loading || toolLoading}
@@ -3629,6 +3630,7 @@ function isMarketplaceQuery(text: string) {
         >
           Send
         </button>
+          </div>
         </div>
       </footer>
     </main>
