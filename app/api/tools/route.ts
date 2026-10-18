@@ -19,7 +19,13 @@ export async function POST(req: Request) {
       );
     }
 
-    const { toolType, userPrompt, images } = await req.json();
+    const { toolType, userPrompt, images, conversationHistory } = await req.json();
+
+    const recentTurns = Array.isArray(conversationHistory)
+      ? conversationHistory.slice(-10)
+          .filter((turn: any) => (turn?.role === "user" || turn?.role === "assistant") && typeof turn.content === "string")
+          .map((turn: any) => ({ role: turn.role, content: turn.content.slice(0, 900) }))
+      : [];
 
     const graceRequestText =
       `${toolType || ""} ${userPrompt || ""}`.toLowerCase();
@@ -53,6 +59,7 @@ GRACE TOOL BRAIN RULES:
 - Be practical, direct, and useful.
 
 PHOTO INTELLIGENCE:
+Use recent conversation turns to understand follow-up requests and avoid repeating earlier suggestions. If the user asks for MORE or DIFFERENT names, do not reuse names from previous assistant answers. Favor original, pronounceable names over generic pet-name lists. Keep your response relevant and conversational; no unsolicited pet-care advice.
 When photos/images are provided, you CAN see them and should analyze the visible contents directly.
 Answer the user's actual question naturally.
 Do not automatically create a numbered report or inspection.
@@ -185,6 +192,7 @@ ${hasImages ? "Use the attached image to answer the user's question. Do not ask 
         stream: true,
         messages: [
           { role: "system", content: systemPrompt },
+          ...recentTurns,
           { role: "user", content },
         ],
       }),
