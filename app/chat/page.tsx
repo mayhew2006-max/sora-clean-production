@@ -1131,8 +1131,6 @@ export default function GraceChat() {
       "total",
       "over",
       "under",
-      "more",
-      "less",
       "strikeout",
       "strikeouts",
       "total bases",
@@ -2593,6 +2591,15 @@ function isMarketplaceQuery(text: string) {
           ? imagesRef.current
           : images
       ).length;
+
+    // Explicit image follow-ups take priority over broad sports heuristics.
+    // "Give me 3 more names" must not become a sports betting request.
+    const explicitSportsIntent =
+      /\b(nfl|nba|mlb|nhl|wnba|sports?|bets?|betting|picks?|parlays?|moneyline|spreads?|props?|draftkings|fanduel|football|basketball|baseball|soccer|odds|strikeouts?)\b/i.test(clean);
+    if (activeImageCount > 0 && shouldUsePhotoTool(clean) && !explicitSportsIntent) {
+      await runGraceTool(clean, "Photo Analysis");
+      return;
+    }
 
     if (
       activeImageCount > 0 &&
