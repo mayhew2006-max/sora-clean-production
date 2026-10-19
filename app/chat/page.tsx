@@ -135,6 +135,7 @@ export default function GraceChat() {
 
   const [input, setInput] = useState("");
   const [embeddedField, setEmbeddedField] = useState(false);
+  const [fieldSpotOffer, setFieldSpotOffer] = useState<{id:string;name:string;lat:number;lng:number}|null>(null);
   const [fieldSpots, setFieldSpots] = useState<Array<{id:string;name:string;type:string;lat:number;lng:number}>>([]);
   useEffect(() => {
     const embedded = window.self !== window.top && new URLSearchParams(window.location.search).get("field") === "1";
@@ -2504,6 +2505,7 @@ function isMarketplaceQuery(text: string) {
       }
       return;
     }
+    setFieldSpotOffer(null);
     const lower = clean.toLowerCase();
 
     const wantsPdfFromLastThing =
@@ -3234,7 +3236,7 @@ function isMarketplaceQuery(text: string) {
         <div className="relative h-full px-5 pt-4 overflow-hidden">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(251,146,60,0.22),transparent_42%),radial-gradient(circle_at_bottom_left,rgba(244,114,182,0.12),transparent_40%)] pointer-events-none" />
 
-          <header className="relative z-30 h-16 shrink-0 border-b border-[#efb99f] bg-[#fff7f1]/95 backdrop-blur px-4 flex items-center justify-between">
+          <header className={`relative z-30 h-16 shrink-0 border-b border-[#efb99f] bg-[#fff7f1]/95 backdrop-blur px-4 flex items-center justify-between ${embeddedField ? "hidden" : ""}`}>
             <div className="flex items-center gap-3">
               <button
                 onClick={() => setSidebarOpen(true)}
@@ -3423,6 +3425,8 @@ function isMarketplaceQuery(text: string) {
 
           <div className="relative z-10 h-[calc(100%-4rem)] overflow-hidden">
             <div className="grace-message-scroll h-full overflow-y-auto px-4 sm:px-6 py-5 pb-32 space-y-4">
+              {embeddedField && fieldSpotOffer && <button type="button" className="rounded-xl bg-[#1a4931] text-white font-bold px-4 py-3 w-full" onClick={() => { window.parent.postMessage({type:"grace-field-focus-spot",...fieldSpotOffer},window.location.origin); setFieldSpotOffer(null); }}>Show {fieldSpotOffer.name} on map ↗</button>}
+              {embeddedField && <button type="button" className="text-sm underline text-[#355f47]" onClick={() => window.parent.postMessage({type:"grace-field-show-spots"},window.location.origin)}>Open saved spots on map</button>}
               {messages.map((message, index) => (
                 <div
                   key={index}
