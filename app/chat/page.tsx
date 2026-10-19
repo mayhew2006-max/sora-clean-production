@@ -2495,7 +2495,7 @@ function isMarketplaceQuery(text: string) {
     if (embeddedField && asksLocation && (named.length > 0 || category || /\b(waypoint|saved (?:spot|location)|marker)\b/i.test(clean))) {
       const matching = named.length ? named : category ? fieldSpots.filter(p => category.test(p.name + " " + p.type)) : [];
       const answer = matching.length === 1
-        ? `I found your saved spot: ${matching[0].name}. Tap “Show on map” below to zoom to its saved marker.`
+        ? `Found ${matching[0].name}. Taking you to its saved marker on the map now.`
         : matching.length > 1
         ? `I found ${matching.length} matching saved spots: ${matching.slice(0,8).map(p=>p.name).join(", ")}. Open Saved Spots to choose the right one.`
         : fieldSpots.length
@@ -2503,7 +2503,10 @@ function isMarketplaceQuery(text: string) {
         : "I don't see any saved spots available in this map session yet. Check Saved Spots, or wait for the map to finish syncing.";
       setMessages([...messagesRef.current,{role:"user",content:clean},{role:"assistant",content:answer}]);
       setInput("");
-      setFieldSpotOffer(matching.length === 1 ? matching[0] : null);
+      setFieldSpotOffer(null);
+      if (matching.length === 1) {
+        window.parent.postMessage({type:"grace-field-focus-spot",...matching[0]},window.location.origin);
+      }
       return;
     }
     setFieldSpotOffer(null);
@@ -3488,7 +3491,7 @@ function isMarketplaceQuery(text: string) {
                 </p>
               )}
 
-              {embeddedField && fieldSpotOffer && <button type="button" className="rounded-xl bg-[#1a4931] text-white font-bold px-4 py-3 w-full" onClick={() => { window.parent.postMessage({type:"grace-field-focus-spot",...fieldSpotOffer},window.location.origin); setFieldSpotOffer(null); }}>Show {fieldSpotOffer.name} on map ↗</button>}
+
               {embeddedField && <button type="button" className="text-sm underline text-[#355f47]" onClick={() => window.parent.postMessage({type:"grace-field-show-spots"},window.location.origin)}>Open saved spots on map</button>}
               <div ref={bottomRef} className="h-10" />
             </div>
