@@ -186,7 +186,7 @@ ${hasImages ? "Use the attached image to answer the user's question. Do not ask 
         Authorization: "Bearer " + process.env.OPENAI_API_KEY,
       },
       body: JSON.stringify({
-        model: content.some((part) => part.type === "image_url") ? (process.env.GRACE_VISION_MODEL || "gpt-4o") : (process.env.OPENAI_MODEL || "gpt-4o-mini"),
+        model: process.env.OPENAI_MODEL || "gpt-4o-mini",
         temperature: 0.30,
  max_tokens: 1400,
         stream: true,
