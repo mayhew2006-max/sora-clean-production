@@ -1331,30 +1331,35 @@ Only use business/report fields when the user specifically requests a report or 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let fullText = "";
+      let pendingSse = "";
 
       setMessages([
         ...nextMessages,
         { role: "assistant", content: "I’m working on it..." },
       ]);
 
+      const acceptSseLine = (line: string) => {
+        if (!line.startsWith("data: ")) return;
+        const data = line.slice(6).trim();
+        if (data === "[DONE]") return;
+        try {
+          const parsed = JSON.parse(data);
+          const token = parsed?.choices?.[0]?.delta?.content || "";
+          if (token) fullText += token;
+        } catch {
+          // Ignore non-JSON SSE control events, not incomplete network chunks.
+        }
+      };
+
       while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
-
-        const chunk = decoder.decode(value);
-        const lines = chunk.split("\n");
-
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-
-          const data = line.replace("data: ", "").trim();
-          if (data === "[DONE]") continue;
-
-          try {
-            const parsed = JSON.parse(data);
-            const token = parsed?.choices?.[0]?.delta?.content || "";
-            if (token) fullText += token;
-          } catch {}
+        pendingSse += decoder.decode(value || new Uint8Array(), { stream: !done });
+        const lines = pendingSse.split("\n");
+        pendingSse = done ? "" : (lines.pop() || "");
+        for (const line of lines) acceptSseLine(line.trimEnd());
+        if (done) {
+          if (pendingSse.trim()) acceptSseLine(pendingSse.trimEnd());
+          break;
         }
       }
 
