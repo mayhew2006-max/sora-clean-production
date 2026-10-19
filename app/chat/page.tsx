@@ -2673,22 +2673,22 @@ function isMarketplaceQuery(text: string) {
       return;
     }
 
-    trackEvent("message_sent");
-    // Memory extraction is supplementary; it must not delay the visible chat.
-    void updateMemory(clean);
-
-    loadingRef.current = true;
-    setLoading(true);
-    setToolsOpen(false);
-    recognitionRef.current?.stop();
-
+    // Show the user's message before any analytics, memory work, or microphone cleanup.
+    // The chat should acknowledge Send immediately, independent of server latency.
     const nextMessages: Message[] = [
       ...messagesRef.current,
       { role: "user", content: clean },
     ];
-
+    loadingRef.current = true;
     setMessages(nextMessages);
     setInput("");
+    setLoading(true);
+    setToolsOpen(false);
+
+    trackEvent("message_sent");
+    // Memory extraction is supplementary; it must not delay the visible chat.
+    void updateMemory(clean);
+    recognitionRef.current?.stop();
 
     try {
       const scoutAnywhereMatch = clean.match(
