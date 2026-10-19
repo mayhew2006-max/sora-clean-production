@@ -2484,12 +2484,20 @@ function isMarketplaceQuery(text: string) {
     if (embeddedField && /\b(stand|camera|truck|camp|waypoint|saved (?:spot|location)|fishing (?:hole|spot)|marker)\b/i.test(clean) &&
         /\b(where|find|show|locate|navigate|open|map|which|my)\b/i.test(clean)) {
       const words = clean.toLowerCase();
-      const matching = fieldSpots.filter(p => words.includes(p.name.toLowerCase()) ||
-        (p.type && words.includes(p.type.toLowerCase())) ||
-        (words.includes("stand") && /stand/i.test(p.name+" "+p.type)) ||
-        (words.includes("truck") && /truck|vehicle|parking/i.test(p.name+" "+p.type)) ||
-        (words.includes("camera") && /camera/i.test(p.name+" "+p.type)) ||
-        (words.includes("camp") && /camp/i.test(p.name+" "+p.type)));
+      const category = /\b(stand|deer stand|tree stand)\b/i.test(clean) ? /\bstand\b|tree.?stand|hunting.?blind/i
+        : /\b(camera|trail cam)\b/i.test(clean) ? /camera|trail.?cam/i
+        : /\b(truck|vehicle|parked)\b/i.test(clean) ? /truck|vehicle|parking/i
+        : /\bcamp\b/i.test(clean) ? /camp/i
+        : /\b(fishing hole|fishing spot)\b/i.test(clean) ? /fish|fishing/i
+        : null;
+      const matching = fieldSpots.filter(p => {
+        const name = p.name.trim().toLowerCase();
+        const type = p.type.trim().toLowerCase();
+        // Never match an empty name or generic type such as "spot" or "marker".
+        const explicitName = name.length >= 3 && words.includes(name);
+        const typedMatch = category ? category.test(name+" "+type) : false;
+        return category ? typedMatch : explicitName;
+      });
       const answer = matching.length === 1
         ? `I found your saved spot: ${matching[0].name}. Tap “Show on map” below to zoom to its saved marker.`
         : matching.length > 1
@@ -2499,10 +2507,7 @@ function isMarketplaceQuery(text: string) {
         : "I don't see any saved spots available in this map session yet. Check Saved Spots, or wait for the map to finish syncing.";
       setMessages([...messagesRef.current,{role:"user",content:clean},{role:"assistant",content:answer}]);
       setInput("");
-      if (matching.length === 1) {
-        const spot = matching[0];
-        window.parent.postMessage({type:"grace-field-spot-offer",id:spot.id,lat:spot.lat,lng:spot.lng,name:spot.name},window.location.origin);
-      }
+      setFieldSpotOffer(matching.length === 1 ? matching[0] : null);
       return;
     }
     setFieldSpotOffer(null);
@@ -3425,8 +3430,6 @@ function isMarketplaceQuery(text: string) {
 
           <div className="relative z-10 h-[calc(100%-4rem)] overflow-hidden">
             <div className="grace-message-scroll h-full overflow-y-auto px-4 sm:px-6 py-5 pb-32 space-y-4">
-              {embeddedField && fieldSpotOffer && <button type="button" className="rounded-xl bg-[#1a4931] text-white font-bold px-4 py-3 w-full" onClick={() => { window.parent.postMessage({type:"grace-field-focus-spot",...fieldSpotOffer},window.location.origin); setFieldSpotOffer(null); }}>Show {fieldSpotOffer.name} on map ↗</button>}
-              {embeddedField && <button type="button" className="text-sm underline text-[#355f47]" onClick={() => window.parent.postMessage({type:"grace-field-show-spots"},window.location.origin)}>Open saved spots on map</button>}
               {messages.map((message, index) => (
                 <div
                   key={index}
@@ -3489,6 +3492,8 @@ function isMarketplaceQuery(text: string) {
                 </p>
               )}
 
+              {embeddedField && fieldSpotOffer && <button type="button" className="rounded-xl bg-[#1a4931] text-white font-bold px-4 py-3 w-full" onClick={() => { window.parent.postMessage({type:"grace-field-focus-spot",...fieldSpotOffer},window.location.origin); setFieldSpotOffer(null); }}>Show {fieldSpotOffer.name} on map ↗</button>}
+              {embeddedField && <button type="button" className="text-sm underline text-[#355f47]" onClick={() => window.parent.postMessage({type:"grace-field-show-spots"},window.location.origin)}>Open saved spots on map</button>}
               <div ref={bottomRef} className="h-10" />
             </div>
           </div>
