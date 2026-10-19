@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { jsPDF } from "jspdf";
 
@@ -3446,13 +3447,14 @@ function isMarketplaceQuery(text: string) {
         </div>
       </section>
 
-      {expandedImage && (
-        <div className="fixed inset-0 z-[80] flex flex-col bg-black/95" role="dialog" aria-modal="true" aria-label="Enlarged image">
+      {expandedImage && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 flex flex-col bg-black/95" style={{ zIndex: 2147483647 }} role="dialog" aria-modal="true" aria-label="Enlarged image">
           <button type="button" onClick={() => setExpandedImage(null)} className="self-end m-3 rounded-xl bg-white px-4 py-2 font-bold text-black" aria-label="Close enlarged image">Close ×</button>
-          <div className="flex-1 min-h-0 overflow-auto flex items-center justify-center p-2">
-            <img src={expandedImage} alt="Enlarged Grace image" className="max-w-full max-h-full object-contain" style={{ touchAction: "pinch-zoom" }} />
+          <div className="flex-1 min-h-0 overflow-auto flex items-center justify-center p-2" style={{ touchAction: "pinch-zoom" }}>
+            <img src={expandedImage} alt="Enlarged Grace image" className="max-w-full max-h-full object-contain" />
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {sidebarOpen && (
