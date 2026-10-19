@@ -2505,7 +2505,7 @@ function isMarketplaceQuery(text: string) {
       setInput("");
       setFieldSpotOffer(null);
       if (matching.length === 1) {
-        window.parent.postMessage({type:"grace-field-focus-spot",...matching[0]},window.location.origin);
+        window.parent.postMessage({type:"grace-field-focus-spot",id:matching[0].id,lat:matching[0].lat,lng:matching[0].lng},window.location.origin);
       }
       return;
     }
