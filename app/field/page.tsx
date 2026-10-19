@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import FieldMission from "@/components/field/FieldMission";
 import FieldWaypointLibrary from "@/components/field/FieldWaypointLibrary";
@@ -40,6 +40,35 @@ export default function GraceField() {
   const [tracking, setTracking] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [graceOpen, setGraceOpen] = useState(false);
+  const graceFrameRef = useRef<HTMLIFrameElement>(null);
+  const sendFieldContext = () => {
+    try {
+      const raw = JSON.parse(localStorage.getItem("graceFieldSpots") || "[]");
+      const spots = Array.isArray(raw) ? raw.filter((p: any) =>
+        p && typeof p.name === "string" && Number.isFinite(Number(p.lat)) && Number.isFinite(Number(p.lng))
+      ).slice(0, 150).map((p: any) => ({id: String(p.id || ""), name: p.name.slice(0,120), type: String(p.type || ""), lat: Number(p.lat), lng: Number(p.lng)})) : [];
+      graceFrameRef.current?.contentWindow?.postMessage({type:"grace-field-context",spots},window.location.origin);
+    } catch { graceFrameRef.current?.contentWindow?.postMessage({type:"grace-field-context",spots:[]},window.location.origin); }
+  };
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin || event.source !== graceFrameRef.current?.contentWindow) return;
+      const data = event.data;
+      if (!data || typeof data !== "object") return;
+      if (data.type === "grace-field-request-context") sendFieldContext();
+      if (data.type === "grace-field-show-spots") { setGraceOpen(false); send("grace-field-open-waypoint-library"); }
+      if (data.type === "grace-field-focus-spot") {
+        const lat = Number(data.lat), lng = Number(data.lng);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat)>90 || Math.abs(lng)>180) return;
+        const spots = JSON.parse(localStorage.getItem("graceFieldSpots") || "[]");
+        if (!Array.isArray(spots) || !spots.some((p:any) => p.id === data.id && Number(p.lat) === lat && Number(p.lng) === lng)) return;
+        setGraceOpen(false);
+        window.dispatchEvent(new CustomEvent("grace-field-focus-waypoint",{detail:{lat,lng}}));
+      }
+    };
+    window.addEventListener("message",onMessage);
+    return () => window.removeEventListener("message",onMessage);
+  }, []);
   const [mapOverlayOpen, setMapOverlayOpen] = useState(false);
   const [gps, setGps] = useState<GpsInfo>({accuracy: null, altitude: null, status: "Acquiring precise GPS…"});
   const [mode] = useState<FieldMode>("hunt");
@@ -109,7 +138,7 @@ export default function GraceField() {
       .grace-field-v3:has([data-grace-field-navigation="true"]) .gf-bottom{visibility:hidden!important;pointer-events:none!important}
       .gf-grace-launch{position:absolute;z-index:1280;right:12px;bottom:calc(env(safe-area-inset-bottom,0px) + 90px);display:flex;align-items:center;gap:9px;padding:8px 13px 8px 8px;border:1px solid #d5a575;border-radius:99px;background:#101d19f5;color:#ffe4cd;box-shadow:0 8px 25px #000a;font-weight:800}
       .gf-grace-launch img{width:36px;height:36px;border-radius:50%;object-fit:cover;border:1px solid #f3a683}
-      .gf-grace-sheet{position:absolute;z-index:1800;top:calc(env(safe-area-inset-top,0px) + 80px);right:9px;bottom:calc(env(safe-area-inset-bottom,0px) + 90px);left:9px;max-width:550px;margin-left:auto;border:1px solid #d5a575;border-radius:18px;overflow:hidden;background:#fff7f1;box-shadow:0 15px 55px #000e;display:flex;flex-direction:column}
+      .gf-grace-sheet{position:absolute;z-index:1800;top:auto;right:9px;bottom:calc(env(safe-area-inset-bottom,0px) + 90px);left:9px;height:min(60dvh,560px);max-width:550px;margin-left:auto;border:1px solid #d5a575;border-radius:18px;overflow:hidden;background:#fff7f1;box-shadow:0 15px 55px #000e;display:flex;flex-direction:column}
       .gf-grace-sheet-head{background:#10221b;color:#fff0df;display:flex;align-items:center;justify-content:space-between;padding:9px 13px;font-weight:800}
       .gf-grace-sheet iframe{border:0;width:100%;flex:1;min-height:0;background:#fff7f1}
       .gf-panel{background:linear-gradient(145deg,#081511f6,#11221bee);border:1px solid #ad9060;box-shadow:0 8px 22px #000a}
@@ -163,7 +192,7 @@ export default function GraceField() {
     {!graceOpen && !mapOverlayOpen && <button type="button" className="gf-grace-launch" onClick={()=>{setMenuOpen(false);setGraceOpen(true);}} aria-label="Talk with Grace while keeping the map open"><img src="/grace-avatar.png" alt=""/><span>Talk to Grace</span></button>}
     {graceOpen && <section className="gf-grace-sheet" aria-label="Grace companion chat">
       <div className="gf-grace-sheet-head"><span>Grace · Your companion</span><button type="button" onClick={()=>setGraceOpen(false)} aria-label="Close Grace chat and return to map" style={{color:"white",background:"transparent",border:0,padding:"7px 10px"}}>✕ Back to map</button></div>
-      <iframe title="Grace conversation" src="/chat" allow="microphone; camera" />
+      <iframe ref={graceFrameRef} title="Grace conversation" src="/chat?field=1" allow="microphone; camera" onLoad={sendFieldContext} />
     </section>}
     <nav className="gf-bottom" aria-label="Main field actions">
       <button className={`gf-action ${tracking?"stop":"primary"}`} onClick={()=>send(tracking?"grace-field-v2-stop-track":"grace-field-v2-start-track")}><Icon name="track"/><span>{tracking?"STOP TRACK":"START TRACK"}</span></button>
