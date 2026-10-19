@@ -2455,7 +2455,9 @@ function isMarketplaceQuery(text: string) {
       return;
     }
 
-    await recordGraceUserMessage();
+    // Do not hold the chat UI while Supabase records usage. Server-side
+    // enforcement still needs its separate security audit.
+    void recordGraceUserMessage();
 
     const lower = clean.toLowerCase();
 
@@ -2672,7 +2674,8 @@ function isMarketplaceQuery(text: string) {
     }
 
     trackEvent("message_sent");
-    await updateMemory(clean);
+    // Memory extraction is supplementary; it must not delay the visible chat.
+    void updateMemory(clean);
 
     loadingRef.current = true;
     setLoading(true);
