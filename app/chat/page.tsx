@@ -3650,7 +3650,7 @@ function isMarketplaceQuery(text: string) {
             const next = e.target.value;
             setInput(next);
             // Height is controlled by React; clearing the draft always returns to one line.
-            const lineCount = next.split("\\n").length;
+            const lineCount = next.split(/\r?\n/).length;
             const estimated = Math.max(48, Math.min(112, lineCount * 24 + 24));
             setComposerHeight(estimated);
           }}
