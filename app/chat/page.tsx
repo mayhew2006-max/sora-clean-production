@@ -3615,7 +3615,7 @@ function isMarketplaceQuery(text: string) {
       )}
 
  <footer className="grace-input-bar fixed bottom-0 left-0 right-0 z-30 px-3 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] bg-gradient-to-t from-[#fff7f1] via-[#fff7f1]/98 to-transparent">
-        <div className="mx-auto max-w-3xl rounded-[1.6rem] border border-[#efb99f] bg-white p-2 shadow-xl">
+        <div className="mx-auto max-w-3xl rounded-[1.6rem] border border-[#efb99f] bg-white p-2 shadow-xl h-auto">
           {images.length > 0 && images.some((image) => !messages.some((msg) => msg.role === "user-image" && msg.image === image)) && (
             <div className="mb-2 flex gap-2 items-center rounded-xl bg-[#fff7f1] p-2">
               {images.filter((image) => !messages.some((msg) => msg.role === "user-image" && msg.image === image)).map((image, index) => (
@@ -3625,7 +3625,7 @@ function isMarketplaceQuery(text: string) {
               <button type="button" onClick={() => { imagesRef.current = []; setImages([]); setImageStatus(""); }} aria-label="Remove attached photo" className="ml-auto px-2 text-xl">×</button>
             </div>
           )}
-          <div className="flex gap-2 items-end">
+          <div className="flex gap-2 items-end h-auto">
         <button
           onClick={() => setToolsOpen((v) => !v)}
           disabled={locked || loading || toolLoading}
@@ -3644,6 +3644,7 @@ function isMarketplaceQuery(text: string) {
         </button>
 
         <textarea
+          key={input.length === 0 ? "empty-composer" : "draft-composer"}
           ref={textareaRef}
           value={input}
           onChange={(e) => {
@@ -3662,7 +3663,7 @@ function isMarketplaceQuery(text: string) {
           }}
           disabled={locked || loading || toolLoading}
           rows={1}
-          style={{ height: composerHeight, maxHeight: 112 }}
+          style={{ height: input.length === 0 ? 48 : composerHeight, minHeight: 48, maxHeight: 112, flexGrow: 1, flexShrink: 1, alignSelf: "flex-end" }}
           placeholder="Ask Grace anything..."
           className="flex-1 min-w-0 min-h-[48px] max-h-28 overflow-y-auto resize-none bg-white border border-[#efb99f] rounded-2xl px-4 py-3 text-[#2f2723] placeholder:text-[#a98273] outline-none disabled:opacity-40 shadow-sm"
         />
