@@ -184,6 +184,7 @@ export default function GraceChat() {
   const [images, setImages] = useState<string[]>([]);
   const imagesRef = useRef<string[]>([]);
   const [imageStatus, setImageStatus] = useState("");
+  const [expandedImage, setExpandedImage] = useState<string | null>(null);
   const [lastToolAnswer, setLastToolAnswer] = useState("");
   const [conversationId, setConversationId] = useState("");
   const [historyReady, setHistoryReady] = useState(false);
@@ -199,6 +200,7 @@ export default function GraceChat() {
   const messagesRef = useRef<Message[]>(messages);
   const memoryRef = useRef("");
   const loadingRef = useRef(false);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   // STEP 14:
   // The exact live game Grace is currently watching with the user.
@@ -1299,6 +1301,7 @@ Only use business/report fields when the user specifically requests a report or 
     messagesRef.current = nextMessages;
     setMessages(nextMessages);
     setInput("");
+    if (textareaRef.current) textareaRef.current.style.height = "48px";
 
     try {
       const res = await fetch("/api/tools", {
@@ -2436,6 +2439,7 @@ function isMarketplaceQuery(text: string) {
   async function sendMessage(text: string) {
     const clean = text.trim();
     if (!clean || loadingRef.current) return;
+    if (textareaRef.current) textareaRef.current.style.height = "48px";
 
     if (locked) {
       trackEvent("paywall_hit");
@@ -3382,11 +3386,13 @@ function isMarketplaceQuery(text: string) {
                       />
                     </div>
                   ) : message.role === "assistant-image" ? (
-                    <img
-                      src={message.image}
-                      alt="Generated Grace"
-                      className="w-full max-w-2xl rounded-3xl border border-[#efb99f] shadow-2xl mx-auto"
-                    />
+                    <button type="button" onClick={() => setExpandedImage(message.image || null)} aria-label="Enlarge generated image" className="block w-full text-left">
+                      <img
+                        src={message.image}
+                        alt="Generated Grace — tap to enlarge"
+                        className="w-full max-w-2xl rounded-3xl border border-[#efb99f] shadow-2xl mx-auto"
+                      />
+                    </button>
                   ) : message.role === "assistant" ? (
                     <>
                       <img
@@ -3428,6 +3434,15 @@ function isMarketplaceQuery(text: string) {
           </div>
         </div>
       </section>
+
+      {expandedImage && (
+        <div className="fixed inset-0 z-[80] flex flex-col bg-black/95" role="dialog" aria-modal="true" aria-label="Enlarged image">
+          <button type="button" onClick={() => setExpandedImage(null)} className="self-end m-3 rounded-xl bg-white px-4 py-2 font-bold text-black" aria-label="Close enlarged image">Close ×</button>
+          <div className="flex-1 min-h-0 overflow-auto flex items-center justify-center p-2">
+            <img src={expandedImage} alt="Enlarged Grace image" className="max-w-full max-h-full object-contain" style={{ touchAction: "pinch-zoom" }} />
+          </div>
+        </div>
+      )}
 
       {sidebarOpen && (
         <div className="fixed inset-0 z-50">
@@ -3519,7 +3534,7 @@ function isMarketplaceQuery(text: string) {
             href="/pay"
             className="inline-block bg-[#f3a683] text-white rounded-2xl px-8 py-4 font-black shadow-lg"
           >
-            Upgrade — $4.99/month
+            Upgrade — $14.99/month
           </a>
           <p className="text-xs text-[#9a6b5a] mt-2">Cancel anytime.</p>
         </div>
@@ -3621,12 +3636,13 @@ function isMarketplaceQuery(text: string) {
         </button>
 
         <textarea
+          ref={textareaRef}
           value={input}
           onChange={(e) => {
             setInput(e.target.value);
             e.currentTarget.style.height = "auto";
             e.currentTarget.style.height =
-              Math.min(e.currentTarget.scrollHeight, 160) + "px";
+              Math.min(e.currentTarget.scrollHeight, 112) + "px";
           }}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
@@ -3637,7 +3653,7 @@ function isMarketplaceQuery(text: string) {
           disabled={locked || loading || toolLoading}
           rows={1}
           placeholder="Ask Grace anything..."
-          className="flex-1 min-w-0 min-h-[48px] max-h-40 overflow-y-auto resize-none bg-white border border-[#efb99f] rounded-2xl px-4 py-3 text-[#2f2723] placeholder:text-[#a98273] outline-none disabled:opacity-40 shadow-sm"
+          className="flex-1 min-w-0 h-12 min-h-[48px] max-h-28 overflow-y-auto resize-none bg-white border border-[#efb99f] rounded-2xl px-4 py-3 text-[#2f2723] placeholder:text-[#a98273] outline-none disabled:opacity-40 shadow-sm"
         />
 
         <button
