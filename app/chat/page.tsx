@@ -134,6 +134,24 @@ export default function GraceChat() {
   ]);
 
   const [input, setInput] = useState("");
+  const [embeddedField, setEmbeddedField] = useState(false);
+  const [fieldSpots, setFieldSpots] = useState<Array<{id:string;name:string;type:string;lat:number;lng:number}>>([]);
+  useEffect(() => {
+    const embedded = window.self !== window.top && new URLSearchParams(window.location.search).get("field") === "1";
+    setEmbeddedField(embedded);
+    if (!embedded) return;
+    const onMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin || event.source !== window.parent) return;
+      if (event.data?.type !== "grace-field-context" || !Array.isArray(event.data.spots)) return;
+      const spots = event.data.spots.slice(0,150).filter((p:any) =>
+        p && typeof p.id === "string" && typeof p.name === "string" && Number.isFinite(p.lat) && Number.isFinite(p.lng)
+      );
+      setFieldSpots(spots);
+    };
+    window.addEventListener("message",onMessage);
+    window.parent.postMessage({type:"grace-field-request-context"},window.location.origin);
+    return () => window.removeEventListener("message",onMessage);
+  }, []);
   const [fieldScoutContext, setFieldScoutContext] =
     useState("");
 
@@ -2460,6 +2478,32 @@ function isMarketplaceQuery(text: string) {
     // enforcement still needs its separate security audit.
     void recordGraceUserMessage();
 
+    // Saved locations are a local map operation, not a paid scouting request.
+    // Never fabricate a marker or infer its position from the question.
+    if (embeddedField && /\b(stand|camera|truck|camp|waypoint|saved (?:spot|location)|fishing (?:hole|spot)|marker)\b/i.test(clean) &&
+        /\b(where|find|show|locate|navigate|open|map|which|my)\b/i.test(clean)) {
+      const words = clean.toLowerCase();
+      const matching = fieldSpots.filter(p => words.includes(p.name.toLowerCase()) ||
+        (p.type && words.includes(p.type.toLowerCase())) ||
+        (words.includes("stand") && /stand/i.test(p.name+" "+p.type)) ||
+        (words.includes("truck") && /truck|vehicle|parking/i.test(p.name+" "+p.type)) ||
+        (words.includes("camera") && /camera/i.test(p.name+" "+p.type)) ||
+        (words.includes("camp") && /camp/i.test(p.name+" "+p.type)));
+      const answer = matching.length === 1
+        ? `I found your saved spot: ${matching[0].name}. Tap “Show on map” below to zoom to its saved marker.`
+        : matching.length > 1
+        ? `I found ${matching.length} matching saved spots: ${matching.slice(0,8).map(p=>p.name).join(", ")}. Open Saved Spots to choose the right one.`
+        : fieldSpots.length
+        ? "I couldn't match that to one of your saved spots. Open Saved Spots to check its name."
+        : "I don't see any saved spots available in this map session yet. Check Saved Spots, or wait for the map to finish syncing.";
+      setMessages([...messagesRef.current,{role:"user",content:clean},{role:"assistant",content:answer}]);
+      setInput("");
+      if (matching.length === 1) {
+        const spot = matching[0];
+        window.parent.postMessage({type:"grace-field-spot-offer",id:spot.id,lat:spot.lat,lng:spot.lng,name:spot.name},window.location.origin);
+      }
+      return;
+    }
     const lower = clean.toLowerCase();
 
     const wantsPdfFromLastThing =
