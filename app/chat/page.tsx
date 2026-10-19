@@ -201,6 +201,7 @@ export default function GraceChat() {
   const memoryRef = useRef("");
   const loadingRef = useRef(false);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const [composerHeight, setComposerHeight] = useState(48);
 
   // STEP 14:
   // The exact live game Grace is currently watching with the user.
@@ -1301,6 +1302,7 @@ Only use business/report fields when the user specifically requests a report or 
     messagesRef.current = nextMessages;
     setMessages(nextMessages);
     setInput("");
+    setComposerHeight(48);
     if (textareaRef.current) textareaRef.current.style.height = "48px";
 
     try {
@@ -2444,6 +2446,7 @@ function isMarketplaceQuery(text: string) {
   async function sendMessage(text: string) {
     const clean = text.trim();
     if (!clean || loadingRef.current) return;
+    setComposerHeight(48);
     if (textareaRef.current) textareaRef.current.style.height = "48px";
 
     if (locked) {
@@ -3383,13 +3386,13 @@ function isMarketplaceQuery(text: string) {
                   }
                 >
                   {message.role === "user-image" ? (
-                    <div className="rounded-3xl bg-[#f3a683] p-2 shadow-lg">
+                    <button type="button" onClick={() => setExpandedImage(message.image || null)} aria-label="Enlarge uploaded photo" className="rounded-3xl bg-[#f3a683] p-2 shadow-lg">
                       <img
                         src={message.image}
-                        alt="Uploaded photo"
+                        alt="Uploaded photo — tap to enlarge"
                         className="max-h-80 w-auto max-w-full rounded-2xl object-contain"
                       />
-                    </div>
+                    </button>
                   ) : message.role === "assistant-image" ? (
                     <button type="button" onClick={() => setExpandedImage(message.image || null)} aria-label="Enlarge generated image" className="block w-full text-left">
                       <img
@@ -3644,10 +3647,12 @@ function isMarketplaceQuery(text: string) {
           ref={textareaRef}
           value={input}
           onChange={(e) => {
-            setInput(e.target.value);
-            e.currentTarget.style.height = "auto";
-            e.currentTarget.style.height =
-              Math.min(e.currentTarget.scrollHeight, 112) + "px";
+            const next = e.target.value;
+            setInput(next);
+            // Height is controlled by React; clearing the draft always returns to one line.
+            const lineCount = next.split("\\n").length;
+            const estimated = Math.max(48, Math.min(112, lineCount * 24 + 24));
+            setComposerHeight(estimated);
           }}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
@@ -3657,8 +3662,9 @@ function isMarketplaceQuery(text: string) {
           }}
           disabled={locked || loading || toolLoading}
           rows={1}
+          style={{ height: composerHeight, maxHeight: 112 }}
           placeholder="Ask Grace anything..."
-          className="flex-1 min-w-0 h-12 min-h-[48px] max-h-28 overflow-y-auto resize-none bg-white border border-[#efb99f] rounded-2xl px-4 py-3 text-[#2f2723] placeholder:text-[#a98273] outline-none disabled:opacity-40 shadow-sm"
+          className="flex-1 min-w-0 min-h-[48px] max-h-28 overflow-y-auto resize-none bg-white border border-[#efb99f] rounded-2xl px-4 py-3 text-[#2f2723] placeholder:text-[#a98273] outline-none disabled:opacity-40 shadow-sm"
         />
 
         <button
