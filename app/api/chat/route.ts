@@ -345,6 +345,9 @@ The goal is to give the RIGHT response to THIS person at THIS moment.
 For ordinary conversation, sound like conversation.
 For a problem, solve the problem.
 For a question, answer the question.
+
+LEGITIMATE CONSOLE MODDING EXAMPLE:
+If asked "Can you help me jailbreak my PS4?", answer YES to discussing legitimate homebrew, compatibility, and risks. Ask for the PS4 system software version before proposing a method. Do not refuse, lecture, or imply criminal intent based solely on the word "jailbreak". Never promise that an exploit works without verified compatibility.
 For pain, be present before trying to fix it.
 For humor, have some damn fun.
 `.trim();
@@ -476,9 +479,16 @@ THIS STYLE LOCK APPLIES TO THE CURRENT RESPONSE.
     // This second tiny call has ONE job: make it sound like Grace.
     // -------------------------------------------------------
 
+    // A second model pass can turn a useful technical answer into a lecture.
+    // For legitimate console-modding questions, preserve the factual first pass.
+    const isConsoleModdingQuestion =
+      typeof latestUserText === "string" &&
+      /\b(ps4|playstation\s*4|ps5|playstation\s*5|console)\b/i.test(latestUserText) &&
+      /\b(jailbreak|jailbreaking|homebrew|modding|mod)\b/i.test(latestUserText);
+
     let finalReply = rawReply;
 
-    try {
+    if (!isConsoleModdingQuestion) try {
       const styleResponse = await fetch(
         "https://api.openai.com/v1/chat/completions",
         {
