@@ -3212,7 +3212,7 @@ function isMarketplaceQuery(text: string) {
   }
 
   return (
-    <main className="h-[100dvh] bg-[#fff7f1] text-[#2f2723] flex flex-col overflow-hidden">
+    <main className={`h-[100dvh] bg-[#fff7f1] text-[#2f2723] flex flex-col overflow-hidden ${embeddedField ? "grace-field-chat" : ""}`}>\n      {embeddedField && <style>{`\n        .grace-field-chat{background:#10221b!important;color:#f4ead3!important}\n        .grace-field-chat section{background:#10221b!important}\n        .grace-field-chat section>div{padding-left:8px!important;padding-right:8px!important}\n        .grace-field-chat .grace-message-scroll{background:#10221b!important;color:#f4ead3!important;padding-bottom:24px!important}\n        .grace-field-chat .grace-message-scroll>div{color:#f4ead3}\n        .grace-field-chat .grace-message-scroll .bg-\\[\\#f3a683\\]{background:#294b37!important;color:#f4ead3!important}\n        .grace-field-chat .grace-input-bar{background:#10221b!important;padding:6px 8px 8px!important}\n        .grace-field-chat .grace-input-bar>div{background:#1b3429!important;border-color:#b99a62!important;padding:6px!important}\n        .grace-field-chat .grace-input-bar textarea{background:#213b2f!important;color:#fff4df!important;border-color:#a68b60!important;min-height:44px!important}\n        .grace-field-chat .grace-input-bar textarea::placeholder{color:#c5bca8!important}\n        .grace-field-chat .grace-input-bar button{border-color:#a68b60!important}\n        .grace-field-chat .grace-input-bar button:last-child{background:#b99a62!important;color:#11251c!important}\n      `}</style>}
       <input
         ref={cameraInputRef}
         type="file"
@@ -3701,7 +3701,7 @@ function isMarketplaceQuery(text: string) {
         </button>
 
         <textarea
-          key={input.length === 0 ? "empty-composer" : "draft-composer"}
+          key="grace-composer"
           ref={textareaRef}
           value={input}
           onChange={(e) => {
