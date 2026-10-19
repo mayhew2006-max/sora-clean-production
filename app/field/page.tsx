@@ -39,6 +39,7 @@ export default function GraceField() {
   const [heading, setHeading] = useState<number | null>(null);
   const [tracking, setTracking] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [graceOpen, setGraceOpen] = useState(false);
   const [mapOverlayOpen, setMapOverlayOpen] = useState(false);
   const [gps, setGps] = useState<GpsInfo>({accuracy: null, altitude: null, status: "Acquiring precise GPS…"});
   const [mode] = useState<FieldMode>("hunt");
@@ -106,6 +107,11 @@ export default function GraceField() {
       .grace-field-v3:has([data-grace-field-navigation="true"]) .gf-sidebar,
       .grace-field-v3:has([data-grace-field-navigation="true"]) .gf-quicktools,
       .grace-field-v3:has([data-grace-field-navigation="true"]) .gf-bottom{visibility:hidden!important;pointer-events:none!important}
+      .gf-grace-launch{position:absolute;z-index:1280;right:12px;bottom:calc(env(safe-area-inset-bottom,0px) + 90px);display:flex;align-items:center;gap:9px;padding:8px 13px 8px 8px;border:1px solid #d5a575;border-radius:99px;background:#101d19f5;color:#ffe4cd;box-shadow:0 8px 25px #000a;font-weight:800}
+      .gf-grace-launch img{width:36px;height:36px;border-radius:50%;object-fit:cover;border:1px solid #f3a683}
+      .gf-grace-sheet{position:absolute;z-index:1800;top:calc(env(safe-area-inset-top,0px) + 80px);right:9px;bottom:calc(env(safe-area-inset-bottom,0px) + 90px);left:9px;max-width:550px;margin-left:auto;border:1px solid #d5a575;border-radius:18px;overflow:hidden;background:#fff7f1;box-shadow:0 15px 55px #000e;display:flex;flex-direction:column}
+      .gf-grace-sheet-head{background:#10221b;color:#fff0df;display:flex;align-items:center;justify-content:space-between;padding:9px 13px;font-weight:800}
+      .gf-grace-sheet iframe{border:0;width:100%;flex:1;min-height:0;background:#fff7f1}
       .gf-panel{background:linear-gradient(145deg,#081511f6,#11221bee);border:1px solid #ad9060;box-shadow:0 8px 22px #000a}
       .gf-header{position:absolute;z-index:1200;top:calc(env(safe-area-inset-top,0px) + 9px);left:9px;right:9px;height:63px;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 9px;border-radius:15px;pointer-events:auto}
       .gf-brand{display:flex;gap:8px;align-items:center;min-width:0}
@@ -154,6 +160,11 @@ export default function GraceField() {
       <button className="gf-icon-button" aria-label="Compass and navigation" onClick={()=>setMenuOpen(v=>!v)}><Icon name="compass"/></button>
       <button className="gf-icon-button" aria-label="Locate me using fresh GPS" onClick={()=>send("grace-field-v2-locate")}><Icon name="locate"/></button>
     </div>
+    {!graceOpen && !mapOverlayOpen && <button type="button" className="gf-grace-launch" onClick={()=>{setMenuOpen(false);setGraceOpen(true);}} aria-label="Talk with Grace while keeping the map open"><img src="/grace-avatar.png" alt=""/><span>Talk to Grace</span></button>}
+    {graceOpen && <section className="gf-grace-sheet" aria-label="Grace companion chat">
+      <div className="gf-grace-sheet-head"><span>Grace · Your companion</span><button type="button" onClick={()=>setGraceOpen(false)} aria-label="Close Grace chat and return to map" style={{color:"white",background:"transparent",border:0,padding:"7px 10px"}}>✕ Back to map</button></div>
+      <iframe title="Grace conversation" src="/chat" allow="microphone; camera" />
+    </section>}
     <nav className="gf-bottom" aria-label="Main field actions">
       <button className={`gf-action ${tracking?"stop":"primary"}`} onClick={()=>send(tracking?"grace-field-v2-stop-track":"grace-field-v2-start-track")}><Icon name="track"/><span>{tracking?"STOP TRACK":"START TRACK"}</span></button>
       <button className="gf-action" onClick={()=>send("grace-field-v2-save-spot")}><Icon name="save"/><span>SAVE LOCATION</span></button>
