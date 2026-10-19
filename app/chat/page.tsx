@@ -2479,25 +2479,21 @@ function isMarketplaceQuery(text: string) {
     // enforcement still needs its separate security audit.
     void recordGraceUserMessage();
 
-    // Saved locations are a local map operation, not a paid scouting request.
-    // Never fabricate a marker or infer its position from the question.
-    if (embeddedField && /\b(stand|camera|truck|camp|waypoint|saved (?:spot|location)|fishing (?:hole|spot)|marker)\b/i.test(clean) &&
-        /\b(where|find|show|locate|navigate|open|map|which|my)\b/i.test(clean)) {
-      const words = clean.toLowerCase();
-      const category = /\b(stand|deer stand|tree stand)\b/i.test(clean) ? /\bstand\b|tree.?stand|hunting.?blind/i
-        : /\b(camera|trail cam)\b/i.test(clean) ? /camera|trail.?cam/i
-        : /\b(truck|vehicle|parked)\b/i.test(clean) ? /truck|vehicle|parking/i
-        : /\bcamp\b/i.test(clean) ? /camp/i
-        : /\b(fishing hole|fishing spot)\b/i.test(clean) ? /fish|fishing/i
-        : null;
-      const matching = fieldSpots.filter(p => {
-        const name = p.name.trim().toLowerCase();
-        const type = p.type.trim().toLowerCase();
-        // Never match an empty name or generic type such as "spot" or "marker".
-        const explicitName = name.length >= 3 && words.includes(name);
-        const typedMatch = category ? category.test(name+" "+type) : false;
-        return category ? typedMatch : explicitName;
-      });
+    // Exact saved marker names win over broad marker categories.
+    const normalizeSpotText = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    const requestWords = " " + normalizeSpotText(clean) + " ";
+    const named = fieldSpots.filter(p => {
+      const name = normalizeSpotText(p.name);
+      return name.length >= 3 && requestWords.includes(" " + name + " ");
+    });
+    const category = /\b(stand|blind)\b/i.test(clean) ? /stand|blind/i
+      : /\b(camera|trail cam)\b/i.test(clean) ? /camera|trail.?cam/i
+      : /\b(truck|vehicle|parked)\b/i.test(clean) ? /truck|vehicle|parking/i
+      : /\bcamp\b/i.test(clean) ? /camp/i
+      : /\b(fishing hole|fishing spot)\b/i.test(clean) ? /fish|fishing/i : null;
+    const asksLocation = /\b(where|find|show|locate|navigate|open|map|which|my|directions)\b/i.test(clean);
+    if (embeddedField && asksLocation && (named.length > 0 || category || /\b(waypoint|saved (?:spot|location)|marker)\b/i.test(clean))) {
+      const matching = named.length ? named : category ? fieldSpots.filter(p => category.test(p.name + " " + p.type)) : [];
       const answer = matching.length === 1
         ? `I found your saved spot: ${matching[0].name}. Tap “Show on map” below to zoom to its saved marker.`
         : matching.length > 1
