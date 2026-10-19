@@ -62,8 +62,11 @@ export default function GraceField() {
         if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat)>90 || Math.abs(lng)>180) return;
         const spots = JSON.parse(localStorage.getItem("graceFieldSpots") || "[]");
         if (!Array.isArray(spots) || !spots.some((p:any) => p.id === data.id && Number(p.lat) === lat && Number(p.lng) === lng)) return;
+        // Let the iframe close and the map regain its full viewport first.
         setGraceOpen(false);
-        window.dispatchEvent(new CustomEvent("grace-field-focus-waypoint",{detail:{lat,lng}}));
+        window.requestAnimationFrame(() => {
+          window.dispatchEvent(new CustomEvent("grace-field-focus-waypoint",{detail:{lat,lng}}));
+        });
       }
     };
     window.addEventListener("message",onMessage);
@@ -138,9 +141,9 @@ export default function GraceField() {
       .grace-field-v3:has([data-grace-field-navigation="true"]) .gf-bottom{visibility:hidden!important;pointer-events:none!important}
       .gf-grace-launch{position:absolute;z-index:1280;right:12px;bottom:calc(env(safe-area-inset-bottom,0px) + 90px);display:flex;align-items:center;gap:9px;padding:8px 13px 8px 8px;border:1px solid #d5a575;border-radius:99px;background:#101d19f5;color:#ffe4cd;box-shadow:0 8px 25px #000a;font-weight:800}
       .gf-grace-launch img{width:36px;height:36px;border-radius:50%;object-fit:cover;border:1px solid #f3a683}
-      .gf-grace-sheet{position:absolute;z-index:1800;top:auto;right:9px;bottom:calc(env(safe-area-inset-bottom,0px) + 90px);left:9px;height:min(42dvh,390px);max-width:480px;margin-left:auto;border:1px solid #d5a575;border-radius:18px;overflow:hidden;background:#fff7f1;box-shadow:0 15px 55px #000e;display:flex;flex-direction:column}
+      .gf-grace-sheet{position:absolute;z-index:1800;top:auto;right:9px;bottom:calc(env(safe-area-inset-bottom,0px) + 90px);left:9px;height:min(42dvh,390px);max-width:480px;margin-left:auto;border:1px solid #b99a62;border-radius:18px;overflow:hidden;background:#10221b;box-shadow:0 15px 55px #000e;display:flex;flex-direction:column}
       .gf-grace-sheet-head{background:#10221b;color:#fff0df;display:flex;align-items:center;justify-content:space-between;padding:9px 13px;font-weight:800}
-      .gf-grace-sheet iframe{border:0;width:100%;flex:1;min-height:0;background:#fff7f1}
+      .gf-grace-sheet iframe{border:0;width:100%;flex:1;min-height:0;background:#10221b}
       .gf-panel{background:linear-gradient(145deg,#081511f6,#11221bee);border:1px solid #ad9060;box-shadow:0 8px 22px #000a}
       .gf-header{position:absolute;z-index:1200;top:calc(env(safe-area-inset-top,0px) + 9px);left:9px;right:9px;height:63px;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 9px;border-radius:15px;pointer-events:auto}
       .gf-brand{display:flex;gap:8px;align-items:center;min-width:0}
