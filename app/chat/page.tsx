@@ -216,6 +216,25 @@ export default function GraceChat() {
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const historySyncedCountRef = useRef(0);
 
+  async function uploadGraceMedia(image: string): Promise<string | null> {
+    if (!userId || !conversationId || !image.startsWith("data:image/")) return null;
+    const match = image.match(/^data:(image\/(?:png|jpeg|webp));base64,(.+)$/s);
+    if (!match) return null;
+    try {
+      const binary = atob(match[2]);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      const ext = match[1] === "image/jpeg" ? "jpg" : match[1].split("/")[1];
+      const key = `${userId}/${conversationId}/${crypto.randomUUID()}.${ext}`;
+      const { error } = await supabase.storage.from("grace-chat-media").upload(key, bytes, { contentType: match[1], upsert: false });
+      if (error) throw error;
+      return key;
+    } catch (error) {
+      console.error("Grace media upload failed:", error);
+      return null;
+    }
+  }
+
   useEffect(() => {
     try {
       const saved =
@@ -558,10 +577,18 @@ export default function GraceChat() {
               typeof row.content === "string" &&
               row.content.trim()
           )
-          .map((row) => ({
-            role: row.role as "user" | "assistant",
-            content: row.content,
-          }));
+          .map((row) => {
+            const marker = row.content.match(/^\[GRACE_MEDIA:(user-image|assistant-image):([^\]]+)\]$/);
+            return marker
+              ? { role: marker[1] as "user-image" | "assistant-image", image: marker[2] }
+              : { role: row.role as "user" | "assistant", content: row.content };
+          });
+        await Promise.all(loadedMessages.map(async (message) => {
+          if ((message.role === "user-image" || message.role === "assistant-image") && message.image) {
+            const { data, error } = await supabase.storage.from("grace-chat-media").createSignedUrl(message.image, 3600);
+            message.image = error ? "" : (data?.signedUrl || "");
+          }
+        }));
 
         historySyncedCountRef.current = loadedMessages.length;
         messagesRef.current = loadedMessages;
@@ -640,19 +667,12 @@ export default function GraceChat() {
   useEffect(() => {
     if (!historyReady || !conversationId || !userId) return;
 
-    const persistentMessages = messages
-      .filter(
-        (message) =>
-          (message.role === "user" ||
-            message.role === "assistant") &&
-          typeof message.content === "string" &&
-          message.content.trim() &&
-          message.content !== "I’m working on it..."
-      )
-      .map((message) => ({
-        role: message.role as "user" | "assistant",
-        content: message.content!.trim(),
-      }));
+    const persistentMessages = messages.filter((message) =>
+      ((message.role === "user" || message.role === "assistant") &&
+        typeof message.content === "string" && message.content.trim() &&
+        message.content !== "I’m working on it...") ||
+      ((message.role === "user-image" || message.role === "assistant-image") && Boolean(message.image))
+    );
 
     const alreadySaved = historySyncedCountRef.current;
 
@@ -666,16 +686,25 @@ export default function GraceChat() {
       // follow-up responses do not duplicate the user message.
       historySyncedCountRef.current = targetCount;
 
-      const { error } = await supabase
-        .from("grace_conversation_messages")
-        .insert(
-          messagesToSave.map((message) => ({
-            conversation_id: conversationId,
-            user_id: userId,
-            role: message.role,
-            content: message.content,
-          }))
-        );
+      const rows = [];
+      for (const message of messagesToSave) {
+        if (message.role === "user-image" || message.role === "assistant-image") {
+          const key = message.image?.startsWith("data:image/") ? await uploadGraceMedia(message.image) : null;
+          if (!key) {
+            console.warn("Grace image history not saved; private media storage may need setup.");
+            continue;
+          }
+          rows.push({ conversation_id: conversationId, user_id: userId,
+            role: message.role === "user-image" ? "user" : "assistant",
+            content: `[GRACE_MEDIA:${message.role}:${key}]` });
+        } else {
+          rows.push({ conversation_id: conversationId, user_id: userId,
+            role: message.role, content: message.content!.trim() });
+        }
+      }
+      const { error } = rows.length
+        ? await supabase.from("grace_conversation_messages").insert(rows)
+        : { error: null };
 
       if (error) {
         console.error(
@@ -721,7 +750,7 @@ export default function GraceChat() {
     // Do not persist generated base64 images in localStorage.
     // They can exceed browser storage limits and crash the page.
     const messagesForStorage = messages
-      .filter((message) => message.role !== "assistant-image")
+      .filter((message) => message.role !== "assistant-image" && message.role !== "user-image")
       .slice(-40);
 
     try {
