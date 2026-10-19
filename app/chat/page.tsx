@@ -3379,7 +3379,7 @@ function isMarketplaceQuery(text: string) {
 
           <div className="relative z-10 h-[calc(100%-4rem)] overflow-hidden">
             <div className="grace-message-scroll h-full overflow-y-auto px-4 sm:px-6 py-5 pb-32 space-y-4">
-              {messages.slice(-10).map((message, index) => (
+              {messages.map((message, index) => (
                 <div
                   key={index}
                   className={
