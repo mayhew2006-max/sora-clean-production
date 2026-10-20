@@ -2626,8 +2626,8 @@ function isMarketplaceQuery(text: string) {
         }
         const data=await res.json() as {places?:Array<{name:string;distanceKm:number;lat:number;lng:number;description:string}>};
         const places=data.places||[];
-        const details=places.slice(0,3).map((p,i)=>(i+1)+". "+p.name+" — "+p.distanceKm.toFixed(1)+" km away\nField map: gracefield://focus?lat="+p.lat+"&lng="+p.lng+"&name="+encodeURIComponent(p.name)+"\nDirections: https://www.google.com/maps/dir/?api=1&destination="+p.lat+"%2C"+p.lng).join("\n\n");
-        finish(places.length?"Publicly mapped "+kind+" leads near "+searchName+":\n"+details+"\n\nMapped places only. Public access, fish species and regulations are not verified.":"I couldn't find publicly mapped "+kind+" destinations near "+searchName+" in this search radius. Try another saved location.");
+        const details=places.slice(0,10).map((p,i)=>(i+1)+". "+p.name+" — "+p.distanceKm.toFixed(1)+" km away\nField map: gracefield://focus?lat="+p.lat+"&lng="+p.lng+"&name="+encodeURIComponent(p.name)+"\nDirections: https://www.google.com/maps/dir/?api=1&destination="+p.lat+"%2C"+p.lng).join("\n\n");
+        finish(places.length?"Publicly mapped "+kind+" leads near "+searchName+" (nearest first; showing "+Math.min(places.length,10)+" results):\n"+details+"\n\nMapped places only. Public access, fish species and regulations are not verified.":"I couldn't find publicly mapped "+kind+" destinations near "+searchName+" in this search radius. Try another saved location.");
       } catch (error) {
         const reason=error instanceof Error?error.message:"Unknown failure";
         console.error("Grace Field discovery failed:",reason);
