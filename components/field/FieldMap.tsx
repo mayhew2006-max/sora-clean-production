@@ -2522,6 +2522,15 @@ export default function FieldMap({
                   : "No usable breadcrumb trail is recorded. Do not rely on a straight-line bearing to avoid cliffs, water, or other obstacles."}
               </div>
             )}
+            <a
+              href={`https://www.google.com/maps/dir/?api=1&destination=${navigationTarget.lat}%2C${navigationTarget.lng}&travelmode=driving`}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{display:"block",marginTop:14,padding:"13px 12px",textAlign:"center",borderRadius:10,background:"#d4af70",color:"#12271c",fontWeight:900,textDecoration:"none"}}
+            >
+              OPEN GOOGLE MAPS · DRIVE THERE ↗
+            </a>
+            <div style={{fontSize:11,color:"#d6c6a6",marginTop:6}}>Google Maps provides road directions. Grace Field remains available for off-road navigation.</div>
             <div style={{display:"flex",gap:9,marginTop:14}}>
               <button type="button" onClick={()=>setNavigationCompact(true)} style={{flex:1,padding:"12px 9px",border:"1px solid #9e926e",borderRadius:10,color:"#f4e5c8",background:"#1c3829",fontWeight:800}}>VIEW MAP</button>
               <button type="button" onClick={stopNavigation} style={{flex:1,padding:"12px 9px",border:"1px solid #c08879",borderRadius:10,color:"#ffe4d9",background:"#452420",fontWeight:800}}>STOP NAVIGATION</button>
