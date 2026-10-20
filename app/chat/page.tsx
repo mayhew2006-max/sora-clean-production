@@ -2489,7 +2489,7 @@ function isMarketplaceQuery(text: string) {
 
     // Forecast and advice questions must never trigger automatic map movement.
     if (embeddedField && /\b(weather|forecast|wind|temperature|rain|storm|conditions|which stand|best stand)\b/i.test(clean)) {
-      const normalize = (v:string) => v.toLowerCase().replace(/[^a-z0-9]+/g," ").trim();
+      const normalize = (v:string) => v.toLowerCase().replace(/[^a-z0-9]+/g," ").trim().split(/\s+/).map(w => w === "mountain" || w === "mount" || w === "mt" ? "mt" : w === "blend" || w === "blinds" ? "blind" : w).join(" ");
       const phrase = " " + normalize(clean) + " ";
       const named = fieldSpots.filter(p => normalize(p.name).length>=3 && phrase.includes(" "+normalize(p.name)+" "));
       const comparison = /\b(which|best|compare|recommend)\b/i.test(clean) && /\b(stand|blind)\b/i.test(clean);
@@ -2535,7 +2535,7 @@ function isMarketplaceQuery(text: string) {
     }
 
     // Exact saved marker names win over broad marker categories.
-    const normalizeSpotText = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    const normalizeSpotText = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().split(/\s+/).map(w => w === "mountain" || w === "mount" || w === "mt" ? "mt" : w === "blend" || w === "blinds" ? "blind" : w).join(" ");
     const requestWords = " " + normalizeSpotText(clean) + " ";
     const named = fieldSpots.filter(p => {
       const name = normalizeSpotText(p.name);
