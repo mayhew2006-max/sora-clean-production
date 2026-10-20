@@ -2534,6 +2534,32 @@ function isMarketplaceQuery(text: string) {
       return;
     }
 
+    // Public outdoor discovery near an explicitly named saved waypoint.
+    if (embeddedField && /\b(find|recommend|nearby|near|local|where|show)\b/i.test(clean) && /\b(fish|fishing|trout|bass|hike|hiking|trail|camp|camping|campsite)\b/i.test(clean)) {
+      const norm=(v:string)=>v.toLowerCase().replace(/[^a-z0-9]+/g," ").trim().replace(/\bmountain\b|\bmount\b/g,"mt").replace(/\bblend\b/g,"blind");
+      const query=" "+norm(clean)+" ";
+      const spot=fieldSpots.find(p=>query.includes(" "+norm(p.name)+" "));
+      const history=[...messagesRef.current,{role:"user" as const,content:clean}];
+      setInput("");
+      if(!spot) {
+        setMessages([...history,{role:"assistant",content:"Tell me which saved location to search around, for example: Find hiking trails near Mt blind. I need a real map location, not a guess."}]);
+        return;
+      }
+      const kind=/\b(fish|fishing|trout|bass)\b/i.test(clean)?"fishing":/\b(camp|camping|campsite)\b/i.test(clean)?"camping":"hiking";
+      setMessages([...history,{role:"assistant",content:"Searching public map records near "+spot.name+"…"}]);
+      try {
+        const res=await fetch("/api/field/discover?lat="+encodeURIComponent(spot.lat)+"&lng="+encodeURIComponent(spot.lng)+"&kind="+kind);
+        if(!res.ok)throw new Error("Discovery unavailable");
+        const data=await res.json() as {places?:Array<{name:string;distanceKm:number;lat:number;lng:number;description:string}>};
+        const places=data.places||[];
+        const details=places.slice(0,6).map((p,i)=>(i+1)+". "+p.name+" ("+p.distanceKm.toFixed(1)+" km): "+p.description+". Map: https://www.openstreetmap.org/?mlat="+p.lat+"&mlon="+p.lng+"#map=14/"+p.lat+"/"+p.lng).join("\n");
+        setMessages([...history,{role:"assistant",content:places.length?"Publicly mapped "+kind+" leads near "+spot.name+":\n"+details+"\n\nThese OpenStreetMap community records do NOT verify public access, fish species, stocking, regulations, current conditions, or safe routes. Check local authorities before going.":"I couldn't find publicly mapped "+kind+" destinations near "+spot.name+" in this search radius. Try another saved location."}]);
+      } catch {
+        setMessages([...history,{role:"assistant",content:"The public outdoor map search isn't responding. I won't invent destinations or species. Try again later."}]);
+      }
+      return;
+    }
+
     // Exact saved marker names win over broad marker categories.
     const normalizeSpotText = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().split(/\s+/).map(w => w === "mountain" || w === "mount" || w === "mt" ? "mt" : w === "blend" || w === "blinds" ? "blind" : w).join(" ");
     const requestWords = " " + normalizeSpotText(clean) + " ";
