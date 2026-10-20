@@ -33,14 +33,15 @@ function filters(kind:string,near:string){
 }
 async function queryOsm(lat:number,lng:number,kind:string,radius:number):Promise<Place[]>{
  const near="(around:"+radius+","+lat+","+lng+")";
- const query="[out:json][timeout:12];("+filters(kind,near).join(";")+";);out center 60;";
- const endpoints=["https://overpass.kumi.systems/api/interpreter","https://overpass.nchc.org.tw/api/interpreter"];
+ const query="[out:json][timeout:8];("+filters(kind,near).join(";")+";);out center 30;";
+ const endpoints=["https://overpass-api.de/api/interpreter","https://overpass.private.coffee/api/interpreter"];
+ const failures:string[]=[];
  for(const endpoint of endpoints){
   const controller=new AbortController();
-  const timer=setTimeout(()=>controller.abort(),8500);
+  const timer=setTimeout(()=>controller.abort(),5500);
   try{
    const res=await fetch(endpoint,{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:new URLSearchParams({data:query}),signal:controller.signal,cache:"no-store"});
-   if(!res.ok)continue;
+   if(!res.ok){failures.push(new URL(endpoint).host+": HTTP "+res.status);continue;}
    const data=await res.json() as {elements?:Element[]};
    const places=(data.elements||[]).flatMap((e):Place[]=>{
     const a=e.lat??e.center?.lat,b=e.lon??e.center?.lon;
@@ -49,10 +50,10 @@ async function queryOsm(lat:number,lng:number,kind:string,radius:number):Promise
     return [{name:(t.name||t["name:en"]||"Unnamed mapped location").slice(0,100),description:[t.tourism,t.leisure,t.route,t.highway,t.water,t.fishing,t.operator].filter(Boolean).join(" / ").slice(0,120)||"Community-mapped outdoor feature",lat:a,lng:b,distanceKm:distance(lat,lng,a,b)}];
    }).filter(p=>p.distanceKm<=radius/1000+0.5);
    return places.sort((a,b)=>a.distanceKm-b.distanceKm).slice(0,12);
-  }catch{/* Try the alternate public endpoint. */}
+  }catch(e){failures.push(new URL(endpoint).host+": "+(e instanceof Error?e.name:"network error"));}
   finally{clearTimeout(timer);}
  }
- throw new Error("Public map providers unavailable");
+ throw new Error(failures.join("; ")||"Public map providers unavailable");
 }
 export async function GET(req:NextRequest){
  const latParam=req.nextUrl.searchParams.get("lat"),lngParam=req.nextUrl.searchParams.get("lng");
@@ -67,7 +68,8 @@ export async function GET(req:NextRequest){
    if(places.length)return NextResponse.json({kind,places,searchRadiusMiles:Math.round(radius/1609.344),source:"OpenStreetMap community data; public access, species and regulations not verified"},{headers:{"Cache-Control":"private, max-age=300"}});
   }
   return NextResponse.json({kind,places:[],searchRadiusMiles:50,source:"OpenStreetMap community data; no mapped matches in searched area"},{headers:{"Cache-Control":"private, max-age=300"}});
- }catch{
-  return NextResponse.json({error:"Public map services unavailable; no conclusion about nearby destinations"},{status:503});
+ }catch(e){
+  console.error("Field discovery provider error",e);
+  return NextResponse.json({error:"Public map services unavailable; no conclusion about nearby destinations",detail:e instanceof Error?e.message:"Unknown error"},{status:503});
  }
 }
