@@ -2479,6 +2479,61 @@ function isMarketplaceQuery(text: string) {
     // enforcement still needs its separate security audit.
     void recordGraceUserMessage();
 
+    // Emergency intent opens Guardian Angel; no call or message is claimed sent.
+    if (embeddedField && /\b(help me|call (?:for )?help|call 911|emergency|sos|guardian angel|i(?:'m| am) lost|i(?:'m| am) hurt)\b/i.test(clean)) {
+      setMessages([...messagesRef.current,{role:"user",content:clean},{role:"assistant",content:"Opening Guardian Angel emergency options. For immediate danger, use CALL 911. You can also prepare an SOS for your trusted contact. No alert has been sent automatically."}]);
+      setInput("");
+      window.parent.postMessage({type:"grace-field-open-guardian"},window.location.origin);
+      return;
+    }
+
+    // Forecast and advice questions must never trigger automatic map movement.
+    if (embeddedField && /\b(weather|forecast|wind|temperature|rain|storm|conditions|which stand|best stand)\b/i.test(clean)) {
+      const normalize = (v:string) => v.toLowerCase().replace(/[^a-z0-9]+/g," ").trim();
+      const phrase = " " + normalize(clean) + " ";
+      const named = fieldSpots.filter(p => normalize(p.name).length>=3 && phrase.includes(" "+normalize(p.name)+" "));
+      const comparison = /\b(which|best|compare|recommend)\b/i.test(clean) && /\b(stand|blind)\b/i.test(clean);
+      const targets = (comparison ? fieldSpots.filter(p=>/stand|blind/i.test(p.name+" "+p.type)) : named).slice(0,8);
+      const history = [...messagesRef.current,{role:"user" as const,content:clean}];
+      setInput("");
+      if (!targets.length) {
+        setMessages([...history,{role:"assistant",content:"Which saved stand or location should I check? I couldn't identify a matching marker. I won't invent coordinates or a forecast."}]);
+        return;
+      }
+      setMessages([...history,{role:"assistant",content:"Checking forecast conditions at your saved coordinates…"}]);
+      try {
+        const tomorrow = /\btomorrow\b/i.test(clean);
+        const day = new Date();
+        if (tomorrow) day.setDate(day.getDate()+1);
+        const date = [day.getFullYear(),String(day.getMonth()+1).padStart(2,"0"),String(day.getDate()).padStart(2,"0")].join("-");
+        const reports = await Promise.all(targets.map(async spot => {
+          const url = new URL("https://api.open-meteo.com/v1/forecast");
+          url.searchParams.set("latitude",String(spot.lat));
+          url.searchParams.set("longitude",String(spot.lng));
+          url.searchParams.set("daily","temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant");
+          url.searchParams.set("temperature_unit","fahrenheit");
+          url.searchParams.set("wind_speed_unit","mph");
+          url.searchParams.set("timezone","auto");
+          url.searchParams.set("forecast_days","3");
+          const res = await fetch(url.toString());
+          if (!res.ok) throw new Error("Weather unavailable");
+          const json = await res.json();
+          const i = (json.daily?.time as string[]|undefined)?.indexOf(date) ?? -1;
+          if (i<0) throw new Error("Date unavailable");
+          const d=json.daily;
+          const deg=Number(d.wind_direction_10m_dominant[i]);
+          const compass=["N","NE","E","SE","S","SW","W","NW"][Math.round(deg/45)%8];
+          return spot.name+": "+Math.round(d.temperature_2m_min[i])+"–"+Math.round(d.temperature_2m_max[i])+"°F, precipitation chance "+d.precipitation_probability_max[i]+"%, wind FROM "+compass+" ("+Math.round(deg)+"°), max wind "+Math.round(d.wind_speed_10m_max[i])+" mph, gusts "+Math.round(d.wind_gusts_10m_max[i])+" mph.";
+        }));
+        let answer="Forecast for "+date+" at your saved GPS coordinates:\n"+reports.join("\n");
+        answer+=comparison?"\n\nThese conditions alone cannot determine the best stand. I need deer approach directions, access paths, and stand-specific observations before ranking them. Wind direction means where the wind comes FROM.":"\n\nForecasts change. Check weather alerts before leaving.";
+        setMessages([...history,{role:"assistant",content:answer}]);
+      } catch {
+        setMessages([...history,{role:"assistant",content:"I couldn't verify the weather forecast at your saved coordinates. I won't guess. Check your connection and try again."}]);
+      }
+      return;
+    }
+
     // Exact saved marker names win over broad marker categories.
     const normalizeSpotText = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
     const requestWords = " " + normalizeSpotText(clean) + " ";
