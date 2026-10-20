@@ -564,22 +564,7 @@ export default function FieldMap({
       }
 
       if (!usage) {
-        const { error: createError } = await supabase
-          .from("grace_user_usage")
-          .upsert({
-            user_id: user.id,
-            email: user.email || "",
-            free_messages_used: 0,
-            updated_at: new Date().toISOString(),
-          });
-
-        if (createError) {
-          console.error(
-            "Grace Field usage account creation failed:",
-            createError
-          );
-        }
-
+        // Only the server creates or updates billing/usage records.
         setAccountFreeUsed(0);
         setPaid(false);
       } else {
