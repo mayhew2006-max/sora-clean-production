@@ -1,3 +1,4 @@
+import { chargeGraceApiRequest } from "@/lib/grace-usage-guard";
 import { NextResponse } from "next/server";
 import { buildFieldIntelligence, fetchCounty } from "@/lib/grace-field-brain";
 
@@ -98,6 +99,8 @@ async function resolveDestination(query: string) {
 }
 
 export async function POST(req: Request) {
+  const quotaFailure = await chargeGraceApiRequest(req);
+  if (quotaFailure) return quotaFailure;
   try {
     const body = await req.json();
 
