@@ -2582,8 +2582,8 @@ function isMarketplaceQuery(text: string) {
         }
         const data=await res.json() as {places?:Array<{name:string;distanceKm:number;lat:number;lng:number;description:string}>};
         const places=data.places||[];
-        const details=places.slice(0,6).map((p,i)=>(i+1)+". "+p.name+" ("+p.distanceKm.toFixed(1)+" km): "+p.description+". View map: https://www.openstreetmap.org/?mlat="+p.lat+"&mlon="+p.lng+"#map=14/"+p.lat+"/"+p.lng+". Directions: https://www.google.com/maps/dir/?api=1&destination="+p.lat+"%2C"+p.lng).join("\n");
-        finish(places.length?"Publicly mapped "+kind+" leads near "+searchName+":\n"+details+"\n\nThese OpenStreetMap community records do NOT verify public access, fish species, stocking, regulations, current conditions, or safe routes. Check local authorities before going.":"I couldn't find publicly mapped "+kind+" destinations near "+searchName+" in this search radius. Try another saved location.");
+        const details=places.slice(0,3).map((p,i)=>(i+1)+". "+p.name+" — "+p.distanceKm.toFixed(1)+" km away\nMap: https://www.openstreetmap.org/?mlat="+p.lat+"&mlon="+p.lng+"\nDirections: https://www.google.com/maps/dir/?api=1&destination="+p.lat+"%2C"+p.lng).join("\n\n");
+        finish(places.length?"Publicly mapped "+kind+" leads near "+searchName+":\n"+details+"\n\nMapped places only. Public access, fish species and regulations are not verified.":"I couldn't find publicly mapped "+kind+" destinations near "+searchName+" in this search radius. Try another saved location.");
       } catch (error) {
         const reason=error instanceof Error?error.message:"Unknown failure";
         console.error("Grace Field discovery failed:",reason);
@@ -3604,7 +3604,7 @@ function isMarketplaceQuery(text: string) {
                         {(message.content || "").split(/(\*\*[^*\n]+\*\*)/g).map((part, i) =>
                           part.startsWith("**") && part.endsWith("**")
                             ? <strong key={i}>{part.slice(2, -2)}</strong>
-                            : <span key={i}>{part}</span>
+                            : <span key={i}>{part.split(/(https?:\/\/[^\s]+)/g).map((chunk,j)=>/^https?:\/\//.test(chunk)?<a key={j} href={chunk} target="_blank" rel="noopener noreferrer" className="underline break-all text-[#d6b178]">{chunk.includes("google.com/maps/dir")?"Get directions":chunk.includes("openstreetmap.org")?"Show on map":"Open link"}</a>:<span key={j}>{chunk}</span>)}</span>
                         )}
                       </div>
                     </>
