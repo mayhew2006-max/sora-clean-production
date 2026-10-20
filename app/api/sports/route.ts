@@ -1,3 +1,4 @@
+import { chargeGraceApiRequest } from "@/lib/grace-usage-guard";
 import {
   GRACE_BAD_BITCH_PERSONALITY,
   GRACE_PROFESSIONAL_STYLE,
@@ -566,6 +567,8 @@ async function discoverLiveGameAcrossLeagues(
 }
 
 export async function POST(req: Request) {
+  const quotaFailure = await chargeGraceApiRequest(req);
+  if (quotaFailure) return quotaFailure;
   try {
     const {
       query,
