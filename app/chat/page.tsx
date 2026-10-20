@@ -2543,10 +2543,7 @@ function isMarketplaceQuery(text: string) {
       setInput("");
       const kind=/\b(fish|fishing|trout|bass|stream|river|creek|lake|pond|waterway|angling)\b/i.test(clean)?"fishing":/\b(camp|camping|campsite)\b/i.test(clean)?"camping":"hiking";
       const nearMe=/\b(my location|current location|near me|around me|where i am|where i'm|here|nearby|local to me|local to my location|my area|near my location)\b/i.test(clean);
-      if(!spot && !nearMe) {
-        setMessages([...history,{role:"assistant",content:"Which location should I search? Say 'near me' to use fresh GPS, or name a saved waypoint."}]);
-        return;
-      }
+      // In Field mode an unnamed outdoor search always uses fresh device GPS.
       let searchLat=spot?.lat,searchLng=spot?.lng;
       const searchName=spot?.name||"your current location";
       setMessages([...history,{role:"assistant",content:"Searching public map records near "+searchName+"…"}]);
@@ -2582,7 +2579,7 @@ function isMarketplaceQuery(text: string) {
         }
         const data=await res.json() as {places?:Array<{name:string;distanceKm:number;lat:number;lng:number;description:string}>};
         const places=data.places||[];
-        const details=places.slice(0,3).map((p,i)=>(i+1)+". "+p.name+" — "+p.distanceKm.toFixed(1)+" km away\nField map: gracefield://focus?lat="+p.lat+"&lng="+p.lng+"\nDirections: https://www.google.com/maps/dir/?api=1&destination="+p.lat+"%2C"+p.lng).join("\n\n");
+        const details=places.slice(0,3).map((p,i)=>(i+1)+". "+p.name+" — "+p.distanceKm.toFixed(1)+" km away\nField map: gracefield://focus?lat="+p.lat+"&lng="+p.lng+"&name="+encodeURIComponent(p.name)+"\nDirections: https://www.google.com/maps/dir/?api=1&destination="+p.lat+"%2C"+p.lng).join("\n\n");
         finish(places.length?"Publicly mapped "+kind+" leads near "+searchName+":\n"+details+"\n\nMapped places only. Public access, fish species and regulations are not verified.":"I couldn't find publicly mapped "+kind+" destinations near "+searchName+" in this search radius. Try another saved location.");
       } catch (error) {
         const reason=error instanceof Error?error.message:"Unknown failure";
@@ -3604,7 +3601,7 @@ function isMarketplaceQuery(text: string) {
                         {(message.content || "").split(/(\*\*[^*\n]+\*\*)/g).map((part, i) =>
                           part.startsWith("**") && part.endsWith("**")
                             ? <strong key={i}>{part.slice(2, -2)}</strong>
-                            : <span key={i}>{part.split(/(gracefield:\/\/focus\?lat=-?[\d.]+&lng=-?[\d.]+|https?:\/\/[^\s]+)/g).map((chunk,j)=>chunk.startsWith("gracefield://focus?")?<button key={j} type="button" className="underline font-bold text-[#d6b178]" onClick={()=>{const params=new URLSearchParams(chunk.split("?")[1]);const lat=Number(params.get("lat")),lng=Number(params.get("lng"));if(embeddedField&&Number.isFinite(lat)&&Number.isFinite(lng)&&Math.abs(lat)<=90&&Math.abs(lng)<=180)window.parent.postMessage({type:"grace-field-focus-discovery",lat,lng},window.location.origin);}}>Show on Grace Field map</button>:/^https?:\/\//.test(chunk)?<a key={j} href={chunk} target="_blank" rel="noopener noreferrer" className="underline break-all text-[#d6b178]">{chunk.includes("google.com/maps/dir")?"Get directions":chunk.includes("openstreetmap.org")?"Show on map":"Open link"}</a>:<span key={j}>{chunk}</span>)}</span>
+                            : <span key={i}>{part.split(/(gracefield:\/\/focus\?lat=-?[\d.]+&lng=-?[\d.]+&name=[^\s]+|https?:\/\/[^\s]+)/g).map((chunk,j)=>chunk.startsWith("gracefield://focus?")?<button key={j} type="button" className="underline font-bold text-[#d6b178]" onClick={()=>{const params=new URLSearchParams(chunk.split("?")[1]);const lat=Number(params.get("lat")),lng=Number(params.get("lng"));if(embeddedField&&Number.isFinite(lat)&&Number.isFinite(lng)&&Math.abs(lat)<=90&&Math.abs(lng)<=180)window.parent.postMessage({type:"grace-field-focus-discovery",lat,lng,name:params.get("name")||"Discovered destination"},window.location.origin);}}>Show on Grace Field map</button>:/^https?:\/\//.test(chunk)?<a key={j} href={chunk.includes("google.com/maps/dir") ? chunk.replace("https://www.google.com/maps/dir/?api=1&destination=","https://www.google.com/maps/search/?api=1&query=") : chunk} target="_blank" rel="noopener noreferrer" className="underline break-all text-[#d6b178]">{chunk.includes("google.com/maps/dir")?"Get directions":chunk.includes("openstreetmap.org")?"Show on map":"Open link"}</a>:<span key={j}>{chunk}</span>)}</span>
                         )}
                       </div>
                     </>
