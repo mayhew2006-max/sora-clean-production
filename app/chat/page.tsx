@@ -893,6 +893,11 @@ export default function GraceChat() {
   const freeLeft = Math.max(FREE_LIMIT - accountFreeUsed, 0);
   const locked = authReady && !paid && freeLeft <= 0;
 
+  async function graceApiHeaders(): Promise<Record<string, string>> {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.access_token ? { Authorization: "Bearer " + session.access_token } : {};
+  }
+
   async function recordGraceUserMessage(): Promise<boolean> {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.access_token) { window.location.href = "/login"; return false; }
@@ -1368,6 +1373,7 @@ Only use business/report fields when the user specifically requests a report or 
         headers: {
           "Content-Type": "application/json",
           "x-grace-paid": paid || !locked ? "true" : "false",
+          ...(await graceApiHeaders()),
         },
         body: JSON.stringify({
           toolType: activeTool,
@@ -1477,6 +1483,7 @@ Only use business/report fields when the user specifically requests a report or 
         headers: {
           "Content-Type": "application/json",
           "x-grace-paid": paid || !locked ? "true" : "false",
+          ...(await graceApiHeaders()),
         },
         body: JSON.stringify({
           prompt: cleanPrompt,
@@ -1546,6 +1553,7 @@ Only use business/report fields when the user specifically requests a report or 
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          ...(await graceApiHeaders()),
         },
         body: JSON.stringify({
           query: cleanQuery,
@@ -1619,6 +1627,7 @@ Only use business/report fields when the user specifically requests a report or 
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          ...(await graceApiHeaders()),
         },
         body: JSON.stringify({
           query: cleanQuery,
@@ -1735,6 +1744,7 @@ Only use business/report fields when the user specifically requests a report or 
         headers: {
           "Content-Type": "application/json",
           "x-grace-paid": paid || !locked ? "true" : "false",
+          ...(await graceApiHeaders()),
         },
         body: JSON.stringify({
           query: cleanQuery,
@@ -2510,7 +2520,10 @@ function isMarketplaceQuery(text: string) {
 
     // Emergency access must never depend on subscription status.
     const emergencyRequest = embeddedField && /\b(help me|call (?:for )?help|call 911|emergency|sos|guardian angel|i(?:'m| am) lost|i(?:'m| am) hurt)\b/i.test(clean);
-    if (!emergencyRequest && !(await recordGraceUserMessage())) return;
+    // Local Field Talk actions consume here; paid APIs consume atomically on the server.
+    // Discovery is charged by its own endpoint, not twice.
+    const localFieldRequest = embeddedField && /\b(weather|forecast|wind|temperature|rain|storm|conditions|which stand|best stand|camera|trail cam|saved spots?)\b/i.test(clean);
+    if (!emergencyRequest && localFieldRequest && !(await recordGraceUserMessage())) return;
 
     // Emergency intent opens Guardian Angel; no call or message is claimed sent.
     if (embeddedField && /\b(help me|call (?:for )?help|call 911|emergency|sos|guardian angel|i(?:'m| am) lost|i(?:'m| am) hurt)\b/i.test(clean)) {
@@ -2604,7 +2617,7 @@ function isMarketplaceQuery(text: string) {
         const controller=new AbortController();
         const timer=setTimeout(()=>controller.abort(),32000);
         let res:Response;
-        try {res=await fetch("/api/field/discover?lat="+encodeURIComponent(searchLat!)+"&lng="+encodeURIComponent(searchLng!)+"&kind="+kind,{signal:controller.signal});}
+        try {res=await fetch("/api/field/discover?lat="+encodeURIComponent(searchLat!)+"&lng="+encodeURIComponent(searchLng!)+"&kind="+kind,{signal:controller.signal,headers:await graceApiHeaders()});}
         finally {clearTimeout(timer);}
         if(!res.ok){
           const failure=await res.json().catch(()=>null) as {error?:string;detail?:string}|null;
@@ -2906,7 +2919,7 @@ function isMarketplaceQuery(text: string) {
         scoutRequest ? "/api/field-scout" : "/api/chat",
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...(await graceApiHeaders()) },
           body: JSON.stringify(
             scoutRequest
               ? {
