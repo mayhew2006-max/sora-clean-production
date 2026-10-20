@@ -88,7 +88,7 @@ export default function FieldMission(){
    const code=`${overdue?"return":"check"}-${Math.floor(now/300000)}`;
    if(alertedAt.current===code)return;
    alertedAt.current=code;
-   setMessage(overdue?"RETURN TIME PASSED — contact your person now. No alert has been sent to them.":"CHECK-IN DUE — share your current position with your contact.");
+   setMessage(overdue?"RETURN TIME PASSED — contact your person now. No alert has been sent to them.":"CHECK-IN DUE — please confirm you are safe. After two missed intervals, an automatic contact alert is planned but NOT active yet.");
    if(typeof navigator!=="undefined" && "vibrate" in navigator)navigator.vibrate?.([250,150,250]);
    async function notify(){
      try{
@@ -137,6 +137,7 @@ export default function FieldMission(){
    window.location.href=`sms:${plan.contactPhone.replace(/[^\d+]/g,"")}?body=${encodeURIComponent(content)}`;
    setMessage("Message composer opened. You must press SEND; Grace cannot verify delivery.");}
  if(!open)return null;
+ // A missed check-in is counted once per full user-selected interval. A local reminder is not proof an alert was delivered.
  const missedCount=checkDue&&plan.nextCheckAt?1+Math.floor(Math.max(0,now-plan.nextCheckAt)/(Math.max(1,plan.checkInterval)*60000)):0;
  const contactNumber=plan.contactPhone.replace(/[^\d+]/g,"");
  const action:React.CSSProperties={...btn,minHeight:44,fontSize:12,letterSpacing:.3,borderRadius:9,background:"linear-gradient(135deg,#172c22,#0a1913)",borderColor:"#9d855f",color:"#f3e9d6"};
@@ -157,7 +158,7 @@ export default function FieldMission(){
     <GuardianGlyph name={isLate?"warning":"shield"} size={30}/>
     <div style={{flex:1}}><div style={eyebrow}>TRIP STATUS</div><div style={{...val,fontSize:16,color:isLate?"#ffa58e":active?"#a0eab2":"#e9cb95"}}>{!active?"READY TO START":overdue?"RETURN TIME OVERDUE":missedCount>=2?"MISSED CHECK-INS":checkDue?"CHECK-IN DUE":"GUARDIAN ACTIVE"}</div><div style={caption}>{active?`Trip time ${clock(now-(plan.startedAt??now))} · ${missedCount} missed check-in(s)`:"Set your plan and tell a trusted person before you leave"}</div></div>
    </div>
-   {(overdue||checkDue)&&<div role="alert" style={{...card,borderColor:"#d89067",background:"#381f17",color:"#ffe0b6",fontSize:13,fontWeight:800}}>{overdue?"RETURN TIME PASSED":"CHECK-IN REMINDER OVERDUE"}<p style={{fontSize:11,fontWeight:400,margin:"5px 0 0"}}>These are reminders on your device only. NO automatic alert was delivered to your trusted contact.</p></div>}
+   {(overdue||checkDue)&&<div role="alert" style={{...card,borderColor:"#d89067",background:"#381f17",color:"#ffe0b6",fontSize:13,fontWeight:800}}>{overdue?"RETURN TIME PASSED":"CHECK-IN REMINDER OVERDUE"}<p style={{fontSize:11,fontWeight:400,margin:"5px 0 0"}}>Two consecutive missed check-ins are the planned automatic-alert threshold. Automatic contact delivery is NOT active. These reminders run only while the app is operating.</p></div>}
    <div style={{...pair,marginTop:9}}>
     <div style={kpi}><div style={eyebrow}>GPS FIX</div><div style={{...val,color:fresh?"#a5e6b2":"#f1bb87",marginTop:5}}>{fresh?"● LIVE":"● WAITING"}</div><div style={caption}>{fix?`±${Math.round(fix.accuracy*3.28084)} ft · ${Math.max(0,Math.round((now-fix.time)/1000))}s old`:gpsError}</div></div>
     <div style={kpi}><div style={eyebrow}>BREADCRUMB TRAIL</div><div style={{...val,color:mapTracking?"#a5e6b2":"#e7b887",marginTop:5}}>{mapTracking?"● TRACKING":"NOT RECORDING"}</div><div style={caption}>{active?"Started by Guardian only if GPS tracking is permitted":"Start Guardian to request tracking"}</div></div>
@@ -169,13 +170,13 @@ export default function FieldMission(){
     <div style={card}>
      <div style={{display:"flex",gap:8,alignItems:"center"}}><GuardianGlyph name="person"/><div style={eyebrow}>TRUSTED CONTACT</div></div>
      <div style={{...pair,marginTop:7}}><label style={caption}>Contact name<input style={field} autoComplete="name" placeholder="Who knows you're out there?" value={plan.contactName} onChange={e=>setPlan(v=>({...v,contactName:e.target.value}))}/></label><label style={caption}>Phone number<input type="tel" autoComplete="tel" style={field} placeholder="Mobile number" value={plan.contactPhone} onChange={e=>setPlan(v=>({...v,contactPhone:e.target.value}))}/></label></div>
-     <div style={caption}>Your contact is not automatically monitored or notified. Share your trip plan before heading out.</div>
+     <div style={caption}>Automatic alerts are not connected yet. Ask this person for permission and share your trip plan before heading out.</div>
     </div>
     <div style={card}>
      <div style={{display:"flex",gap:8,alignItems:"center"}}><GuardianGlyph name="clock"/><div style={eyebrow}>TRIP PLAN & CHECK-IN SCHEDULE</div></div>
      <label style={caption}>Destination<input style={field} placeholder="Ridge stand / Campsite / Creek" value={plan.destinationName} onChange={e=>setPlan(v=>({...v,destinationName:e.target.value}))}/></label>
-     <div style={{...pair,marginTop:9}}><label style={caption}>Expected return<input type="datetime-local" style={{...field,colorScheme:"dark"}} value={plan.returnAt} onChange={e=>setPlan(v=>({...v,returnAt:e.target.value}))}/></label><label style={caption}>Check-in reminder<select style={field} value={plan.checkInterval} onChange={e=>setPlan(v=>({...v,checkInterval:Number(e.target.value),nextCheckAt:v.startedAt?Date.now()+Number(e.target.value)*60000:null}))}>{[10,15,30,45,60,90,120].map(v=><option key={v} value={v}>Every {v} min</option>)}</select></label></div>
-     <div style={{...pair,marginTop:9}}><div style={kpi}><div style={eyebrow}>NEXT REMINDER</div><div style={{...val,marginTop:5}}>{!active?"NOT STARTED":checkDue?"DUE NOW":new Date(plan.nextCheckAt??now).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})}</div></div><div style={kpi}><div style={eyebrow}>MISSED CHECK-INS</div><div style={{...val,marginTop:5,color:missedCount>=2?"#ff9b84":"#f5d8ac"}}>{missedCount} · LOCAL ONLY</div></div></div>
+     <div style={{...pair,marginTop:9}}><label style={caption}>Expected return<input type="datetime-local" style={{...field,colorScheme:"dark"}} value={plan.returnAt} onChange={e=>setPlan(v=>({...v,returnAt:e.target.value}))}/></label><label style={caption}>Check-in reminder<select style={field} value={plan.checkInterval} onChange={e=>setPlan(v=>({...v,checkInterval:Number(e.target.value),nextCheckAt:v.startedAt?Date.now()+Number(e.target.value)*60000:null}))}>{[10,15,20,30,45,60,90,120].map(v=><option key={v} value={v}>Every {v} min</option>)}</select></label></div>
+     <div style={{...pair,marginTop:9}}><div style={kpi}><div style={eyebrow}>NEXT REMINDER</div><div style={{...val,marginTop:5}}>{!active?"NOT STARTED":checkDue?"DUE NOW":new Date(plan.nextCheckAt??now).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})}</div></div><div style={kpi}><div style={eyebrow}>MISSED CHECK-INS</div><div style={{...val,marginTop:5,color:missedCount>=2?"#ff9b84":"#f5d8ac"}}>{missedCount} · NO AUTO ALERT</div></div></div>
     </div>
     <div style={card}>
      <div style={{display:"flex",gap:8,alignItems:"center"}}><GuardianGlyph name="location"/><div style={eyebrow}>CURRENT GPS POSITION</div></div>
