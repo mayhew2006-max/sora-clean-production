@@ -58,6 +58,12 @@ export default function GraceField() {
       if (data.type === "grace-field-request-context") sendFieldContext();
       if (data.type === "grace-field-open-guardian") { setGraceOpen(false); send("grace-field-open-mission"); }
       if (data.type === "grace-field-show-spots") { setGraceOpen(false); send("grace-field-open-waypoint-library"); }
+      if (data.type === "grace-field-focus-discovery") {
+        const lat = Number(data.lat), lng = Number(data.lng);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat)>90 || Math.abs(lng)>180) return;
+        setGraceOpen(false);
+        window.requestAnimationFrame(() => window.dispatchEvent(new CustomEvent("grace-field-focus-waypoint",{detail:{lat,lng}})));
+      }
       if (data.type === "grace-field-focus-spot") {
         const lat = Number(data.lat), lng = Number(data.lng);
         if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat)>90 || Math.abs(lng)>180) return;
@@ -194,10 +200,10 @@ export default function GraceField() {
       <button className="gf-icon-button" aria-label="Locate me using fresh GPS" onClick={()=>send("grace-field-v2-locate")}><Icon name="locate"/></button>
     </div>
     {!graceOpen && !mapOverlayOpen && <button type="button" className="gf-grace-launch" onClick={()=>{setMenuOpen(false);setGraceOpen(true);}} aria-label="Talk with Grace while keeping the map open"><img src="/grace-avatar.png" alt=""/><span>Talk to Grace</span></button>}
-    {graceOpen && <section className="gf-grace-sheet" aria-label="Grace companion chat">
+    <section className="gf-grace-sheet" aria-label="Grace companion chat" style={{display:graceOpen?"":"none"}}>
       <div className="gf-grace-sheet-head"><span>Grace · Your companion</span><button type="button" onClick={()=>setGraceOpen(false)} aria-label="Close Grace chat and return to map" style={{color:"white",background:"transparent",border:0,padding:"7px 10px"}}>✕ Back to map</button></div>
       <iframe ref={graceFrameRef} title="Grace conversation" src="/chat?field=1" allow="microphone; camera" onLoad={sendFieldContext} />
-    </section>}
+    </section>
     <nav className="gf-bottom" aria-label="Main field actions">
       <button className={`gf-action ${tracking?"stop":"primary"}`} onClick={()=>send(tracking?"grace-field-v2-stop-track":"grace-field-v2-start-track")}><Icon name="track"/><span>{tracking?"STOP TRACK":"START TRACK"}</span></button>
       <button className="gf-action" onClick={()=>send("grace-field-v2-save-spot")}><Icon name="save"/><span>SAVE LOCATION</span></button>
