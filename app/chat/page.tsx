@@ -2547,15 +2547,26 @@ function isMarketplaceQuery(text: string) {
       }
       const kind=/\b(fish|fishing|trout|bass)\b/i.test(clean)?"fishing":/\b(camp|camping|campsite)\b/i.test(clean)?"camping":"hiking";
       setMessages([...history,{role:"assistant",content:"Searching public map records near "+spot.name+"…"}]);
+      const finish=(content:string)=>setMessages(prev=>{
+        const copy=[...prev];
+        const index=copy.findLastIndex(m=>m.role==="assistant" && m.content==="Searching public map records near "+spot.name+"…");
+        if(index>=0)copy[index]={role:"assistant",content};
+        else copy.push({role:"assistant",content});
+        return copy;
+      });
       try {
-        const res=await fetch("/api/field/discover?lat="+encodeURIComponent(spot.lat)+"&lng="+encodeURIComponent(spot.lng)+"&kind="+kind);
+        const controller=new AbortController();
+        const timer=setTimeout(()=>controller.abort(),16000);
+        let res:Response;
+        try {res=await fetch("/api/field/discover?lat="+encodeURIComponent(spot.lat)+"&lng="+encodeURIComponent(spot.lng)+"&kind="+kind,{signal:controller.signal});}
+        finally {clearTimeout(timer);}
         if(!res.ok)throw new Error("Discovery unavailable");
         const data=await res.json() as {places?:Array<{name:string;distanceKm:number;lat:number;lng:number;description:string}>};
         const places=data.places||[];
         const details=places.slice(0,6).map((p,i)=>(i+1)+". "+p.name+" ("+p.distanceKm.toFixed(1)+" km): "+p.description+". Map: https://www.openstreetmap.org/?mlat="+p.lat+"&mlon="+p.lng+"#map=14/"+p.lat+"/"+p.lng).join("\n");
-        setMessages([...history,{role:"assistant",content:places.length?"Publicly mapped "+kind+" leads near "+spot.name+":\n"+details+"\n\nThese OpenStreetMap community records do NOT verify public access, fish species, stocking, regulations, current conditions, or safe routes. Check local authorities before going.":"I couldn't find publicly mapped "+kind+" destinations near "+spot.name+" in this search radius. Try another saved location."}]);
+        finish(places.length?"Publicly mapped "+kind+" leads near "+spot.name+":\n"+details+"\n\nThese OpenStreetMap community records do NOT verify public access, fish species, stocking, regulations, current conditions, or safe routes. Check local authorities before going.":"I couldn't find publicly mapped "+kind+" destinations near "+spot.name+" in this search radius. Try another saved location.");
       } catch {
-        setMessages([...history,{role:"assistant",content:"The public outdoor map search isn't responding. I won't invent destinations or species. Try again later."}]);
+        finish("The public outdoor map search isn't responding. I won't invent destinations or species. Try again later.");
       }
       return;
     }
