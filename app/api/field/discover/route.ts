@@ -1,3 +1,4 @@
+import { chargeGraceApiRequest } from "@/lib/grace-usage-guard";
 import { NextRequest, NextResponse } from "next/server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -110,6 +111,8 @@ async function queryArcGis(lat:number,lng:number,kind:string,radiusMeters:number
  }finally{clearTimeout(timer);}
 }
 export async function GET(req:NextRequest){
+ const quotaFailure = await chargeGraceApiRequest(req);
+ if (quotaFailure) return quotaFailure;
  const latParam=req.nextUrl.searchParams.get("lat"),lngParam=req.nextUrl.searchParams.get("lng");
  const lat=Number(latParam),lng=Number(lngParam),kind=req.nextUrl.searchParams.get("kind");
  if(!latParam||!lngParam||!Number.isFinite(lat)||!Number.isFinite(lng)||Math.abs(lat)>90||Math.abs(lng)>180||!["fishing","hiking","camping"].includes(kind||""))
