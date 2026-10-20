@@ -400,6 +400,7 @@ export default function FieldMap({
       if (!Number.isFinite(lat) || !Number.isFinite(lng) ||
           Math.abs(lat) > 90 || Math.abs(lng) > 180) return;
 
+      if (detail.discovery) setDiscoveryPin({lat,lng,name: typeof detail.name === "string" ? detail.name.slice(0,100) : "Fishing destination"});
       setMapCommand({
         id: Date.now(),
         lat,
@@ -414,6 +415,7 @@ export default function FieldMap({
     );
   }, []);
 
+ const [discoveryPin, setDiscoveryPin] = useState<{lat:number;lng:number;name:string}|null>(null);
  const [mapCommand, setMapCommand] =
     useState<{
       id: number;
@@ -2560,6 +2562,8 @@ export default function FieldMap({
               }, 100);
             }}
           />
+
+          {discoveryPin && <Marker position={[discoveryPin.lat,discoveryPin.lng]} icon={makeIcon("custom","#f2bc62")}><Popup>{discoveryPin.name} — discovered location (public access unverified)</Popup></Marker>}
 
           {pending && (
             <Marker
