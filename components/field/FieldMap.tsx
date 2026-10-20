@@ -381,6 +381,26 @@ export default function FieldMap({
 
   const [navigationTarget, setNavigationTarget] =
     useState<FieldSpot | null>(null);
+  // Navigate to a discovered destination without saving it as a permanent waypoint.
+  useEffect(() => {
+    const navigate = (event: Event) => {
+      const detail = (event as CustomEvent<{lat:number;lng:number}>).detail;
+      const lat = Number(detail?.lat), lng = Number(detail?.lng);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat)>90 || Math.abs(lng)>180) return;
+      setNavigationTarget({
+        id: "grace-discovery-"+lat+"-"+lng,
+        lat, lng, mode:"fish", type:"discovered", name:"Discovered destination",
+        notes:"Mapped destination; legal public access not verified.",
+        createdAt:new Date().toISOString()
+      });
+      setReturningToStart(false);
+      setDiscoveryPin({lat,lng,name:"Discovered destination"});
+      setMapCommand({id:Date.now(),lat,lng,zoom:16});
+    };
+    window.addEventListener("grace-field-navigate-discovery",navigate);
+    return () => window.removeEventListener("grace-field-navigate-discovery",navigate);
+  }, []);
+
 
  
   // Unified waypoint library: focus the existing map without
