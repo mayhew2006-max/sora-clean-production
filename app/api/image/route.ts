@@ -1,3 +1,4 @@
+import { chargeGraceApiRequest } from "@/lib/grace-usage-guard";
 import OpenAI from "openai";
 
 export const runtime = "nodejs";
@@ -11,6 +12,8 @@ function cleanPrompt(prompt: string) {
 }
 
 export async function POST(req: Request) {
+  const quotaFailure = await chargeGraceApiRequest(req);
+  if (quotaFailure) return quotaFailure;
   try {
     const { prompt } = await req.json();
 
