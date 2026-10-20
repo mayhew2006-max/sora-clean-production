@@ -3212,7 +3212,22 @@ function isMarketplaceQuery(text: string) {
   }
 
   return (
-    <main className={`h-[100dvh] bg-[#fff7f1] text-[#2f2723] flex flex-col overflow-hidden ${embeddedField ? "grace-field-chat" : ""}`}>\n      {embeddedField && <style>{`\n        .grace-field-chat{background:#10221b!important;color:#f4ead3!important}\n        .grace-field-chat section{background:#10221b!important}\n        .grace-field-chat section>div{padding-left:8px!important;padding-right:8px!important}\n        .grace-field-chat .grace-message-scroll{background:#10221b!important;color:#f4ead3!important;padding-bottom:24px!important}\n        .grace-field-chat .grace-message-scroll>div{color:#f4ead3}\n        .grace-field-chat .grace-message-scroll .bg-\\[\\#f3a683\\]{background:#294b37!important;color:#f4ead3!important}\n        .grace-field-chat .grace-input-bar{background:#10221b!important;padding:6px 8px 8px!important}\n        .grace-field-chat .grace-input-bar>div{background:#1b3429!important;border-color:#b99a62!important;padding:6px!important}\n        .grace-field-chat .grace-input-bar textarea{background:#213b2f!important;color:#fff4df!important;border-color:#a68b60!important;min-height:44px!important}\n        .grace-field-chat .grace-input-bar textarea::placeholder{color:#c5bca8!important}\n        .grace-field-chat .grace-input-bar button{border-color:#a68b60!important}\n        .grace-field-chat .grace-input-bar button:last-child{background:#b99a62!important;color:#11251c!important}\n      `}</style>}
+    <main className={`h-[100dvh] bg-[#fff7f1] text-[#2f2723] flex flex-col overflow-hidden ${embeddedField ? "grace-field-chat" : ""}`}>
+      {embeddedField && <style>{`
+        .grace-field-chat{background:#10221b!important;color:#f4ead3!important}
+        .grace-field-chat section{background:#10221b!important}
+        .grace-field-chat .grace-message-scroll{background:#10221b!important;color:#f4ead3!important;padding:12px 12px 18px!important}
+        .grace-field-chat .grace-message-scroll .grace-assistant-text{color:#fff4df!important;background:#1c3529!important;border:1px solid #52654b;border-radius:14px;padding:10px 12px!important;line-height:1.5}
+        .grace-field-chat .grace-message-scroll .grace-user-text{background:#355440!important;color:#fff4df!important;border:1px solid #b99a62!important}
+        .grace-field-chat .grace-message-scroll .grace-assistant-avatar{width:34px;height:34px;border:2px solid #b99a62;flex-shrink:0}
+        .grace-field-chat .grace-message-scroll .grace-open-spots{color:#e4c98d!important}
+        .grace-field-chat .grace-input-bar{background:#10221b!important;padding:6px 8px 8px!important}
+        .grace-field-chat .grace-input-bar>div{background:#1b3429!important;border-color:#b99a62!important;padding:6px!important}
+        .grace-field-chat .grace-input-bar textarea{background:#213b2f!important;color:#fff4df!important;border-color:#a68b60!important;min-height:44px!important}
+        .grace-field-chat .grace-input-bar textarea::placeholder{color:#c5bca8!important}
+        .grace-field-chat .grace-input-bar button{border-color:#a68b60!important}
+        .grace-field-chat .grace-input-bar button:last-child{background:#b99a62!important;color:#11251c!important}
+      `}</style>}
       <input
         ref={cameraInputRef}
         type="file"
@@ -3460,10 +3475,10 @@ function isMarketplaceQuery(text: string) {
                       <img
                         src={graceAvatar}
                         alt="Grace"
-                        className="w-8 h-8 rounded-full object-cover object-top border border-[#efb99f] shadow-sm shrink-0"
+                        className="grace-assistant-avatar w-8 h-8 rounded-full object-cover object-top border border-[#efb99f] shadow-sm shrink-0"
                       />
 
-                      <div className="text-[#2f2723] px-1 py-2 whitespace-pre-wrap leading-7 max-w-3xl">
+                      <div className="grace-assistant-text text-[#2f2723] px-1 py-2 whitespace-pre-wrap leading-7 max-w-3xl">
                         {(message.content || "").split(/(\*\*[^*\n]+\*\*)/g).map((part, i) =>
                           part.startsWith("**") && part.endsWith("**")
                             ? <strong key={i}>{part.slice(2, -2)}</strong>
@@ -3472,7 +3487,7 @@ function isMarketplaceQuery(text: string) {
                       </div>
                     </>
                   ) : (
-                    <div className="bg-[#f3a683] text-white rounded-3xl px-5 py-4 shadow-lg whitespace-pre-wrap">
+                    <div className="grace-user-text bg-[#f3a683] text-white rounded-3xl px-5 py-4 shadow-lg whitespace-pre-wrap">
                       {message.content}
                     </div>
                   )}
@@ -3492,7 +3507,7 @@ function isMarketplaceQuery(text: string) {
               )}
 
 
-              {embeddedField && <button type="button" className="text-sm underline text-[#355f47]" onClick={() => window.parent.postMessage({type:"grace-field-show-spots"},window.location.origin)}>Open saved spots on map</button>}
+              {embeddedField && <button type="button" className="grace-open-spots text-sm underline text-[#355f47]" onClick={() => window.parent.postMessage({type:"grace-field-show-spots"},window.location.origin)}>Open saved spots on map</button>}
               <div ref={bottomRef} className="h-10" />
             </div>
           </div>
