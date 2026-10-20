@@ -2535,13 +2535,13 @@ function isMarketplaceQuery(text: string) {
     }
 
     // Public outdoor discovery near an explicitly named saved waypoint.
-    if (embeddedField && /\b(find|recommend|nearby|near|local|where|show)\b/i.test(clean) && /\b(fish|fishing|trout|bass|hike|hiking|trail|camp|camping|campsite)\b/i.test(clean)) {
+    if (embeddedField && /\b(find|recommend|nearby|near|local|where|show|any|search|looking|access|spots?|places?|areas?|locations?|public)\b/i.test(clean) && /\b(fish|fishing|trout|bass|stream|river|creek|lake|pond|waterway|angling|hike|hiking|trail|trails|camp|camping|campsite)\b/i.test(clean)) {
       const norm=(v:string)=>v.toLowerCase().replace(/[^a-z0-9]+/g," ").trim().replace(/\bmountain\b|\bmount\b/g,"mt").replace(/\bblend\b/g,"blind");
       const query=" "+norm(clean)+" ";
       const spot=fieldSpots.find(p=>query.includes(" "+norm(p.name)+" "));
       const history=[...messagesRef.current,{role:"user" as const,content:clean}];
       setInput("");
-      const kind=/\b(fish|fishing|trout|bass)\b/i.test(clean)?"fishing":/\b(camp|camping|campsite)\b/i.test(clean)?"camping":"hiking";
+      const kind=/\b(fish|fishing|trout|bass|stream|river|creek|lake|pond|waterway|angling)\b/i.test(clean)?"fishing":/\b(camp|camping|campsite)\b/i.test(clean)?"camping":"hiking";
       const nearMe=/\b(my location|current location|near me|around me|where i am|where i'm|here|nearby|local to me|local to my location|my area|near my location)\b/i.test(clean);
       if(!spot && !nearMe) {
         setMessages([...history,{role:"assistant",content:"Which location should I search? Say 'near me' to use fresh GPS, or name a saved waypoint."}]);
