@@ -734,15 +734,23 @@ export default function GraceChat() {
     userId,
   ]);
 
-  // Restore the newest conversation position after account history loads, including inside Field Talk.
+  // Embedded Field Talk is mounted in an iframe. Wait until the history
+  // has painted and its scroll viewport has a measurable height.
   useEffect(() => {
     if (!historyReady) return;
-    const frame = window.requestAnimationFrame(() => {
-      const viewport = document.querySelector(".grace-message-scroll");
+    const scrollToLatest = () => {
+      const viewport = document.querySelector<HTMLElement>(".grace-message-scroll");
       if (viewport) viewport.scrollTop = viewport.scrollHeight;
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [historyReady, conversationId]);
+    };
+    const frame = window.requestAnimationFrame(scrollToLatest);
+    const shortDelay = window.setTimeout(scrollToLatest, 150);
+    const layoutDelay = window.setTimeout(scrollToLatest, 500);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.clearTimeout(shortDelay);
+      window.clearTimeout(layoutDelay);
+    };
+  }, [historyReady, conversationId, embeddedField]);
 
   useEffect(() => {
     messagesRef.current = messages;
@@ -762,9 +770,13 @@ export default function GraceChat() {
       console.warn("Grace message storage skipped:", error);
     }
 
-    setTimeout(() => {
-      bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    const timer = window.setTimeout(() => {
+      const viewport = document.querySelector<HTMLElement>(".grace-message-scroll");
+      if (viewport) {
+        viewport.scrollTop = viewport.scrollHeight;
+      }
     }, 100);
+    return () => window.clearTimeout(timer);
   }, [messages, loading, toolLoading, listening]);
 
   useEffect(() => {
