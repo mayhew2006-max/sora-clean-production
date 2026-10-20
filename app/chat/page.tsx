@@ -2572,7 +2572,7 @@ function isMarketplaceQuery(text: string) {
       });
       try {
         const controller=new AbortController();
-        const timer=setTimeout(()=>controller.abort(),16000);
+        const timer=setTimeout(()=>controller.abort(),32000);
         let res:Response;
         try {res=await fetch("/api/field/discover?lat="+encodeURIComponent(searchLat!)+"&lng="+encodeURIComponent(searchLng!)+"&kind="+kind,{signal:controller.signal});}
         finally {clearTimeout(timer);}
