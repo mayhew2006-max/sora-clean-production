@@ -2582,12 +2582,12 @@ function isMarketplaceQuery(text: string) {
         }
         const data=await res.json() as {places?:Array<{name:string;distanceKm:number;lat:number;lng:number;description:string}>};
         const places=data.places||[];
-        const details=places.slice(0,6).map((p,i)=>(i+1)+". "+p.name+" ("+p.distanceKm.toFixed(1)+" km): "+p.description+". Map: https://www.openstreetmap.org/?mlat="+p.lat+"&mlon="+p.lng+"#map=14/"+p.lat+"/"+p.lng).join("\n");
+        const details=places.slice(0,6).map((p,i)=>(i+1)+". "+p.name+" ("+p.distanceKm.toFixed(1)+" km): "+p.description+". View map: https://www.openstreetmap.org/?mlat="+p.lat+"&mlon="+p.lng+"#map=14/"+p.lat+"/"+p.lng+". Directions: https://www.google.com/maps/dir/?api=1&destination="+p.lat+"%2C"+p.lng).join("\n");
         finish(places.length?"Publicly mapped "+kind+" leads near "+searchName+":\n"+details+"\n\nThese OpenStreetMap community records do NOT verify public access, fish species, stocking, regulations, current conditions, or safe routes. Check local authorities before going.":"I couldn't find publicly mapped "+kind+" destinations near "+searchName+" in this search radius. Try another saved location.");
       } catch (error) {
         const reason=error instanceof Error?error.message:"Unknown failure";
         console.error("Grace Field discovery failed:",reason);
-        finish("Outdoor search failed: "+(reason==="AbortError"?"Request timed out":reason)+". No public access or fish species has been verified.");
+        finish("I couldn\u0027t complete the outdoor search right now. The map data service is unavailable or timed out. No public access or fish species has been verified. Please try again shortly.");
       }
       return;
     }
