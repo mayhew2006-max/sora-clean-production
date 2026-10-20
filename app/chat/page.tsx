@@ -3215,6 +3215,15 @@ function isMarketplaceQuery(text: string) {
     <main className={`h-[100dvh] bg-[#fff7f1] text-[#2f2723] flex flex-col overflow-hidden ${embeddedField ? "grace-field-chat" : ""}`}>
       {embeddedField && <style>{`
         .grace-field-chat{background:#10221b!important;color:#f4ead3!important}
+        /* Embedded Field is a compact iframe: give its messages a real scroll viewport. */
+        .grace-field-chat{position:relative;height:100%!important;min-height:0!important}
+        .grace-field-chat section{min-height:0!important;padding-bottom:0!important;display:flex!important;flex-direction:column!important}
+        .grace-field-chat section>div{min-height:0!important;height:100%!important;display:flex!important;flex-direction:column!important;padding:0!important;overflow:hidden!important}
+        .grace-field-chat section>div>div:has(>.grace-message-scroll){flex:1 1 auto!important;height:auto!important;min-height:0!important;overflow:hidden!important}
+        .grace-field-chat .grace-message-scroll{height:100%!important;min-height:0!important;overflow-y:auto!important;overscroll-behavior:contain!important;scroll-padding-bottom:12px!important}
+        .grace-field-chat .grace-input-bar{position:relative!important;bottom:auto!important;left:auto!important;right:auto!important;flex-shrink:0!important;z-index:40!important}
+        .grace-field-chat .grace-message-scroll>div{flex-shrink:0}
+
         .grace-field-chat section{background:#10221b!important}
         .grace-field-chat .grace-message-scroll{background:#10221b!important;color:#f4ead3!important;padding:12px 12px 18px!important}
         .grace-field-chat .grace-message-scroll .grace-assistant-text{color:#fff4df!important;background:#1c3529!important;border:1px solid #52654b;border-radius:14px;padding:10px 12px!important;line-height:1.5}
