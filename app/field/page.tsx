@@ -56,6 +56,7 @@ export default function GraceField() {
       const data = event.data;
       if (!data || typeof data !== "object") return;
       if (data.type === "grace-field-request-context") sendFieldContext();
+      if (data.type === "grace-field-open-guardian") { setGraceOpen(false); send("grace-field-open-mission"); }
       if (data.type === "grace-field-show-spots") { setGraceOpen(false); send("grace-field-open-waypoint-library"); }
       if (data.type === "grace-field-focus-spot") {
         const lat = Number(data.lat), lng = Number(data.lng);
