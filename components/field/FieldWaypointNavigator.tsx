@@ -472,6 +472,8 @@ export default function FieldWaypointNavigator() {
           </div>
         </div>
 
+        <a href={`https://www.google.com/maps/dir/?api=1&destination=${destination.lat}%2C${destination.lng}&travelmode=driving`} target="_blank" rel="noopener noreferrer" style={{display:"block",marginTop:12,padding:"13px",borderRadius:12,background:"#d4af70",color:"#12271c",fontWeight:900,textAlign:"center",textDecoration:"none"}}>OPEN GOOGLE MAPS · DRIVE THERE ↗</a>
+        <p style={{fontSize:12,color:"#c9cdbf"}}>Road access may end before the saved spot. Use Grace Field for the off-road portion.</p>
         <div style={{
           background: "#1B2C22",
           padding: 14,
