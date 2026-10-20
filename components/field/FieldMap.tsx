@@ -390,6 +390,8 @@ export default function FieldMap({
       const detail = (event as CustomEvent<{
         lat: number;
         lng: number;
+        discovery?: boolean;
+        name?: string;
       }>).detail;
 
       if (!detail) return;
