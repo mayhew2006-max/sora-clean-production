@@ -2576,13 +2576,18 @@ function isMarketplaceQuery(text: string) {
         let res:Response;
         try {res=await fetch("/api/field/discover?lat="+encodeURIComponent(searchLat!)+"&lng="+encodeURIComponent(searchLng!)+"&kind="+kind,{signal:controller.signal});}
         finally {clearTimeout(timer);}
-        if(!res.ok)throw new Error("Discovery unavailable");
+        if(!res.ok){
+          const failure=await res.json().catch(()=>null) as {error?:string;detail?:string}|null;
+          throw new Error("Search service HTTP "+res.status+": "+(failure?.detail||failure?.error||"No details available"));
+        }
         const data=await res.json() as {places?:Array<{name:string;distanceKm:number;lat:number;lng:number;description:string}>};
         const places=data.places||[];
         const details=places.slice(0,6).map((p,i)=>(i+1)+". "+p.name+" ("+p.distanceKm.toFixed(1)+" km): "+p.description+". Map: https://www.openstreetmap.org/?mlat="+p.lat+"&mlon="+p.lng+"#map=14/"+p.lat+"/"+p.lng).join("\n");
         finish(places.length?"Publicly mapped "+kind+" leads near "+searchName+":\n"+details+"\n\nThese OpenStreetMap community records do NOT verify public access, fish species, stocking, regulations, current conditions, or safe routes. Check local authorities before going.":"I couldn't find publicly mapped "+kind+" destinations near "+searchName+" in this search radius. Try another saved location.");
-      } catch {
-        finish("The public outdoor map search isn't responding. I won't invent destinations or species. Try again later.");
+      } catch (error) {
+        const reason=error instanceof Error?error.message:"Unknown failure";
+        console.error("Grace Field discovery failed:",reason);
+        finish("Outdoor search failed: "+(reason==="AbortError"?"Request timed out":reason)+". No public access or fish species has been verified.");
       }
       return;
     }
