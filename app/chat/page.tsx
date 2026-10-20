@@ -734,6 +734,16 @@ export default function GraceChat() {
     userId,
   ]);
 
+  // Restore the newest conversation position after account history loads, including inside Field Talk.
+  useEffect(() => {
+    if (!historyReady) return;
+    const frame = window.requestAnimationFrame(() => {
+      const viewport = document.querySelector(".grace-message-scroll");
+      if (viewport) viewport.scrollTop = viewport.scrollHeight;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [historyReady, conversationId]);
+
   useEffect(() => {
     messagesRef.current = messages;
 
@@ -3601,7 +3611,7 @@ function isMarketplaceQuery(text: string) {
                         {(message.content || "").split(/(\*\*[^*\n]+\*\*)/g).map((part, i) =>
                           part.startsWith("**") && part.endsWith("**")
                             ? <strong key={i}>{part.slice(2, -2)}</strong>
-                            : <span key={i}>{part.split(/(gracefield:\/\/focus\?lat=-?[\d.]+&lng=-?[\d.]+&name=[^\s]+|https?:\/\/[^\s]+)/g).map((chunk,j)=>chunk.startsWith("gracefield://focus?")?<button key={j} type="button" className="underline font-bold text-[#d6b178]" onClick={()=>{const params=new URLSearchParams(chunk.split("?")[1]);const lat=Number(params.get("lat")),lng=Number(params.get("lng"));if(embeddedField&&Number.isFinite(lat)&&Number.isFinite(lng)&&Math.abs(lat)<=90&&Math.abs(lng)<=180)window.parent.postMessage({type:"grace-field-focus-discovery",lat,lng,name:params.get("name")||"Discovered destination"},window.location.origin);}}>Show on Grace Field map</button>:/^https?:\/\//.test(chunk)?<a key={j} href={chunk.includes("google.com/maps/dir") ? chunk.replace("https://www.google.com/maps/dir/?api=1&destination=","https://www.google.com/maps/search/?api=1&query=") : chunk} target="_blank" rel="noopener noreferrer" className="underline break-all text-[#d6b178]">{chunk.includes("google.com/maps/dir")?"Get directions":chunk.includes("openstreetmap.org")?"Show on map":"Open link"}</a>:<span key={j}>{chunk}</span>)}</span>
+                            : <span key={i}>{part.split(/(gracefield:\/\/focus\?lat=-?[\d.]+&lng=-?[\d.]+&name=[^\s]+|https?:\/\/[^\s]+)/g).map((chunk,j)=>chunk.startsWith("gracefield://focus?")?<button key={j} type="button" className="underline font-bold text-[#d6b178]" onClick={()=>{const params=new URLSearchParams(chunk.split("?")[1]);const lat=Number(params.get("lat")),lng=Number(params.get("lng"));if(embeddedField&&Number.isFinite(lat)&&Number.isFinite(lng)&&Math.abs(lat)<=90&&Math.abs(lng)<=180)window.parent.postMessage({type:"grace-field-focus-discovery",lat,lng,name:params.get("name")||"Discovered destination"},window.location.origin);}}>Show on Grace Field map</button>:/^https?:\/\//.test(chunk)?<a key={j} href={chunk} target="_blank" rel="noopener noreferrer" className="underline break-all text-[#d6b178]">{chunk.includes("google.com/maps/dir")?"Get directions":chunk.includes("openstreetmap.org")?"Show on map":"Open link"}</a>:<span key={j}>{chunk}</span>)}</span>
                         )}
                       </div>
                     </>
