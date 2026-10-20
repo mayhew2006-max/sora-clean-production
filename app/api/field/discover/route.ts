@@ -66,7 +66,7 @@ async function queryOsm(lat:number,lng:number,kind:string,radius:number):Promise
 async function queryNominatim(lat:number,lng:number,kind:string):Promise<Place[]>{
  // Independent geocoding fallback: returns mapped destinations, NOT proof of public access.
  const term=kind==="fishing"?"fishing":kind==="hiking"?"hiking trail":"campground";
- const deltaLat=0.5,deltaLng=0.5/Math.max(0.25,Math.cos(lat*RAD));
+ const deltaLat=0.29,deltaLng=0.29/Math.max(0.25,Math.cos(lat*RAD));
  const box=[lng-deltaLng,lat+deltaLat,lng+deltaLng,lat-deltaLat].join(",");
  const params=new URLSearchParams({q:term,format:"jsonv2",limit:"15",viewbox:box,bounded:"1",addressdetails:"0"});
  const controller=new AbortController();
@@ -79,7 +79,7 @@ async function queryNominatim(lat:number,lng:number,kind:string):Promise<Place[]
    const a=Number(p.lat),b=Number(p.lon);
    if(!Number.isFinite(a)||!Number.isFinite(b))return [];
    const d=distance(lat,lng,a,b);
-   if(d>80.5)return [];
+   if(d>32.187)return [];
    return [{name:String(p.display_name||"Mapped outdoor destination").split(",")[0].slice(0,100),description:"OpenStreetMap place search / "+String(p.type||p.category||"destination")+"; access and activity unverified",lat:a,lng:b,distanceKm:d}];
   }).sort((a,b)=>a.distanceKm-b.distanceKm);
  }catch{return [];}finally{clearTimeout(timer);}
@@ -116,8 +116,8 @@ export async function GET(req:NextRequest){
   return NextResponse.json({error:"Invalid coordinates or activity"},{status:400});
  // Independent providers are queried concurrently to avoid serial 20+ second waits.
  const [arc,osm,nominatim]=await Promise.allSettled([
-  queryArcGis(lat,lng,kind!,40234),
-  queryOsm(lat,lng,kind!,16093),
+  queryArcGis(lat,lng,kind!,32187),
+  queryOsm(lat,lng,kind!,32187),
   queryNominatim(lat,lng,kind!)
  ]);
  const sources=[
@@ -134,11 +134,12 @@ export async function GET(req:NextRequest){
   }
  }
  combined.sort((a,b)=>a.distanceKm-b.distanceKm);
+ const nearby=combined.filter(p=>p.distanceKm<=32.187);
  const sourceLabel=sources.filter(p=>p.result.status==="fulfilled"&&p.result.value.length).map(p=>p.label).join("; ");
  return NextResponse.json({
-  kind,places:combined.slice(0,15),searchRadiusMiles:50,
+  kind,places:nearby.slice(0,20),searchRadiusMiles:20,
   source:sourceLabel||"No matching destinations returned by public map services",
   notice:"Mapped features do not verify legal public access, fish species, regulations or trail permissions. Confirm locally before visiting.",
-  ...(combined.length===0?{warning:"No mapped destinations found. Providers may be unavailable; this does not prove none exist."}:{})
+  ...(nearby.length===0?{warning:"No mapped destinations found. Providers may be unavailable; this does not prove none exist."}:{})
  },{headers:{"Cache-Control":"private, max-age=300"}});
 }
