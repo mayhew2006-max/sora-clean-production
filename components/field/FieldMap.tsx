@@ -1231,51 +1231,32 @@ export default function FieldMap({
     };
   }, [authReady, userId]);
 
-  async function useFieldAction() {
-    if (!authReady) {
-      setLocationStatus("Grace is checking your account...");
-      return false;
-    }
-
-    if (!userId) {
-      window.location.href = "/login";
-      return false;
-    }
-
-    if (paid) return true;
-
-    if (fieldLocked) {
-      window.location.href = "/pay";
-      return false;
-    }
-
-    const nextUsed = accountFreeUsed + 1;
-    setAccountFreeUsed(nextUsed);
-
-    const { error } = await supabase
-      .from("grace_user_usage")
-      .upsert({
-        user_id: userId,
-        email: userEmail,
-        free_messages_used: nextUsed,
-        updated_at: new Date().toISOString(),
+  async function useFieldAction(action: "field_save" | "field_track" = "field_save") {
+    if (!authReady) { setLocationStatus("Grace is checking your account..."); return false; }
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) { window.location.href = "/login"; return false; }
+    try {
+      const res = await fetch("/api/usage/consume", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + session.access_token },
+        body: JSON.stringify({ action }),
       });
-
-    if (error) {
-      console.error("Grace Field usage update failed:", error);
-      setAccountFreeUsed(accountFreeUsed);
-      setLocationStatus(
-        "Grace could not update your account. Try again."
-      );
+      if (res.status === 402) { setAccountFreeUsed(FREE_LIMIT); window.location.href = "/pay"; return false; }
+      if (res.status === 401) { window.location.href = "/login"; return false; }
+      if (!res.ok) throw new Error("Usage check failed");
+      const result = await res.json() as { used: number; paid: boolean };
+      setAccountFreeUsed(result.used);
+      setPaid(result.paid);
+      return true;
+    } catch {
+      setLocationStatus("Could not verify your free actions. Please try again.");
       return false;
     }
-
-    return true;
   }
 
   async function startTracking() {
     if (trackingActiveRef.current) return;
-    if (!(await useFieldAction())) return;
+    if (!(await useFieldAction("field_track"))) return;
     const native = graceNativeTrail();
     if (!native && !navigator.geolocation) return;
     let newNativeTrail = false;
