@@ -2520,7 +2520,7 @@ function isMarketplaceQuery(text: string) {
     // Server checks the quota; Guardian Angel always remains available.
 
     // Emergency access must never depend on subscription status.
-    const emergencyRequest = embeddedField && /\\b(help me|call (?:for )?help|call 911|emergency|sos|guardian angel|i(?:'m| am) lost|i(?:'m| am) hurt)\\b/i.test(clean);
+    const emergencyRequest = embeddedField && /\b(help me|call (?:for )?help|call 911|emergency|sos|guardian angel|i(?:'m| am) lost|i(?:'m| am) hurt)\b/i.test(clean);
     if (!emergencyRequest && !(await recordGraceUserMessage())) return;
 
     // Emergency intent opens Guardian Angel; no call or message is claimed sent.
