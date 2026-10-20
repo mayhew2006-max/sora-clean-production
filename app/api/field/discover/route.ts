@@ -13,7 +13,10 @@ function filters(kind:string,near:string){
  if(kind==="fishing")return [
   'nwr["leisure"="fishing"]'+near,
   'nwr["fishing"]'+near,
-  'nwr["waterway"="fish_pass"]'+near,
+  'nwr["waterway"="access_point"]'+near,
+  'nwr["waterway"="river"]["name"]'+near,
+  'nwr["waterway"="stream"]["name"]'+near,
+  'nwr["water"="river"]["name"]'+near,
   'nwr["leisure"="marina"]'+near,
   'nwr["water"="lake"]["name"]'+near,
   'nwr["water"="reservoir"]["name"]'+near
@@ -33,21 +36,22 @@ function filters(kind:string,near:string){
 }
 async function queryOsm(lat:number,lng:number,kind:string,radius:number):Promise<Place[]>{
  const near="(around:"+radius+","+lat+","+lng+")";
- const query="[out:json][timeout:8];("+filters(kind,near).join(";")+";);out center 30;";
- const endpoints=["https://overpass-api.de/api/interpreter","https://overpass.private.coffee/api/interpreter"];
+ const query="[out:json][timeout:12];("+filters(kind,near).join(";")+";);out center 60;";
+ const endpoints=["https://overpass.kumi.systems/api/interpreter","https://overpass.nchc.org.tw/api/interpreter","https://overpass-api.de/api/interpreter","https://overpass.private.coffee/api/interpreter"];
  const failures:string[]=[];
  for(const endpoint of endpoints){
   const controller=new AbortController();
-  const timer=setTimeout(()=>controller.abort(),5500);
+  const timer=setTimeout(()=>controller.abort(),6500);
   try{
-   const res=await fetch(endpoint,{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:new URLSearchParams({data:query}),signal:controller.signal,cache:"no-store"});
+   const url=endpoint+"?data="+encodeURIComponent(query);
+   const res=await fetch(url,{method:"GET",headers:{"Accept":"application/json","User-Agent":"GraceField/1.0 (outdoor map lookup)","Referer":"https://grace-assistant.vercel.app/"},signal:controller.signal,cache:"no-store"});
    if(!res.ok){failures.push(new URL(endpoint).host+": HTTP "+res.status);continue;}
    const data=await res.json() as {elements?:Element[]};
    const places=(data.elements||[]).flatMap((e):Place[]=>{
     const a=e.lat??e.center?.lat,b=e.lon??e.center?.lon;
     if(typeof a!=="number"||typeof b!=="number")return [];
     const t=e.tags||{};
-    return [{name:(t.name||t["name:en"]||"Unnamed mapped location").slice(0,100),description:[t.tourism,t.leisure,t.route,t.highway,t.water,t.fishing,t.operator].filter(Boolean).join(" / ").slice(0,120)||"Community-mapped outdoor feature",lat:a,lng:b,distanceKm:distance(lat,lng,a,b)}];
+    return [{name:(t.name||t["name:en"]||"Unnamed mapped location").slice(0,100),description:[t.tourism,t.leisure,t.route,t.highway,t.water,t.waterway,t.fishing,t.operator].filter(Boolean).join(" / ").slice(0,120)||"Community-mapped outdoor feature",lat:a,lng:b,distanceKm:distance(lat,lng,a,b)}];
    }).filter(p=>p.distanceKm<=radius/1000+0.5);
    return places.sort((a,b)=>a.distanceKm-b.distanceKm).slice(0,12);
   }catch(e){failures.push(new URL(endpoint).host+": "+(e instanceof Error?e.name:"network error"));}
