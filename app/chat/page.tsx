@@ -410,18 +410,7 @@ export default function GraceChat() {
       }
 
       if (!usage) {
-        const { error: createError } = await supabase
-          .from("grace_user_usage")
-          .insert({
-            user_id: user.id,
-            email: user.email || "",
-            free_messages_used: 0,
-          });
-
-        if (createError) {
-          console.error("Grace account creation failed:", createError);
-        }
-
+        // Usage rows are created only by the authenticated server when the first action is consumed.
         setAccountFreeUsed(0);
         setPaid(false);
       } else {
