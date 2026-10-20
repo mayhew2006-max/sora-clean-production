@@ -2320,6 +2320,8 @@ export default function FieldMap({
                             Navigate
                           </button>
 
+                          <a href={`https://www.google.com/maps/dir/?api=1&destination=${spot.lat}%2C${spot.lng}&travelmode=driving`} target="_blank" rel="noopener noreferrer" style={{flex:1,padding:"9px 8px",borderRadius:9,border:"1px solid #d4af70",background:"#d4af70",color:"#12271c",fontWeight:900,textAlign:"center",textDecoration:"none",fontSize:12}}>DRIVE THERE ↗</a>
+
                           <button
                             type="button"
                             onClick={() => {
@@ -2706,6 +2708,7 @@ export default function FieldMap({
                         Navigate
                       </button>
 
+                      <a href={`https://www.google.com/maps/dir/?api=1&destination=${spot.lat}%2C${spot.lng}&travelmode=driving`} target="_blank" rel="noopener noreferrer" style={{display:"inline-block",padding:"10px",borderRadius:8,background:"#d4af70",color:"#12271c",fontWeight:900,textDecoration:"none"}}>Drive There ↗</a>
                       <button onClick={() => {
                         setPending({lat:spot.lat,lng:spot.lng});
                         setName(spot.name);setNotes(spot.notes);
