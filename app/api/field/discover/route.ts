@@ -59,21 +59,49 @@ async function queryOsm(lat:number,lng:number,kind:string,radius:number):Promise
  }
  throw new Error(failures.join("; ")||"Public map providers unavailable");
 }
+type ArcCandidate = {address?:string;location?:{x:number;y:number};attributes?:Record<string,string|number|null>};
+async function queryArcGis(lat:number,lng:number,kind:string,radiusMeters:number):Promise<Place[]>{
+ const categories:Record<string,string>={fishing:"Fishing",hiking:"Hiking Trail",camping:"Campground"};
+ const params=new URLSearchParams({
+  f:"json",category:categories[kind],location:lng+","+lat,
+  distance:String(Math.round(radiusMeters)),outFields:"*",maxLocations:"20"
+ });
+ const controller=new AbortController();
+ const timer=setTimeout(()=>controller.abort(),6500);
+ try{
+  const res=await fetch("https://geocode-api.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates?"+params.toString(),{signal:controller.signal,cache:"no-store"});
+  if(!res.ok)throw new Error("ArcGIS HTTP "+res.status);
+  const data=await res.json() as {error?:{message?:string};candidates?:ArcCandidate[]};
+  if(data.error)throw new Error(data.error.message||"ArcGIS search error");
+  return (data.candidates||[]).flatMap((p):Place[]=>{
+   const x=p.location?.x,y=p.location?.y;
+   if(typeof x!=="number"||typeof y!=="number")return [];
+   const d=distance(lat,lng,y,x);
+   if(d>radiusMeters/1000+0.5)return [];
+   const name=String(p.attributes?.PlaceName||p.address||"Mapped outdoor destination").slice(0,100);
+   return [{name,description:"ArcGIS mapped point of interest; access and activity not independently verified",lat:y,lng:x,distanceKm:d}];
+  }).sort((a,b)=>a.distanceKm-b.distanceKm).slice(0,12);
+ }finally{clearTimeout(timer);}
+}
 export async function GET(req:NextRequest){
  const latParam=req.nextUrl.searchParams.get("lat"),lngParam=req.nextUrl.searchParams.get("lng");
  const lat=Number(latParam),lng=Number(lngParam),kind=req.nextUrl.searchParams.get("kind");
  if(!latParam||!lngParam||!Number.isFinite(lat)||!Number.isFinite(lng)||Math.abs(lat)>90||Math.abs(lng)>180||!["fishing","hiking","camping"].includes(kind||""))
   return NextResponse.json({error:"Invalid coordinates or activity"},{status:400});
- // Expand only after a successful empty result. Provider failures are not evidence of no locations.
- const radii=[16093,40234,80467]; // 10, 25, 50 miles
- try{
-  for(const radius of radii){
-   const places=await queryOsm(lat,lng,kind!,radius);
-   if(places.length)return NextResponse.json({kind,places,searchRadiusMiles:Math.round(radius/1609.344),source:"OpenStreetMap community data; public access, species and regulations not verified"},{headers:{"Cache-Control":"private, max-age=300"}});
-  }
-  return NextResponse.json({kind,places:[],searchRadiusMiles:50,source:"OpenStreetMap community data; no mapped matches in searched area"},{headers:{"Cache-Control":"private, max-age=300"}});
- }catch(e){
-  console.error("Field discovery provider error",e);
-  return NextResponse.json({error:"Public map services unavailable; no conclusion about nearby destinations",detail:e instanceof Error?e.message:"Unknown error"},{status:503});
+ const radii=[16093,40234,80467];
+ const errors:string[]=[];
+ // Independent POI search first. A mapped river is NOT proof of public access.
+ for(const radius of radii){
+  try{
+   const places=await queryArcGis(lat,lng,kind!,radius);
+   if(places.length)return NextResponse.json({kind,places,searchRadiusMiles:Math.round(radius/1609.344),source:"ArcGIS POI data; public access, fish species and regulations not verified"},{headers:{"Cache-Control":"private, max-age=300"}});
+  }catch(e){errors.push("ArcGIS: "+(e instanceof Error?e.message:"unavailable"));break;}
  }
+ // Fallback to community maps, limited to one radius to avoid long waits.
+ try{
+  const places=await queryOsm(lat,lng,kind!,16093);
+  if(places.length)return NextResponse.json({kind,places,searchRadiusMiles:10,source:"OpenStreetMap community data; access, species and regulations not verified"},{headers:{"Cache-Control":"private, max-age=300"}});
+ }catch(e){errors.push("OpenStreetMap: "+(e instanceof Error?e.message:"unavailable"));}
+ if(errors.length===2)return NextResponse.json({error:"Outdoor search providers unavailable. No access or species verified.",detail:errors.join("; ")},{status:503});
+ return NextResponse.json({kind,places:[],searchRadiusMiles:50,source:"No matching mapped destinations; this does not establish whether public access exists"},{headers:{"Cache-Control":"private, max-age=300"}});
 }
