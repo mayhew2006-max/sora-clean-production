@@ -2582,7 +2582,7 @@ function isMarketplaceQuery(text: string) {
         }
         const data=await res.json() as {places?:Array<{name:string;distanceKm:number;lat:number;lng:number;description:string}>};
         const places=data.places||[];
-        const details=places.slice(0,3).map((p,i)=>(i+1)+". "+p.name+" — "+p.distanceKm.toFixed(1)+" km away\nMap: https://www.openstreetmap.org/?mlat="+p.lat+"&mlon="+p.lng+"\nDirections: https://www.google.com/maps/dir/?api=1&destination="+p.lat+"%2C"+p.lng).join("\n\n");
+        const details=places.slice(0,3).map((p,i)=>(i+1)+". "+p.name+" — "+p.distanceKm.toFixed(1)+" km away\nField map: gracefield://focus?lat="+p.lat+"&lng="+p.lng+"\nDirections: https://www.google.com/maps/dir/?api=1&destination="+p.lat+"%2C"+p.lng).join("\n\n");
         finish(places.length?"Publicly mapped "+kind+" leads near "+searchName+":\n"+details+"\n\nMapped places only. Public access, fish species and regulations are not verified.":"I couldn't find publicly mapped "+kind+" destinations near "+searchName+" in this search radius. Try another saved location.");
       } catch (error) {
         const reason=error instanceof Error?error.message:"Unknown failure";
@@ -3604,7 +3604,7 @@ function isMarketplaceQuery(text: string) {
                         {(message.content || "").split(/(\*\*[^*\n]+\*\*)/g).map((part, i) =>
                           part.startsWith("**") && part.endsWith("**")
                             ? <strong key={i}>{part.slice(2, -2)}</strong>
-                            : <span key={i}>{part.split(/(https?:\/\/[^\s]+)/g).map((chunk,j)=>/^https?:\/\//.test(chunk)?<a key={j} href={chunk} target="_blank" rel="noopener noreferrer" className="underline break-all text-[#d6b178]">{chunk.includes("google.com/maps/dir")?"Get directions":chunk.includes("openstreetmap.org")?"Show on map":"Open link"}</a>:<span key={j}>{chunk}</span>)}</span>
+                            : <span key={i}>{part.split(/(gracefield:\/\/focus\?lat=-?[\d.]+&lng=-?[\d.]+|https?:\/\/[^\s]+)/g).map((chunk,j)=>chunk.startsWith("gracefield://focus?")?<button key={j} type="button" className="underline font-bold text-[#d6b178]" onClick={()=>{const params=new URLSearchParams(chunk.split("?")[1]);const lat=Number(params.get("lat")),lng=Number(params.get("lng"));if(embeddedField&&Number.isFinite(lat)&&Number.isFinite(lng)&&Math.abs(lat)<=90&&Math.abs(lng)<=180)window.parent.postMessage({type:"grace-field-focus-discovery",lat,lng},window.location.origin);}}>Show on Grace Field map</button>:/^https?:\/\//.test(chunk)?<a key={j} href={chunk} target="_blank" rel="noopener noreferrer" className="underline break-all text-[#d6b178]">{chunk.includes("google.com/maps/dir")?"Get directions":chunk.includes("openstreetmap.org")?"Show on map":"Open link"}</a>:<span key={j}>{chunk}</span>)}</span>
                         )}
                       </div>
                     </>
