@@ -734,6 +734,31 @@ export default function GraceChat() {
     userId,
   ]);
 
+  // A hidden Field Talk iframe has zero layout height. Scroll after it is
+  // reopened, not only after history initially loads.
+  useEffect(() => {
+    if (!embeddedField) return;
+    let frame = 0;
+    let retry = 0;
+    const onOpen = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin || event.source !== window.parent || event.data?.type !== "grace-field-chat-opened") return;
+      const scroll = () => {
+        const viewport = document.querySelector<HTMLElement>(".grace-message-scroll");
+        if (!viewport || viewport.clientHeight === 0) {
+          if (retry++ < 15) frame = window.requestAnimationFrame(scroll);
+          return;
+        }
+        viewport.scrollTop = viewport.scrollHeight;
+        frame = window.requestAnimationFrame(() => { viewport.scrollTop = viewport.scrollHeight; });
+      };
+      retry = 0;
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(scroll);
+    };
+    window.addEventListener("message", onOpen);
+    return () => {window.removeEventListener("message", onOpen);window.cancelAnimationFrame(frame);};
+  }, [embeddedField]);
+
   // Embedded Field Talk is mounted in an iframe. Wait until the history
   // has painted and its scroll viewport has a measurable height.
   useEffect(() => {
