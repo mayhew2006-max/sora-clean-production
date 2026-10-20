@@ -62,7 +62,7 @@ export default function GraceField() {
         const lat = Number(data.lat), lng = Number(data.lng);
         if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat)>90 || Math.abs(lng)>180) return;
         setGraceOpen(false);
-        window.requestAnimationFrame(() => window.dispatchEvent(new CustomEvent("grace-field-focus-waypoint",{detail:{lat,lng}})));
+        window.requestAnimationFrame(() => window.dispatchEvent(new CustomEvent("grace-field-focus-waypoint",{detail:{lat,lng,discovery:true,name:typeof data.name==="string"?data.name:"Discovered destination"}})));
       }
       if (data.type === "grace-field-focus-spot") {
         const lat = Number(data.lat), lng = Number(data.lng);
