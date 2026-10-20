@@ -58,6 +58,12 @@ export default function GraceField() {
       if (data.type === "grace-field-request-context") sendFieldContext();
       if (data.type === "grace-field-open-guardian") { setGraceOpen(false); send("grace-field-open-mission"); }
       if (data.type === "grace-field-show-spots") { setGraceOpen(false); send("grace-field-open-waypoint-library"); }
+      if (data.type === "grace-field-navigate-discovery") {
+        const lat = Number(data.lat), lng = Number(data.lng);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat)>90 || Math.abs(lng)>180) return;
+        setGraceOpen(false);
+        window.requestAnimationFrame(() => window.dispatchEvent(new CustomEvent("grace-field-navigate-discovery",{detail:{lat,lng}})));
+      }
       if (data.type === "grace-field-focus-discovery") {
         const lat = Number(data.lat), lng = Number(data.lng);
         if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat)>90 || Math.abs(lng)>180) return;
