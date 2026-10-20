@@ -904,24 +904,25 @@ export default function GraceChat() {
   const freeLeft = Math.max(FREE_LIMIT - accountFreeUsed, 0);
   const locked = authReady && !paid && freeLeft <= 0;
 
-  async function recordGraceUserMessage() {
-    if (!userId || paid) return;
-
-    const nextUsed = accountFreeUsed + 1;
-    setAccountFreeUsed(nextUsed);
-
-    const { error } = await supabase
-      .from("grace_user_usage")
-      .upsert({
-        user_id: userId,
-        email: userEmail,
-        free_messages_used: nextUsed,
-        updated_at: new Date().toISOString(),
+  async function recordGraceUserMessage(): Promise<boolean> {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) { window.location.href = "/login"; return false; }
+    try {
+      const res = await fetch("/api/usage/consume", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + session.access_token },
+        body: JSON.stringify({ action: "chat" }),
       });
-
-    if (error) {
-      console.error("Grace usage update failed:", error);
-      setAccountFreeUsed(accountFreeUsed);
+      if (res.status === 402) { setAccountFreeUsed(FREE_LIMIT); trackEvent("paywall_hit"); window.location.href = "/pay"; return false; }
+      if (res.status === 401) { window.location.href = "/login"; return false; }
+      if (!res.ok) throw new Error("Usage check failed");
+      const result = await res.json() as { used: number; paid: boolean };
+      setAccountFreeUsed(result.used);
+      setPaid(result.paid);
+      return true;
+    } catch {
+      setMessages(prev => [...prev, { role: "assistant", content: "Grace couldn't verify your account allowance. Please try again." }]);
+      return false;
     }
   }
 
@@ -2516,15 +2517,11 @@ function isMarketplaceQuery(text: string) {
     setComposerHeight(48);
     if (textareaRef.current) textareaRef.current.style.height = "48px";
 
-    if (locked) {
-      trackEvent("paywall_hit");
-      window.location.href = "/pay";
-      return;
-    }
+    // Server checks the quota; Guardian Angel always remains available.
 
-    // Do not hold the chat UI while Supabase records usage. Server-side
-    // enforcement still needs its separate security audit.
-    void recordGraceUserMessage();
+    // Emergency access must never depend on subscription status.
+    const emergencyRequest = embeddedField && /\\b(help me|call (?:for )?help|call 911|emergency|sos|guardian angel|i(?:'m| am) lost|i(?:'m| am) hurt)\\b/i.test(clean);
+    if (!emergencyRequest && !(await recordGraceUserMessage())) return;
 
     // Emergency intent opens Guardian Angel; no call or message is claimed sent.
     if (embeddedField && /\b(help me|call (?:for )?help|call 911|emergency|sos|guardian angel|i(?:'m| am) lost|i(?:'m| am) hurt)\b/i.test(clean)) {
