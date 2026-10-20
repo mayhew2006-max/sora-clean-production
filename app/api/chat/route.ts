@@ -1,3 +1,4 @@
+import { chargeGraceApiRequest } from "@/lib/grace-usage-guard";
 import { buildFieldIntelligence } from "@/lib/grace-field-brain";
 import {
   GRACE_BAD_BITCH_PERSONALITY,
@@ -5,6 +6,8 @@ import {
 } from "@/lib/grace-personality";
 
 export async function POST(req: Request) {
+  const quotaFailure = await chargeGraceApiRequest(req);
+  if (quotaFailure) return quotaFailure;
   try {
     const {
       messages,
