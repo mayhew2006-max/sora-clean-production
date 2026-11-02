@@ -389,6 +389,53 @@ export default function FieldMap({
     }catch(e){setTerrainError(e instanceof Error?e.message:"Terrain unavailable");}
     finally{setTerrainBusy(false);}
   }
+
+  const [waterInfo,setWaterInfo]=useState<{spot:string;stations:{name:string;distanceKm:number;flow:string;level:string;time:string}[]}|null>(null);
+  const [waterBusy,setWaterBusy]=useState(false);
+  const [waterError,setWaterError]=useState("");
+  async function inspectNearbyWater(spot:FieldSpot){
+    if(!(await useFieldAction()))return;
+    setScentSpot(null);setSpotIntel(null);setTerrainInfo(null);setJournalSpot(null);setWaterInfo(null);setWaterError("");setWaterBusy(true);
+    try {
+      // Public USGS stream gauge observations, not a fishing recommendation.
+      const radius=0.27;const longitudeRadius=radius/Math.max(.3,Math.cos(spot.lat*Math.PI/180));
+      const bbox=[spot.lng-longitudeRadius,spot.lat-radius,spot.lng+longitudeRadius,spot.lat+radius].map(x=>x.toFixed(5)).join(",");
+      const url="https://waterservices.usgs.gov/nwis/iv/?"+new URLSearchParams({format:"json",bBox:bbox,parameterCd:"00060,00065",siteStatus:"all"});
+      const response=await fetch(url);
+      if(!response.ok)throw new Error("USGS gauge service unavailable");
+      const data=await response.json();
+      const bySite=new Map<string,{name:string;distanceKm:number;flow:string;level:string;time:string}>();
+      for(const series of data?.value?.timeSeries||[]){
+        const site=series?.sourceInfo;const id=String(site?.siteCode?.[0]?.value||"");
+        const lat=Number(site?.geoLocation?.geogLocation?.latitude),lng=Number(site?.geoLocation?.geogLocation?.longitude);
+        if(!id||!Number.isFinite(lat)||!Number.isFinite(lng))continue;
+        const distanceKm=Math.round(Math.hypot((lat-spot.lat)*111,(lng-spot.lng)*111*Math.cos(spot.lat*Math.PI/180))*10)/10;
+        const existing=bySite.get(id)||{name:String(site?.siteName||id),distanceKm,flow:"Unavailable",level:"Unavailable",time:""};
+        const param=String(series?.variable?.variableCode?.[0]?.value||"");
+        const values=series?.values?.[0]?.value||[];
+        const latest=values[values.length-1];
+        if(latest && Number.isFinite(Number(latest.value))&&Number(latest.value)>=0){
+          if(param==="00060")existing.flow=String(latest.value)+" ft³/s";
+          if(param==="00065")existing.level=String(latest.value)+" ft";
+          existing.time=String(latest.dateTime||existing.time);
+        }
+        bySite.set(id,existing);
+      }
+      setWaterInfo({spot:spot.name,stations:[...bySite.values()].sort((a,b)=>a.distanceKm-b.distanceKm).slice(0,5)});
+    }catch(e){setWaterError(e instanceof Error?e.message:"Gauge information unavailable");}
+    finally{setWaterBusy(false);}
+  }
+  const [shareSpot,setShareSpot]=useState<FieldSpot|null>(null);
+  async function shareSingleSpot(spot:FieldSpot){
+    // Never automatically send coordinates; user must explicitly confirm.
+    const text="Grace Field location: "+spot.name+"\nhttps://www.google.com/maps?q="+encodeURIComponent(spot.lat.toFixed(6)+","+spot.lng.toFixed(6));
+    try {
+      if(typeof navigator!=="undefined"&&navigator.share){await navigator.share({title:spot.name,text});}
+      else if(typeof navigator!=="undefined"&&navigator.clipboard){await navigator.clipboard.writeText(text);setLocationStatus("Only this location was copied. Paste it where you want to share.");}
+      else setLocationStatus("Sharing is unavailable on this device.");
+      setShareSpot(null);
+    }catch(e){if((e as Error)?.name!=="AbortError")setLocationStatus("Could not share location.");}
+  }
   const [name, setName] = useState("");
   const [notes, setNotes] = useState("");
   const [editingSpotId, setEditingSpotId] = useState<string | null>(null);
@@ -2639,6 +2686,14 @@ export default function FieldMap({
         <small style={{display:"block",opacity:.75,margin:"8px 0"}}>Notes are private to this device until cloud sync is added. Saving an entry uses one free action.</small>
         {journalEntries.map((entry,i)=><div key={entry.date+"-"+i} style={{padding:"9px 0",borderTop:"1px solid #44574b",whiteSpace:"pre-wrap",fontSize:13}}><small style={{color:"#d4ba83"}}>{new Date(entry.date).toLocaleString()}</small><div>{entry.text}</div></div>)}
       </section>}
+      {(waterBusy||waterError||waterInfo)&&<section role="dialog" aria-label="Nearby water gauges" style={{position:"absolute",zIndex:1904,left:12,right:12,top:"calc(env(safe-area-inset-top,0px) + 16px)",maxWidth:330,maxHeight:"65%",overflowY:"auto",margin:"auto",background:"#10221b",color:"#f5e6ca",border:"1px solid #d3b16f",borderRadius:15,padding:14}}>
+        <div style={{display:"flex",justifyContent:"space-between"}}><strong>🌊 Nearby USGS Gauges</strong><button type="button" onClick={()=>{setWaterInfo(null);setWaterError("");setWaterBusy(false);}} style={{color:"#f5e6ca",background:"transparent",border:0,fontSize:22}}>×</button></div>
+        {waterBusy?<p>Checking public stream gauges…</p>:waterError?<p>{waterError}</p>:waterInfo?<div style={{fontSize:14}}><p>Near {waterInfo.spot}</p>{waterInfo.stations.length===0?<p>No reporting gauges found within roughly 30 km.</p>:waterInfo.stations.map((station,i)=><div key={i} style={{borderTop:"1px solid #526052",padding:"9px 0"}}><strong>{station.name}</strong><div>{station.distanceKm} km away · Flow: {station.flow} · Gauge height: {station.level}</div><small>{station.time?new Date(station.time).toLocaleString():"Latest observation unavailable"}</small></div>)}<small style={{opacity:.8}}>Gauge measurements may be delayed and do not establish water safety or fishing quality.</small></div>:null}
+      </section>}
+      {shareSpot&&<section role="dialog" aria-label="Confirm sharing one location" style={{position:"absolute",zIndex:1905,left:12,right:12,top:"calc(env(safe-area-inset-top,0px) + 16px)",maxWidth:330,margin:"auto",background:"#10221b",color:"#f5e6ca",border:"1px solid #d3b16f",borderRadius:15,padding:14}}>
+        <strong>🤝 Share one location?</strong><p style={{fontSize:14}}>This shares the exact coordinates of <strong>{shareSpot.name}</strong> with whoever you choose. Your other saved spots, notes and journal stay private. Only share hunting spots with people you trust.</p>
+        <div style={{display:"flex",gap:8}}><button type="button" onClick={()=>setShareSpot(null)} style={{flex:1,padding:10,background:"#253b32",color:"#fff"}}>Cancel</button><button type="button" onClick={()=>void shareSingleSpot(shareSpot)} style={{flex:1,padding:10,background:"#bca06b",color:"#10221b"}}>Share coordinates</button></div>
+      </section>}
         <MapContainer
           center={center}
           zoom={position ? 15 : 7}
@@ -2760,6 +2815,8 @@ export default function FieldMap({
                     <button type="button" onClick={e=>{e.stopPropagation();(e.currentTarget.closest(".leaflet-popup") as HTMLElement | null)?.querySelector<HTMLElement>(".leaflet-popup-close-button")?.click();void analyzeSpotConditions(spot);}} style={{width:"100%",background:"#233d33",border:"1px solid #d6b477",padding:9,borderRadius:8,marginBottom:7}}>☀️ SUN, ELEVATION & CONDITIONS</button>
                     <button type="button" onClick={e=>{e.stopPropagation();(e.currentTarget.closest(".leaflet-popup") as HTMLElement|null)?.querySelector<HTMLElement>(".leaflet-popup-close-button")?.click();void analyzeTerrain(spot);}} style={{width:"100%",background:"#233d33",border:"1px solid #d6b477",padding:9,borderRadius:8,marginBottom:7}}>⛰️ TERRAIN SCAN</button>
                     <button type="button" onClick={e=>{e.stopPropagation();(e.currentTarget.closest(".leaflet-popup") as HTMLElement|null)?.querySelector<HTMLElement>(".leaflet-popup-close-button")?.click();openJournal(spot);}} style={{width:"100%",background:"#233d33",border:"1px solid #d6b477",padding:9,borderRadius:8,marginBottom:7}}>📓 OUTDOOR JOURNAL</button>
+                    <button type="button" onClick={e=>{e.stopPropagation();(e.currentTarget.closest(".leaflet-popup") as HTMLElement|null)?.querySelector<HTMLElement>(".leaflet-popup-close-button")?.click();void inspectNearbyWater(spot);}} style={{width:"100%",background:"#233d33",border:"1px solid #d6b477",padding:9,borderRadius:8,marginBottom:7}}>🌊 NEARBY WATER GAUGES</button>
+                    <button type="button" onClick={e=>{e.stopPropagation();(e.currentTarget.closest(".leaflet-popup") as HTMLElement|null)?.querySelector<HTMLElement>(".leaflet-popup-close-button")?.click();setShareSpot(spot);}} style={{width:"100%",background:"#233d33",border:"1px solid #d6b477",padding:9,borderRadius:8,marginBottom:7}}>🤝 SHARE THIS SPOT ONLY</button>
                     {spot.notes && <p style={{whiteSpace:"pre-wrap"}}>{spot.notes}</p>}
 
                     <small style={{display:"block",marginTop:6,color:"#c6bea8"}}>
