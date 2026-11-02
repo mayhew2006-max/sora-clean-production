@@ -2558,6 +2558,27 @@ function isMarketplaceQuery(text: string) {
 
     // One conversational planning path for saved hunting, fishing, camping and other markers.
     // Do not double-charge: this server endpoint owns quota validation.
+    // Exploring a searched location is different from forecasting a saved activity.
+    // Verify visitor rules with source-backed research rather than general AI memory.
+    if(embeddedField && temporaryFieldPlace?.activity==="explore" && !emergencyRequest &&
+      /\b(visit|visiting|about|know|things to do|activities|campground|reservations|rules|allowed|access|open|hours|fee|fees|swimming|camping|fishing)\b/i.test(clean)){
+      const history=[...messagesRef.current,{role:"user" as const,content:clean}];
+      setInput("");
+      setMessages([...history,{role:"assistant",content:"Checking available visitor information…"}]);
+      try{
+        const response=await fetch("/api/field-place-info",{
+          method:"POST",headers:{"Content-Type":"application/json",...(await graceApiHeaders())},
+          body:JSON.stringify({question:clean,place:temporaryFieldPlace})
+        });
+        const data=await response.json();
+        const sourceText=Array.isArray(data.sources)?data.sources.filter((s:any)=>typeof s.url==="string"&&/^https?:\/\//.test(s.url)).slice(0,4).map((s:any)=>"- "+String(s.title||"Source").slice(0,80)+": "+s.url).join("\n"):"";
+        const reply=String(data.reply||data.error||"Couldn't check visitor information right now.")+(sourceText?"\n\nSources to check:\n"+sourceText:"");
+        setMessages([...history,{role:"assistant",content:reply}]);
+        void speak(String(data.reply||reply)).catch(()=>{});
+      }catch{setMessages([...history,{role:"assistant",content:"I couldn't verify visitor information right now. Check the destination's official land manager."}]);}
+      return;
+    }
+
     const fieldActivity = /\b(hunt|hunting|deer|stand|blind|fish|fishing|trout|bass|camp|camping|campsite|hike|hiking|paddle|paddling|kayak|canoe)\b/i.test(clean);
     const planningIntent = /\b(best|which|where should|where to|should i|recommend|good idea|worth|conditions|forecast|weather|wind|tomorrow|friday|saturday|sunday|monday|tuesday|wednesday|thursday|tonight|weekend|morning|evening)\b/i.test(clean);
     const fieldFollowUp = Boolean(fieldPlanContext) && /^(?:what about|how about|and (?:what about|on|for)|would|is|okay|ok|alright|so)\b/i.test(clean) && /\b(sunday|monday|tuesday|wednesday|thursday|friday|saturday|tomorrow|morning|evening|afternoon|night|weekend|there|that|it)\b/i.test(clean);
