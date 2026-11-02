@@ -136,7 +136,7 @@ export default function GraceChat() {
   const [input, setInput] = useState("");
   const [embeddedField, setEmbeddedField] = useState(false);
   const [fieldSpotOffer, setFieldSpotOffer] = useState<{id:string;name:string;lat:number;lng:number}|null>(null);
-  const [fieldSpots, setFieldSpots] = useState<Array<{id:string;name:string;type:string;lat:number;lng:number}>>([]);
+  const [fieldSpots, setFieldSpots] = useState<Array<{id:string;name:string;type:string;lat:number;lng:number;mode?:string;notes?:string;observations?:string[];approach?:string}>>([]);
   useEffect(() => {
     const embedded = window.self !== window.top && new URLSearchParams(window.location.search).get("field") === "1";
     setEmbeddedField(embedded);
@@ -2523,13 +2523,40 @@ function isMarketplaceQuery(text: string) {
     // Local Field Talk actions consume here; paid APIs consume atomically on the server.
     // Discovery is charged by its own endpoint, not twice.
     const localFieldRequest = embeddedField && /\b(weather|forecast|wind|temperature|rain|storm|conditions|which stand|best stand|camera|trail cam|saved spots?)\b/i.test(clean);
-    if (!emergencyRequest && localFieldRequest && !(await recordGraceUserMessage())) return;
+    if (!emergencyRequest && localFieldRequest && !(/\b(hunt|hunting|deer|stand|blind|fish|fishing|trout|bass|camp|camping|campsite|hike|hiking|paddle|paddling|kayak|canoe)\b/i.test(clean) && /\b(best|which|where should|where to|should i|recommend|good idea|worth|conditions|forecast|weather|wind|tomorrow|friday|saturday|sunday|monday|tuesday|wednesday|thursday|tonight|weekend|morning|evening)\b/i.test(clean)) && !(await recordGraceUserMessage())) return;
 
     // Emergency intent opens Guardian Angel; no call or message is claimed sent.
     if (embeddedField && /\b(help me|call (?:for )?help|call 911|emergency|sos|guardian angel|i(?:'m| am) lost|i(?:'m| am) hurt)\b/i.test(clean)) {
       setMessages([...messagesRef.current,{role:"user",content:clean},{role:"assistant",content:"Opening Guardian Angel emergency options. For immediate danger, use CALL 911. You can also prepare an SOS for your trusted contact. No alert has been sent automatically."}]);
       setInput("");
       window.parent.postMessage({type:"grace-field-open-guardian"},window.location.origin);
+      return;
+    }
+
+    // One conversational planning path for saved hunting, fishing, camping and other markers.
+    // Do not double-charge: this server endpoint owns quota validation.
+    const fieldActivity = /\b(hunt|hunting|deer|stand|blind|fish|fishing|trout|bass|camp|camping|campsite|hike|hiking|paddle|paddling|kayak|canoe)\b/i.test(clean);
+    const planningIntent = /\b(best|which|where should|where to|should i|recommend|good idea|worth|conditions|forecast|weather|wind|tomorrow|friday|saturday|sunday|monday|tuesday|wednesday|thursday|tonight|weekend|morning|evening)\b/i.test(clean);
+    if(embeddedField && fieldActivity && planningIntent && !emergencyRequest){
+      const history=[...messagesRef.current,{role:"user" as const,content:clean}];
+      setInput("");
+      setMessages([...history,{role:"assistant",content:"Checking your saved outdoor spots and forecast…"}]);
+      try{
+        window.parent.postMessage({type:"grace-field-request-context"},window.location.origin);
+        const now=new Date();
+        const localDate=[now.getFullYear(),String(now.getMonth()+1).padStart(2,"0"),String(now.getDate()).padStart(2,"0")].join("-");
+        const result=await fetch("/api/field-advice",{
+          method:"POST",
+          headers:{"Content-Type":"application/json",...(await graceApiHeaders())},
+          body:JSON.stringify({question:clean,localDate,spots:fieldSpots,history:messagesRef.current.slice(-6)})
+        });
+        const data=await result.json();
+        const reply=String(data.reply||data.error||"Couldn't verify that forecast right now.");
+        setMessages([...history,{role:"assistant",content:reply}]);
+        void speak(reply).catch(()=>{});
+      }catch{
+        setMessages([...history,{role:"assistant",content:"Couldn't check those saved spots right now. Try again when the connection returns."}]);
+      }
       return;
     }
 
