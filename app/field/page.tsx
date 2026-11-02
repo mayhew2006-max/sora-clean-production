@@ -40,6 +40,7 @@ export default function GraceField() {
   const [tracking, setTracking] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [graceOpen, setGraceOpen] = useState(false);
+  const [graceExpanded, setGraceExpanded] = useState(false);
   const graceFrameRef = useRef<HTMLIFrameElement>(null);
   const sendFieldContext = () => {
     try {
@@ -156,6 +157,7 @@ export default function GraceField() {
       .gf-grace-launch img{width:36px;height:36px;border-radius:50%;object-fit:cover;border:1px solid #f3a683}
       .gf-grace-sheet{position:absolute;z-index:1800;top:auto;right:9px;bottom:calc(env(safe-area-inset-bottom,0px) + 90px);left:9px;height:min(42dvh,390px);max-width:480px;margin-left:auto;border:1px solid #b99a62;border-radius:18px;overflow:hidden;background:#10221b;box-shadow:0 15px 55px #000e;display:flex;flex-direction:column}
       .gf-grace-sheet-head{background:#10221b;color:#fff0df;display:flex;align-items:center;justify-content:space-between;padding:9px 13px;font-weight:800}
+      .gf-grace-sheet.gf-grace-expanded{top:calc(env(safe-area-inset-top,0px) + 78px);bottom:calc(env(safe-area-inset-bottom,0px) + 8px);height:auto;max-width:none;left:9px;right:9px}
       .gf-grace-sheet iframe{border:0;width:100%;flex:1;min-height:0;background:#10221b}
       .gf-panel{background:linear-gradient(145deg,#081511f6,#11221bee);border:1px solid #ad9060;box-shadow:0 8px 22px #000a}
       .gf-header{position:absolute;z-index:1200;top:calc(env(safe-area-inset-top,0px) + 9px);left:9px;right:9px;height:63px;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 9px;border-radius:15px;pointer-events:auto}
@@ -206,8 +208,8 @@ export default function GraceField() {
       <button className="gf-icon-button" aria-label="Locate me using fresh GPS" onClick={()=>send("grace-field-v2-locate")}><Icon name="locate"/></button>
     </div>
     {!graceOpen && !mapOverlayOpen && <button type="button" className="gf-grace-launch" onClick={()=>{setMenuOpen(false);setGraceOpen(true);graceFrameRef.current?.contentWindow?.postMessage({type:"grace-field-chat-opened"},window.location.origin);}} aria-label="Talk with Grace while keeping the map open"><img src="/grace-avatar.png" alt=""/><span>Talk to Grace</span></button>}
-    <section className="gf-grace-sheet" aria-label="Grace companion chat" style={{display:graceOpen?"":"none"}}>
-      <div className="gf-grace-sheet-head"><span>Grace · Your companion</span><button type="button" onClick={()=>setGraceOpen(false)} aria-label="Close Grace chat and return to map" style={{color:"white",background:"transparent",border:0,padding:"7px 10px"}}>✕ Back to map</button></div>
+    <section className={`gf-grace-sheet${graceExpanded?" gf-grace-expanded":""}`} aria-label="Grace companion chat" style={{display:graceOpen?"":"none"}}>
+      <div className="gf-grace-sheet-head"><span>Grace · Your companion</span><button type="button" onClick={()=>setGraceExpanded(v=>!v)} aria-label={graceExpanded?"Shrink chat":"Expand chat"} style={{color:"white",background:"transparent",border:0,padding:"7px 10px"}}>{graceExpanded?"Shrink":"Expand"}</button><button type="button" onClick={()=>setGraceOpen(false)} aria-label="Close Grace chat and return to map" style={{color:"white",background:"transparent",border:0,padding:"7px 10px"}}>✕ Back to map</button></div>
       <iframe ref={graceFrameRef} title="Grace conversation" src="/chat?field=1" allow="microphone; camera" onLoad={sendFieldContext} />
     </section>
     <nav className="gf-bottom" aria-label="Main field actions">
@@ -224,7 +226,7 @@ export default function GraceField() {
         <button className="gf-menu-choice" onClick={()=>doMenuAction("grace-field-v2-locate")}><Icon name="locate"/> MY LOCATION</button>
         <button className="gf-menu-choice" onClick={()=>doMenuAction("grace-field-open-tools")}><Icon name="weather"/> OUTDOOR TOOLS</button>
         <button className="gf-menu-choice" onClick={()=>doMenuAction("grace-field-open-mission")}><Icon name="shield"/> GUARDIAN ANGEL</button>
-        <button className="gf-menu-choice" style={{gridColumn:"1 / -1"}} onClick={()=>{if(window.history.length>1)window.history.back();else window.location.assign("/");}}><Icon name="back"/> BACK TO GRACE</button>
+        <button className="gf-menu-choice" style={{gridColumn:"1 / -1"}} onClick={()=>{setMenuOpen(false);setGraceOpen(true);setGraceExpanded(true);}}><Icon name="back"/> FULL GRACE CHAT</button>
       </div>
       <div className="gf-footer-note">{gps.status} · GPS and compass accuracy depend on your device and conditions.</div>
     </div>}
