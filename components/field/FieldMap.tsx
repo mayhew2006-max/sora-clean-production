@@ -2929,6 +2929,22 @@ export default function FieldMap({
             <button type="button" aria-label="Close save location" onClick={()=>{setPending(null);setEditingSpotId(null);}} style={{background:"#1a2b21",border:"1px solid #806f51",color:"#fff",borderRadius:20,padding:"5px 12px"}}>✕</button>
           </div>
           <div style={{color:"#b4c6b4",fontSize:12,marginTop:6}}>Choose a location type, then give it a name. Your spot stays on your map.</div>
+          {!editingSpotId && <details style={{border:"1px solid #8c7652",borderRadius:10,padding:9,marginTop:10}}>
+            <summary style={{fontWeight:800,color:"#e9c98b",cursor:"pointer"}}>🔎 Analyze Here — no need to save</summary>
+            <p style={{fontSize:12,color:"#c7d1c1"}}>Check this map point without creating a waypoint. Each analysis uses one action.</p>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:6}}>
+              {(["Wind & Scent","Sun & Weather","Terrain Scan","Water Gauges"] as const).map((item,i)=><button key={item} type="button" onClick={()=>{
+                if(!pending)return;
+                const temporary:FieldSpot={id:"temporary-analysis",lat:pending.lat,lng:pending.lng,mode,type:"custom",name:"Map Point",notes:"",createdAt:new Date().toISOString()};
+                setPending(null);
+                if(i===0)void analyzeSpotWind(temporary);
+                if(i===1)void analyzeSpotConditions(temporary);
+                if(i===2)void analyzeTerrain(temporary);
+                if(i===3)void inspectNearbyWater(temporary);
+              }} style={{padding:9,borderRadius:8,fontSize:12,background:"#274034",color:"#f5e6ca",border:"1px solid #b89a69"}}>{item}</button>)}
+            </div>
+          </details>}
+
           <div style={{display:"flex",gap:7,overflowX:"auto",padding:"10px 0 6px"}}>
             {(["Hunting","Fishing","Camping & Base","Other"] as const).map(category=><button key={category} type="button" onClick={()=>{const first=markerOptions.find(m=>m.category===category);if(first)setSelectedType(first.type);}} style={{background:markerOptions.find(m=>m.type===selectedType)?.category===category?"#405b3e":"#14251b",color:"#f8e8cb",border:"1px solid #917a50",borderRadius:9,padding:"9px 12px",fontSize:12,fontWeight:700,whiteSpace:"nowrap"}}>{category}</button>)}
           </div>
