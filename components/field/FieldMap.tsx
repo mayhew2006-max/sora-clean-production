@@ -2700,18 +2700,23 @@ export default function FieldMap({
         <MapContainer
           center={center}
           zoom={position ? 15 : 7}
+          maxZoom={21}
+          zoomSnap={0.5}
+          zoomDelta={0.5}
           style={{ height: "100%", width: "100%" }}
         >
           <TileLayer
             key={mapLayer}
             attribution={activeLayer.attribution}
             url={activeLayer.url}
-            maxZoom={activeLayer.maxZoom}
+            maxNativeZoom={activeLayer.maxZoom}
+            maxZoom={21}
           />
           {mapLayer === "hybrid" && <TileLayer
             attribution="Labels &copy; Esri"
             url="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"
-            maxZoom={19}
+            maxNativeZoom={19}
+            maxZoom={21}
           />}
 
           <MapController
