@@ -187,9 +187,10 @@ function MapController({
   useEffect(() => {
     if (!command) return;
 
+    // Search results need to zoom OUT for cities or distant regions too.
     map.flyTo(
       [command.lat, command.lng],
-      Math.max(map.getZoom(), command.zoom)
+      command.zoom
     );
 
     onComplete();
