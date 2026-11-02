@@ -56,7 +56,7 @@ export default function GraceField() {
           if(Array.isArray(journal)) observations = journal.filter((entry:any)=>typeof entry?.text==="string").slice(0,4).map((entry:any)=>String(entry.text).slice(0,180));
           approach = String(localStorage.getItem("grace-field-stand-approach-v1-"+id) || "");
         }catch{}
-        return {id,name:p.name.slice(0,120),type:String(p.type||""),mode:String(p.mode||""),lat:Number(p.lat),lng:Number(p.lng),notes:String(p.notes||"").slice(0,350),observations,approach};
+        return {id,name:p.name.slice(0,120),type:String(p.type||""),mode:String(p.mode||""),lat:Number(p.lat),lng:Number(p.lng),notes:String(p.notes||"").slice(0,350),observations,approach,excludeFromAdvice:(localStorage.getItem("grace-field-advice-exclude-v1-"+id) ?? (/^(home|house|my home)$/i.test(String(p.name||"").trim())?"true":"false"))==="true"};
       }) : [];
       graceFrameRef.current?.contentWindow?.postMessage({type:"grace-field-context",spots},window.location.origin);
     } catch { graceFrameRef.current?.contentWindow?.postMessage({type:"grace-field-context",spots:[]},window.location.origin); }
