@@ -301,9 +301,10 @@ export default function FieldMap({
   const [scentHour, setScentHour] = useState(0);
   const [scentError, setScentError] = useState("");
   const [scentLoading, setScentLoading] = useState(false);
+  const [scentCollapsed, setScentCollapsed] = useState(false);
   async function analyzeSpotWind(spot: FieldSpot) {
     if (!(await useFieldAction())) return;
-    setScentSpot(spot); setScentForecast([]); setScentHour(0); setScentError(""); setScentLoading(true);
+    setScentSpot(spot); setScentCollapsed(false); setScentForecast([]); setScentHour(0); setScentError(""); setScentLoading(true);
     try {
       const q = new URLSearchParams({latitude:String(spot.lat),longitude:String(spot.lng),hourly:"wind_direction_10m,wind_speed_10m",wind_speed_unit:"mph",forecast_days:"2",timezone:"auto"});
       const res = await fetch("https://api.open-meteo.com/v1/forecast?"+q);
@@ -2555,13 +2556,14 @@ export default function FieldMap({
         }}
       >
 
-      {scentSpot && <section role="dialog" aria-label="Wind and scent forecast" style={{position:"absolute",zIndex:1900,left:12,right:12,bottom:"calc(env(safe-area-inset-bottom,0px) + 90px)",maxWidth:440,margin:"auto",background:"#10221b",color:"#f5e6ca",border:"1px solid #d3b16f",borderRadius:15,padding:15,boxShadow:"0 10px 35px #000b"}}>
+      {scentSpot && <section role="dialog" aria-label="Wind and scent forecast" style={{position:"absolute",zIndex:1900,left:12,right:12,top:"calc(env(safe-area-inset-top,0px) + 16px)",maxWidth:330,margin:"auto",background:"#10221b",color:"#f5e6ca",border:"1px solid #d3b16f",borderRadius:15,padding:15,boxShadow:"0 10px 35px #000b"}}>
         <div style={{display:"flex",justifyContent:"space-between",gap:10,alignItems:"center"}}><strong>🌬️ Wind & Scent · {scentSpot.name}</strong><button type="button" onClick={()=>setScentSpot(null)} style={{color:"#f5e6ca",background:"transparent",border:0,fontSize:22}}>×</button></div>
-        {scentLoading ? <p>Checking hourly wind…</p> : scentError ? <p>{scentError}</p> : scentCurrent ? <>
+        <button type="button" onClick={()=>setScentCollapsed(v=>!v)} style={{background:"transparent",border:0,color:"#d3b16f",padding:"4px 0"}}>{scentCollapsed?"Show forecast controls":"Hide forecast controls"}</button>
+        {!scentCollapsed && (scentLoading ? <p>Checking hourly wind…</p> : scentError ? <p>{scentError}</p> : scentCurrent ? <>
           <p style={{margin:"10px 0"}}>{new Date(scentCurrent.time).toLocaleString([], {weekday:"short",hour:"numeric",minute:"2-digit"})} · Wind from {Math.round(scentCurrent.direction)}° at {Math.round(scentCurrent.speed)} mph</p>
           <label style={{display:"block"}}>Forecast hour <input aria-label="Forecast hour" type="range" min={0} max={scentForecast.length-1} value={scentHour} onChange={e=>setScentHour(Number(e.target.value))} style={{width:"100%",accentColor:"#d3b16f"}}/></label>
           <small style={{display:"block",opacity:.85,marginTop:8}}>Gold cone estimates downwind direction for roughly 400 m. Terrain, thermals and gusts can redirect scent; not a safety or wildlife prediction.</small>
-        </> : null}
+        </> : null)}
       </section>}
         <MapContainer
           center={center}
@@ -2680,7 +2682,7 @@ export default function FieldMap({
                     <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:8}}>
                       {(["realistic","modern","tactical","topo","minimal"] as const).map(style=><button type="button" key={style} onClick={()=>setLocalSpotStyle(spot.id,style)} style={{fontSize:10,padding:"5px 7px",background:spotStyle===style?"#5d4926":"#1c3027",borderColor:spotStyle===style?"#e9c788":"#5b6b57"}}>{style}</button>)}
                     </div>
-                    <button type="button" onClick={()=>void analyzeSpotWind(spot)} style={{width:"100%",background:"#314a32",border:"1px solid #d6b477",padding:"9px",borderRadius:8,marginBottom:7}}>🌬️ WIND & SCENT CONE</button>
+                    <button type="button" onClick={e=>{e.stopPropagation();(e.currentTarget.closest(".leaflet-popup") as HTMLElement | null)?.querySelector<HTMLElement>(".leaflet-popup-close-button")?.click();void analyzeSpotWind(spot);}} style={{width:"100%",background:"#314a32",border:"1px solid #d6b477",padding:"9px",borderRadius:8,marginBottom:7}}>🌬️ WIND & SCENT CONE</button>
                     {spot.notes && <p style={{whiteSpace:"pre-wrap"}}>{spot.notes}</p>}
 
                     <small style={{display:"block",marginTop:6,color:"#c6bea8"}}>
