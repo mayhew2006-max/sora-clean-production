@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import FieldMission from "@/components/field/FieldMission";
+import FieldPlaceSearch from "@/components/field/FieldPlaceSearch";
 import FieldWaypointLibrary from "@/components/field/FieldWaypointLibrary";
 import FieldWaypointNavigator from "@/components/field/FieldWaypointNavigator";
 import type { FieldMode } from "@/components/field/FieldMap";
@@ -39,6 +40,7 @@ export default function GraceField() {
   const [heading, setHeading] = useState<number | null>(null);
   const [tracking, setTracking] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [placeSearchOpen,setPlaceSearchOpen] = useState(false);
   const [graceOpen, setGraceOpen] = useState(false);
   const [graceExpanded, setGraceExpanded] = useState(false);
   const graceFrameRef = useRef<HTMLIFrameElement>(null);
@@ -107,7 +109,12 @@ export default function GraceField() {
     window.addEventListener("grace-field-ask-spot",openSpotQuestion);
     return()=>window.removeEventListener("grace-field-ask-spot",openSpotQuestion);
   },[]);
-    const [mapOverlayOpen, setMapOverlayOpen] = useState(false);
+    function chooseFoundPlace(place:{name:string;lat:number;lng:number;zoom:number},activity:string){
+    setPlaceSearchOpen(false);
+    const detail={lat:place.lat,lng:place.lng,discovery:true,name:place.name,zoom:place.zoom,activity};
+    window.dispatchEvent(new CustomEvent("grace-field-focus-waypoint",{detail}));
+  }
+  const [mapOverlayOpen, setMapOverlayOpen] = useState(false);
   const [spotPopupOpen,setSpotPopupOpen] = useState(false);
   useEffect(()=>{const handle=(event:Event)=>setSpotPopupOpen(Boolean((event as CustomEvent<{open:boolean}>).detail?.open));window.addEventListener("grace-field-spot-popup",handle);return()=>window.removeEventListener("grace-field-spot-popup",handle);},[]);
   const [gps, setGps] = useState<GpsInfo>({accuracy: null, altitude: null, status: "Acquiring precise GPS…"});
@@ -226,11 +233,12 @@ export default function GraceField() {
     </aside>
     <div className="gf-quicktools" aria-label="Map controls">
       <button className="gf-icon-button" aria-label="Map layers" onClick={()=>send("grace-field-open-layers")}><Icon name="layers"/></button>
-      <button className="gf-icon-button" aria-label="Saved spots and search" onClick={()=>send("grace-field-open-waypoint-library")}><Icon name="search"/></button>
+      <button className="gf-icon-button" aria-label="Find places worldwide" onClick={()=>{setMenuOpen(false);setPlaceSearchOpen(true);}}><Icon name="search"/></button>
       <button className="gf-icon-button" aria-label="Compass and navigation" onClick={()=>setMenuOpen(v=>!v)}><Icon name="compass"/></button>
       <button className="gf-icon-button" aria-label="Locate me using fresh GPS" onClick={()=>send("grace-field-v2-locate")}><Icon name="locate"/></button>
     </div>
-    {!graceOpen && !mapOverlayOpen && !spotPopupOpen && <button type="button" className="gf-grace-launch" onClick={()=>{setMenuOpen(false);setGraceOpen(true);graceFrameRef.current?.contentWindow?.postMessage({type:"grace-field-chat-opened"},window.location.origin);}} aria-label="Talk with Grace while keeping the map open"><img src="/grace-avatar.png" alt=""/><span>Talk to Grace</span></button>}
+    <FieldPlaceSearch open={placeSearchOpen} onClose={()=>setPlaceSearchOpen(false)} onChoose={chooseFoundPlace}/>
+    {!graceOpen && !placeSearchOpen && !mapOverlayOpen && !spotPopupOpen && <button type="button" className="gf-grace-launch" onClick={()=>{setMenuOpen(false);setGraceOpen(true);graceFrameRef.current?.contentWindow?.postMessage({type:"grace-field-chat-opened"},window.location.origin);}} aria-label="Talk with Grace while keeping the map open"><img src="/grace-avatar.png" alt=""/><span>Talk to Grace</span></button>}
     <section className={`gf-grace-sheet${graceExpanded?" gf-grace-expanded":""}`} aria-label="Grace companion chat" style={{display:graceOpen?"":"none"}}>
       <div className="gf-grace-sheet-head"><span>Grace · Your companion</span><button type="button" onClick={()=>setGraceExpanded(v=>!v)} aria-label={graceExpanded?"Shrink chat":"Expand chat"} style={{color:"white",background:"transparent",border:0,padding:"7px 10px"}}>{graceExpanded?"Shrink":"Expand"}</button><button type="button" onClick={()=>setGraceOpen(false)} aria-label="Close Grace chat and return to map" style={{color:"white",background:"transparent",border:0,padding:"7px 10px"}}>✕ Back to map</button></div>
       <iframe ref={graceFrameRef} title="Grace conversation" src="/chat?field=1" allow="microphone; camera" onLoad={sendFieldContext} />
@@ -244,6 +252,7 @@ export default function GraceField() {
       <div className="gf-menu-title"><span>FIELD OPERATIONS</span><button className="gf-icon-button" aria-label="Close field menu" onClick={()=>setMenuOpen(false)}><Icon name="x"/></button></div>
       <div className="gf-menu-grid">
         <button className="gf-menu-choice" onClick={()=>doMenuAction("grace-field-open-waypoint-library")}><Icon name="pin"/> SAVED SPOTS</button>
+        <button className="gf-menu-choice" onClick={()=>{setMenuOpen(false);setPlaceSearchOpen(true);}}><Icon name="search"/> FIND PLACES</button>
         <button className="gf-menu-choice" onClick={()=>doMenuAction("grace-field-v2-trail-back")}><Icon name="back"/> FOLLOW TRAIL BACK</button>
         <button className="gf-menu-choice" onClick={()=>doMenuAction("grace-field-open-layers")}><Icon name="layers"/> MAP TYPES</button>
         <button className="gf-menu-choice" onClick={()=>doMenuAction("grace-field-v2-locate")}><Icon name="locate"/> MY LOCATION</button>
