@@ -153,7 +153,18 @@ export default function GraceChat() {
     window.parent.postMessage({type:"grace-field-request-context"},window.location.origin);
     return () => window.removeEventListener("message",onMessage);
   }, []);
-  const [fieldPlanContext,setFieldPlanContext] = useState<{activity:string;period:string;spotIds:string[]}|null>(null);
+  // The Field map can prepare an activity-specific question, but the user
+  // decides whether to send it. No automatic charges or external requests.
+  useEffect(()=>{
+    const receive=(event:MessageEvent)=>{
+      if(event.origin!==window.location.origin || event.source!==window.parent || event.data?.type!=="grace-field-compose-question")return;
+      const question=event.data.question;
+      if(typeof question==="string" && question.length<=350)setInput(question);
+    };
+    window.addEventListener("message",receive);
+    return()=>window.removeEventListener("message",receive);
+  },[]);
+    const [fieldPlanContext,setFieldPlanContext] = useState<{activity:string;period:string;spotIds:string[]}|null>(null);
   const [fieldScoutContext, setFieldScoutContext] =
     useState("");
 
