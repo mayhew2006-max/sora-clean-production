@@ -2800,7 +2800,7 @@ export default function FieldMap({
                 position={[spot.lat, spot.lng]}
                 icon={makeIcon(spot.type, markerColor(spot.type), spotStyle)}
               >
-                <Popup maxWidth={320} autoPanPaddingTopLeft={[15, 105]} autoPanPaddingBottomRight={[15, 125]}>
+                <Popup maxWidth={320} autoPanPaddingTopLeft={[15, 105]} autoPanPaddingBottomRight={[15, 125]} eventHandlers={{add:()=>window.dispatchEvent(new CustomEvent("grace-field-spot-popup",{detail:{open:true}})),remove:()=>window.dispatchEvent(new CustomEvent("grace-field-spot-popup",{detail:{open:false}}))}}>
                   <div style={{ minWidth: 190 }}>
                     <strong style={{display:"block",fontSize:17,color:"#efd29e",marginBottom:6}}>{spot.name}</strong>
                     {photo && <img src={photo} alt={`Saved view at ${spot.name}`} style={{width:"100%",maxHeight:152,objectFit:"cover",borderRadius:9,border:"1px solid #97835c",marginBottom:8}}/>}
