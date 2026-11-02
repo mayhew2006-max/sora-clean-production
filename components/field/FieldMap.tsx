@@ -2803,6 +2803,24 @@ export default function FieldMap({
                   <div style={{ minWidth: 190 }}>
                     <strong style={{display:"block",fontSize:17,color:"#efd29e",marginBottom:6}}>{spot.name}</strong>
                     {photo && <img src={photo} alt={`Saved view at ${spot.name}`} style={{width:"100%",maxHeight:152,objectFit:"cover",borderRadius:9,border:"1px solid #97835c",marginBottom:8}}/>}
+                    <details style={{marginBottom:8,border:"1px solid #756a4d",borderRadius:9,padding:8}}>
+                      <summary style={{cursor:"pointer",fontWeight:800,color:"#efd29e",padding:5}}>🔎 Analyze Location</summary>
+                      <div style={{marginTop:9}}>
+                    <button type="button" onClick={e=>{e.stopPropagation();(e.currentTarget.closest(".leaflet-popup") as HTMLElement | null)?.querySelector<HTMLElement>(".leaflet-popup-close-button")?.click();void analyzeSpotWind(spot);}} style={{width:"100%",background:"#314a32",border:"1px solid #d6b477",padding:"9px",borderRadius:8,marginBottom:7}}>🌬️ WIND & SCENT CONE</button>
+                    <button type="button" onClick={e=>{e.stopPropagation();(e.currentTarget.closest(".leaflet-popup") as HTMLElement | null)?.querySelector<HTMLElement>(".leaflet-popup-close-button")?.click();void analyzeSpotConditions(spot);}} style={{width:"100%",background:"#233d33",border:"1px solid #d6b477",padding:9,borderRadius:8,marginBottom:7}}>☀️ SUN, ELEVATION & CONDITIONS</button>
+                    <button type="button" onClick={e=>{e.stopPropagation();(e.currentTarget.closest(".leaflet-popup") as HTMLElement|null)?.querySelector<HTMLElement>(".leaflet-popup-close-button")?.click();void analyzeTerrain(spot);}} style={{width:"100%",background:"#233d33",border:"1px solid #d6b477",padding:9,borderRadius:8,marginBottom:7}}>⛰️ TERRAIN SCAN</button>
+                    <button type="button" onClick={e=>{e.stopPropagation();(e.currentTarget.closest(".leaflet-popup") as HTMLElement|null)?.querySelector<HTMLElement>(".leaflet-popup-close-button")?.click();void inspectNearbyWater(spot);}} style={{width:"100%",background:"#233d33",border:"1px solid #d6b477",padding:9,borderRadius:8,marginBottom:7}}>🌊 NEARBY WATER GAUGES</button>
+                      </div>
+                    </details>
+                    <details style={{marginBottom:8,border:"1px solid #756a4d",borderRadius:9,padding:8}}>
+                      <summary style={{cursor:"pointer",fontWeight:800,color:"#efd29e",padding:5}}>📓 Outdoor Journal</summary>
+                      <div style={{marginTop:9}}>
+                    <button type="button" onClick={e=>{e.stopPropagation();(e.currentTarget.closest(".leaflet-popup") as HTMLElement|null)?.querySelector<HTMLElement>(".leaflet-popup-close-button")?.click();openJournal(spot);}} style={{width:"100%",background:"#233d33",border:"1px solid #d6b477",padding:9,borderRadius:8,marginBottom:7}}>📓 OUTDOOR JOURNAL</button>
+                      </div>
+                    </details>
+                    <details style={{marginBottom:8,border:"1px solid #756a4d",borderRadius:9,padding:8}}>
+                      <summary style={{cursor:"pointer",fontWeight:800,color:"#efd29e",padding:5}}>⚙️ Manage & Share</summary>
+                      <div style={{marginTop:9}}>
                     <label style={{display:"block",textAlign:"center",background:"#23392b",border:"1px solid #927850",padding:8,borderRadius:9,fontWeight:800,cursor:"pointer",fontSize:11,marginBottom:8}}>
                       {photo?"CHANGE PHOTO":"ADD SPOT PHOTO"}
                       <input type="file" accept="image/*" capture="environment" style={{display:"none"}} onChange={e=>{const f=e.currentTarget.files?.[0];if(f)void attachLocalSpotPhoto(spot.id,f);e.currentTarget.value="";}}/>
@@ -2811,12 +2829,9 @@ export default function FieldMap({
                     <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:8}}>
                       {(["realistic","modern","tactical","topo","minimal"] as const).map(style=><button type="button" key={style} onClick={()=>setLocalSpotStyle(spot.id,style)} style={{fontSize:10,padding:"5px 7px",background:spotStyle===style?"#5d4926":"#1c3027",borderColor:spotStyle===style?"#e9c788":"#5b6b57"}}>{style}</button>)}
                     </div>
-                    <button type="button" onClick={e=>{e.stopPropagation();(e.currentTarget.closest(".leaflet-popup") as HTMLElement | null)?.querySelector<HTMLElement>(".leaflet-popup-close-button")?.click();void analyzeSpotWind(spot);}} style={{width:"100%",background:"#314a32",border:"1px solid #d6b477",padding:"9px",borderRadius:8,marginBottom:7}}>🌬️ WIND & SCENT CONE</button>
-                    <button type="button" onClick={e=>{e.stopPropagation();(e.currentTarget.closest(".leaflet-popup") as HTMLElement | null)?.querySelector<HTMLElement>(".leaflet-popup-close-button")?.click();void analyzeSpotConditions(spot);}} style={{width:"100%",background:"#233d33",border:"1px solid #d6b477",padding:9,borderRadius:8,marginBottom:7}}>☀️ SUN, ELEVATION & CONDITIONS</button>
-                    <button type="button" onClick={e=>{e.stopPropagation();(e.currentTarget.closest(".leaflet-popup") as HTMLElement|null)?.querySelector<HTMLElement>(".leaflet-popup-close-button")?.click();void analyzeTerrain(spot);}} style={{width:"100%",background:"#233d33",border:"1px solid #d6b477",padding:9,borderRadius:8,marginBottom:7}}>⛰️ TERRAIN SCAN</button>
-                    <button type="button" onClick={e=>{e.stopPropagation();(e.currentTarget.closest(".leaflet-popup") as HTMLElement|null)?.querySelector<HTMLElement>(".leaflet-popup-close-button")?.click();openJournal(spot);}} style={{width:"100%",background:"#233d33",border:"1px solid #d6b477",padding:9,borderRadius:8,marginBottom:7}}>📓 OUTDOOR JOURNAL</button>
-                    <button type="button" onClick={e=>{e.stopPropagation();(e.currentTarget.closest(".leaflet-popup") as HTMLElement|null)?.querySelector<HTMLElement>(".leaflet-popup-close-button")?.click();void inspectNearbyWater(spot);}} style={{width:"100%",background:"#233d33",border:"1px solid #d6b477",padding:9,borderRadius:8,marginBottom:7}}>🌊 NEARBY WATER GAUGES</button>
                     <button type="button" onClick={e=>{e.stopPropagation();(e.currentTarget.closest(".leaflet-popup") as HTMLElement|null)?.querySelector<HTMLElement>(".leaflet-popup-close-button")?.click();setShareSpot(spot);}} style={{width:"100%",background:"#233d33",border:"1px solid #d6b477",padding:9,borderRadius:8,marginBottom:7}}>🤝 SHARE THIS SPOT ONLY</button>
+                      </div>
+                    </details>
                     {spot.notes && <p style={{whiteSpace:"pre-wrap"}}>{spot.notes}</p>}
 
                     <small style={{display:"block",marginTop:6,color:"#c6bea8"}}>
