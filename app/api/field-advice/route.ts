@@ -5,7 +5,7 @@ export const maxDuration=60;
 type Activity="hunt"|"fish"|"camp"|"hike"|"paddle";
 type Spot={id:string;name:string;type:string;mode:string;lat:number;lng:number;notes:string;observations:string[];approach:string;activity:Activity|"other";excludeFromAdvice:boolean};
 type Hour={time:string;temp:number;wind:number;windFrom:number;gust:number;rain:number;rainChance:number|null;code:number;score:number;reason:string[]};
-type Report={spot:Spot;day:string;period:string;best:Hour|null;average:number;high:number;low:number;maxGust:number;rainTotal:number;peakRainChance:number|null;hours:Hour[];error?:string};
+type Report={spot:Spot;day:string;period:string;best:Hour|null;average:number;high:number;low:number;maxGust:number;rainTotal:number;peakRainChance:number|null;hours:Hour[];windowEndDate:string;risks:string[];error?:string};
 const windDirs=["N","NE","E","SE","S","SW","W","NW"] as const;
 const validCoord=(lat:number,lng:number)=>Number.isFinite(lat)&&Number.isFinite(lng)&&Math.abs(lat)<=90&&Math.abs(lng)<=180;
 const num=(arr:unknown,i:number):number|null=>Array.isArray(arr)&&arr[i]!==null&&Number.isFinite(Number(arr[i]))?Number(arr[i]):null;
@@ -17,10 +17,10 @@ function activityFor(type:string,mode:string):Activity|"other"{
  // food plot or truck is useful context, but not an eligible hunting stand.
  const v=type.trim().toLowerCase();
  if(["stand","blind","deer","trail"].includes(v))return "hunt";
- if(["hole","catch","dock","ramp","current","weed","dropoff","structure"].includes(v))return "fish";
- if(["camp","cabin","fire"].includes(v))return "camp";
+ if(["hole","catch","dock","ramp","current","weed","dropoff","structure","water"].includes(v))return "fish";
+ if(["camp","cabin"].includes(v))return "camp";
  if(["paddle","kayak","canoe","launch"].includes(v))return "paddle";
- if(["hike","hiking","scenic","cave"].includes(v))return "hike";
+ if(["hike","hiking","scenic"].includes(v))return "hike";
  void mode;
  return "other";
 }
@@ -59,13 +59,18 @@ function targetDate(q:string,today:string):string{
  current.setUTCDate(current.getUTCDate()+offset);
  return current.toISOString().slice(0,10);
 }
-function requestedPeriod(q:string,hint:unknown):{name:string;hours:number[]}{
+function requestedPeriod(q:string,hint:unknown,activity:Activity):{name:string;hours:number[]}{
  const lower=q.toLowerCase();
+ // "Camping Friday" means a night away, not just 00:00–23:00 Friday.
+ // An explicit daytime request can still narrow that to a day trip.
+ if(activity==="camp" && !/\b(morning|afternoon|daytime|day trip)\b/.test(lower) &&
+    (!/\b(day|hours?)\b/.test(lower) || /\b(night|overnight|camp|weekend|evening)\b/.test(lower) || hint==="overnight"))
+   return {name:"overnight",hours:[15,16,17,18,19,20,21,22,23,0,1,2,3,4,5,6,7,8,9,10]};
  if(/\b(morning|sunrise|dawn|early)\b/.test(lower))return {name:"morning",hours:[4,5,6,7,8,9,10,11]};
  if(/\b(afternoon|midday)\b/.test(lower))return {name:"afternoon",hours:[12,13,14,15,16,17]};
  if(/\b(evening|sunset|dusk)\b/.test(lower))return {name:"evening",hours:[15,16,17,18,19,20,21]};
  if(/\b(night|overnight)\b/.test(lower))return {name:"night",hours:[18,19,20,21,22,23,0,1,2,3,4,5]};
- if(["morning","afternoon","evening","night"].includes(String(hint)))return requestedPeriod(String(hint),null);
+ if(["morning","afternoon","evening","night","overnight"].includes(String(hint)))return requestedPeriod(String(hint),null,activity);
  return {name:"day",hours:Array.from({length:24},(_,i)=>i)};
 }
 function matchSpots(q:string,spots:Spot[],activity:Activity,hint:unknown):Spot[]{
@@ -115,7 +120,7 @@ function hourScore(a:Activity,h:{temp:number;wind:number;gust:number;rain:number
  return {score:Math.max(0,Math.min(9,Math.round(score*10)/10)),reason};
 }
 async function forecast(spot:Spot,day:string,period:{name:string;hours:number[]},activity:Activity):Promise<Report>{
- const base:Report={spot,day,period:period.name,best:null,average:0,high:NaN,low:NaN,maxGust:NaN,rainTotal:0,peakRainChance:null,hours:[]};
+ const base:Report={spot,day,period:period.name,best:null,average:0,high:NaN,low:NaN,maxGust:NaN,rainTotal:0,peakRainChance:null,hours:[],windowEndDate:day,risks:[]};
  try{
   const url=new URL("https://api.open-meteo.com/v1/forecast");
   url.searchParams.set("latitude",String(spot.lat));url.searchParams.set("longitude",String(spot.lng));
@@ -130,9 +135,15 @@ async function forecast(spot:Spot,day:string,period:{name:string;hours:number[]}
   const minute=(time:string)=>{const m=time.match(/T(\d{2}):(\d{2})/);return m?Number(m[1])*60+Number(m[2]):null;};
   const sunrise=minute(String(data.daily?.sunrise?.[dayIndex]||"")),sunset=minute(String(data.daily?.sunset?.[dayIndex]||""));
   const rows:Hour[]=[];
+  const crossesMidnight=period.name==="night" || period.name==="overnight";
+  const followingDay=new Date(Date.parse(day+"T12:00:00Z")+86400000).toISOString().slice(0,10);
   for(let i=0;i<(h.time?.length||0);i++){
-   const stamp=String(h.time[i]);if(stamp.slice(0,10)!==day)continue;
-   const clock=Number(stamp.slice(11,13));if(!period.hours.includes(clock))continue;
+   const stamp=String(h.time[i]),clock=Number(stamp.slice(11,13)),rowDay=stamp.slice(0,10);
+   const withinWindow=crossesMidnight
+     ? (rowDay===day && clock>=(period.name==="overnight"?15:18))
+       || (rowDay===followingDay && clock<=(period.name==="overnight"?10:5))
+     : rowDay===day && period.hours.includes(clock);
+   if(!withinWindow)continue;
    const temp=num(h.temperature_2m,i),wind=num(h.wind_speed_10m,i),windFrom=num(h.wind_direction_10m,i);
    const gust=num(h.wind_gusts_10m,i),rain=num(h.precipitation,i),code=num(h.weather_code,i);
    if(temp===null||wind===null||windFrom===null||gust===null||rain===null||code===null)continue;
@@ -141,11 +152,18 @@ async function forecast(spot:Spot,day:string,period:{name:string;hours:number[]}
    rows.push({time:stamp,temp,wind,windFrom,gust,rain,rainChance,code,score:scored.score,reason:scored.reason});
   }
   if(!rows.length)throw new Error("No hourly forecast for selected date");
+  if(crossesMidnight && !rows.some(row=>row.time.slice(0,10)===followingDay))
+    throw new Error("The next-morning forecast isn't available yet; cannot assess a full overnight stay.");
+  const risks:string[]=[];
+  if(rows.some(row=>[95,96,99].includes(row.code)))risks.push("Forecast thunderstorm conditions; check official alerts before any outdoor trip");
+  if(rows.some(row=>row.gust>=35))risks.push("Gusts forecast at 35 mph or higher");
+  if(rows.some(row=>row.temp<=32))risks.push("Freezing or below-freezing air temperatures");
+  if(rows.reduce((total,row)=>total+row.rain,0)>=0.5)risks.push("Half an inch or more of forecast precipitation during this window");
   const best=[...rows].sort((a,b)=>b.score-a.score||a.time.localeCompare(b.time))[0];
   return {...base,hours:rows,best,average:Math.round(rows.reduce((sum,r)=>sum+r.score,0)/rows.length*10)/10,
    high:Math.round(Math.max(...rows.map(r=>r.temp))),low:Math.round(Math.min(...rows.map(r=>r.temp))),
    maxGust:Math.round(Math.max(...rows.map(r=>r.gust))),rainTotal:Math.round(rows.reduce((sum,r)=>sum+r.rain,0)*100)/100,
-   peakRainChance:Math.max(...rows.map(r=>r.rainChance??0))};
+   peakRainChance:Math.max(...rows.map(r=>r.rainChance??0)),windowEndDate:crossesMidnight?followingDay:day,risks};
  }catch(e){return {...base,error:e instanceof Error?e.message:"Forecast unavailable"};}
 }
 /**
@@ -198,7 +216,7 @@ export async function POST(req:Request){
   const body=await req.json();
   const question=String(body.question||"").slice(0,700).trim(),today=String(body.localDate||"").slice(0,10);
   if(!question||!/^\d{4}-\d{2}-\d{2}$/.test(today))return NextResponse.json({error:"Question and local date required."},{status:400});
-  const activity=parseActivity(question,body.activityHint),day=targetDate(question,today),period=requestedPeriod(question,body.periodHint);
+  const activity=parseActivity(question,body.activityHint),day=targetDate(question,today),period=requestedPeriod(question,body.periodHint,activity);
   const raw=Array.isArray(body.spots)?body.spots.slice(0,150):[];
   const spots=raw.map(sanitizeSpot).filter((s:Spot|null):s is Spot=>s!==null);
   const targets=matchSpots(question,spots,activity,body.spotIdsHint);
@@ -217,7 +235,10 @@ export async function POST(req:Request){
    rainInches:r.rainTotal,maxRainProbabilityPercent:r.peakRainChance,
    bestHourWindFrom:direction(r.best!.windFrom),bestHourWindMph:Math.round(r.best!.wind),
    mainFactors:r.best!.reason,observationNotes:r.spot.observations,markerNotes:r.spot.notes,
-   expectedDeerApproach:r.spot.approach||"Not supplied"
+   expectedDeerApproach:r.spot.approach||"Not supplied",spotMarkerType:r.spot.type,
+   windowEndDate:r.windowEndDate,forecastCoversOvernight:r.period==="overnight",
+   riskFlags:r.risks,
+   warningsNotVerified:["Official weather alerts","Land access or site regulations","Water temperature or river conditions","Terrain and on-site hazards"]
   }));
   const rawConversation=Array.isArray(body.history)?body.history.slice(-6):[];
   const conversation=rawConversation.filter((x:unknown)=>x&&typeof x==="object"&&["user","assistant"].includes(String((x as Record<string,unknown>).role))&&typeof (x as Record<string,unknown>).content==="string")
