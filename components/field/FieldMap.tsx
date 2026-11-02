@@ -330,6 +330,27 @@ export default function FieldMap({
     return [[scentSpot.lat,scentSpot.lng] as [number,number],destination(downwind-25,400),destination(downwind+25,400)];
   })() : null;
 
+  const [spotIntel, setSpotIntel] = useState<{name:string;sunrise:string;sunset:string;elevation:number|null;rain:number|null;temperature:number|null}|null>(null);
+  const [intelLoading, setIntelLoading] = useState(false);
+  const [intelError, setIntelError] = useState("");
+  async function analyzeSpotConditions(spot: FieldSpot) {
+    if (!(await useFieldAction())) return;
+    setSpotIntel(null); setIntelError(""); setIntelLoading(true);
+    try {
+      const q = new URLSearchParams({latitude:String(spot.lat),longitude:String(spot.lng),current:"temperature_2m,precipitation",daily:"sunrise,sunset",temperature_unit:"fahrenheit",precipitation_unit:"inch",timezone:"auto",forecast_days:"1"});
+      const elevationQuery = new URLSearchParams({latitude:String(spot.lat),longitude:String(spot.lng)});
+      const [forecast,elevation] = await Promise.all([
+        fetch("https://api.open-meteo.com/v1/forecast?"+q),
+        fetch("https://api.open-meteo.com/v1/elevation?"+elevationQuery)
+      ]);
+      if (!forecast.ok) throw new Error("Location conditions unavailable");
+      const data = await forecast.json();
+      const elevationData = elevation.ok ? await elevation.json() : null;
+      const meters = Number(elevationData?.elevation?.[0]);
+      setSpotIntel({name:spot.name,sunrise:String(data?.daily?.sunrise?.[0]||""),sunset:String(data?.daily?.sunset?.[0]||""),elevation:Number.isFinite(meters)&&elevationData?.elevation?.length?Math.round(meters*3.28084):null,rain:Number.isFinite(Number(data?.current?.precipitation))?Number(data.current.precipitation):null,temperature:Number.isFinite(Number(data?.current?.temperature_2m))?Number(data.current.temperature_2m):null});
+    } catch(e) {setIntelError(e instanceof Error?e.message:"Conditions unavailable");}
+    finally {setIntelLoading(false);}
+  }
   const [name, setName] = useState("");
   const [notes, setNotes] = useState("");
   const [editingSpotId, setEditingSpotId] = useState<string | null>(null);
@@ -2565,6 +2586,10 @@ export default function FieldMap({
           <small style={{display:"block",opacity:.85,marginTop:8}}>Gold cone estimates downwind direction for roughly 400 m. Terrain, thermals and gusts can redirect scent; not a safety or wildlife prediction.</small>
         </> : null)}
       </section>}
+      {(intelLoading || intelError || spotIntel) && <section role="dialog" aria-label="Location conditions" style={{position:"absolute",zIndex:1901,left:12,right:12,top:"calc(env(safe-area-inset-top,0px) + 16px)",maxWidth:330,margin:"auto",background:"#10221b",color:"#f5e6ca",border:"1px solid #d3b16f",borderRadius:15,padding:14,boxShadow:"0 10px 35px #000b"}}>
+        <div style={{display:"flex",justifyContent:"space-between",gap:10}}><strong>☀️ Location Conditions</strong><button type="button" onClick={()=>{setSpotIntel(null);setIntelError("");setIntelLoading(false);}} style={{background:"transparent",border:0,color:"#f5e6ca",fontSize:22}}>×</button></div>
+        {intelLoading?<p>Loading conditions…</p>:intelError?<p>{intelError}</p>:spotIntel?<div style={{fontSize:14,lineHeight:1.7}}><strong>{spotIntel.name}</strong><div>Sunrise: {spotIntel.sunrise?new Date(spotIntel.sunrise).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"}):"Unavailable"}</div><div>Sunset: {spotIntel.sunset?new Date(spotIntel.sunset).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"}):"Unavailable"}</div><div>Elevation: {spotIntel.elevation===null?"Unavailable":spotIntel.elevation+" ft (approx.)"}</div><div>Temperature: {spotIntel.temperature===null?"Unavailable":Math.round(spotIntel.temperature)+"°F"}</div><div>Current precipitation: {spotIntel.rain===null?"Unavailable":spotIntel.rain.toFixed(2)+" in"}</div><small style={{opacity:.75}}>Forecast and elevation estimates; not a terrain-shadow analysis.</small></div>:null}
+      </section>}
         <MapContainer
           center={center}
           zoom={position ? 15 : 7}
@@ -2683,6 +2708,7 @@ export default function FieldMap({
                       {(["realistic","modern","tactical","topo","minimal"] as const).map(style=><button type="button" key={style} onClick={()=>setLocalSpotStyle(spot.id,style)} style={{fontSize:10,padding:"5px 7px",background:spotStyle===style?"#5d4926":"#1c3027",borderColor:spotStyle===style?"#e9c788":"#5b6b57"}}>{style}</button>)}
                     </div>
                     <button type="button" onClick={e=>{e.stopPropagation();(e.currentTarget.closest(".leaflet-popup") as HTMLElement | null)?.querySelector<HTMLElement>(".leaflet-popup-close-button")?.click();void analyzeSpotWind(spot);}} style={{width:"100%",background:"#314a32",border:"1px solid #d6b477",padding:"9px",borderRadius:8,marginBottom:7}}>🌬️ WIND & SCENT CONE</button>
+                    <button type="button" onClick={e=>{e.stopPropagation();(e.currentTarget.closest(".leaflet-popup") as HTMLElement | null)?.querySelector<HTMLElement>(".leaflet-popup-close-button")?.click();void analyzeSpotConditions(spot);}} style={{width:"100%",background:"#233d33",border:"1px solid #d6b477",padding:9,borderRadius:8,marginBottom:7}}>☀️ SUN, ELEVATION & CONDITIONS</button>
                     {spot.notes && <p style={{whiteSpace:"pre-wrap"}}>{spot.notes}</p>}
 
                     <small style={{display:"block",marginTop:6,color:"#c6bea8"}}>
