@@ -17,6 +17,7 @@ import "leaflet/dist/leaflet.css";
 import { markerOptions, markerSvg, markerColor } from "./FieldPremiumMarkers";
 import { calculateTrailReturn } from "./FieldReturnGuidance";
 import FieldDeerForecast from "./FieldDeerForecast";
+import FieldSightingJournal from "./FieldSightingJournal";
 
 async function fieldElevations(points: Array<[number,number]>): Promise<number[]> {
   try {
@@ -627,6 +628,7 @@ export default function FieldMap({
   }, []);
 
  const [deerForecastOpen,setDeerForecastOpen] = useState(false);
+ const [sightingsOpen,setSightingsOpen] = useState(false);
  const [historyOpen, setHistoryOpen] =
     useState(false);
 
@@ -636,10 +638,10 @@ export default function FieldMap({
     useState<"weather" | "offline" | null>(null);
 
   useEffect(() => {
-    const open = Boolean(deerForecastOpen || fieldPanel || historyOpen || toolsOpen || layersOpen || pending || (navigationTarget && !navigationCompact));
+    const open = Boolean(sightingsOpen || deerForecastOpen || fieldPanel || historyOpen || toolsOpen || layersOpen || pending || (navigationTarget && !navigationCompact));
     window.dispatchEvent(new CustomEvent("grace-field-overlay-state", {detail: {open}}));
     return () => { window.dispatchEvent(new CustomEvent("grace-field-overlay-state", {detail: {open: false}})); };
-  }, [deerForecastOpen, fieldPanel, historyOpen, toolsOpen, layersOpen, pending, navigationTarget, navigationCompact]);
+  }, [sightingsOpen, deerForecastOpen, fieldPanel, historyOpen, toolsOpen, layersOpen, pending, navigationTarget, navigationCompact]);
 
   useEffect(() => {
     setNavigationCompact(false);
@@ -1946,6 +1948,7 @@ export default function FieldMap({
       }}
     >
       <FieldDeerForecast open={deerForecastOpen} onClose={()=>setDeerForecastOpen(false)} position={position}/>
+      <FieldSightingJournal open={sightingsOpen} onClose={()=>setSightingsOpen(false)} position={position}/>
       {toolsOpen && (
         <div role="dialog" aria-label="Outdoor field tools" className="gf-premium-sheet" style={{position:"absolute",zIndex:1600,left:10,right:10,bottom:"calc(env(safe-area-inset-bottom, 0px) + 94px)",maxWidth:510,margin:"auto",maxHeight:"min(70dvh, 600px)",overflowY:"auto",borderRadius:17,padding:"17px 14px 18px",background:"linear-gradient(150deg,rgba(7,20,16,.99),rgba(13,30,22,.99))",border:"1px solid #d3ac72",boxShadow:"0 15px 50px #000d",color:"#f3e6cd"}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:"1px solid #8c785766",paddingBottom:12}}>
@@ -1961,6 +1964,7 @@ export default function FieldMap({
               [tracking?"STOP TRACK":"START TRACK","track"],
               ["FOLLOW TRAIL BACK","return"],
               ["DEER MOVEMENT OUTLOOK","deer"],
+              ["FIELD SIGHTING JOURNAL","sightings"],
               ["SAVED SPOTS","history"],
               ["WEATHER & WIND","weather"],
               ["OFFLINE MAP STATUS","offline"],
@@ -1973,6 +1977,7 @@ export default function FieldMap({
               if(kind==="track"){if(tracking)stopTracking();else void startTracking();}
               if(kind==="return")returnToStart();
               if(kind==="deer")setDeerForecastOpen(true);
+              if(kind==="sightings")setSightingsOpen(true);
               if(kind==="history")setHistoryOpen(true);
               if(kind==="weather"){setFieldPanel("weather");void loadFieldWeather();}
               if(kind==="offline")setFieldPanel("offline");
