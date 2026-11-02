@@ -2901,6 +2901,21 @@ export default function FieldMap({
                   <div style={{ minWidth: 190 }}>
                     <strong style={{display:"block",fontSize:17,color:"#efd29e",marginBottom:6}}>{spot.name}</strong>
                     {photo && <img src={photo} alt={`Saved view at ${spot.name}`} style={{width:"100%",maxHeight:152,objectFit:"cover",borderRadius:9,border:"1px solid #97835c",marginBottom:8}}/>}
+                    {["hole","catch","dock","ramp","water","current","weed","dropoff","structure","camp","cabin","scenic"].includes(spot.type) && (
+                      <button type="button" onClick={e=>{
+                        e.stopPropagation();
+                        (e.currentTarget.closest(".leaflet-popup") as HTMLElement | null)?.querySelector<HTMLElement>(".leaflet-popup-close-button")?.click();
+                        const activity=["camp","cabin"].includes(spot.type)?"camping":["scenic"].includes(spot.type)?"hiking":"fishing";
+                        const question=activity==="camping"
+                          ? `Grace, is camping at ${spot.name} a good idea Friday night? Check the full overnight forecast and explain any risks.`
+                          : activity==="hiking"
+                            ? `Grace, is hiking at ${spot.name} a good idea Saturday? Check weather and wind.`
+                            : `Grace, what is the best time to go fishing at ${spot.name} tomorrow, and why?`;
+                        window.dispatchEvent(new CustomEvent("grace-field-ask-spot",{detail:{question}}));
+                      }} style={{width:"100%",background:"#21493c",border:"1px solid #d6b477",padding:11,borderRadius:8,marginBottom:9,fontWeight:800,color:"#f8e4c2"}}>
+                        💬 ASK GRACE ABOUT THIS SPOT
+                      </button>
+                    )}
                     <details style={{marginBottom:8,border:"1px solid #756a4d",borderRadius:9,padding:8}}>
                       <summary style={{cursor:"pointer",fontWeight:800,color:"#efd29e",padding:5}}>🔎 Analyze Location</summary>
                       <div style={{marginTop:9}}>
