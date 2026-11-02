@@ -47,7 +47,17 @@ export default function GraceField() {
       const raw = JSON.parse(localStorage.getItem("graceFieldSpots") || "[]");
       const spots = Array.isArray(raw) ? raw.filter((p: any) =>
         p && typeof p.name === "string" && Number.isFinite(Number(p.lat)) && Number.isFinite(Number(p.lng))
-      ).slice(0, 150).map((p: any) => ({id: String(p.id || ""), name: p.name.slice(0,120), type: String(p.type || ""), lat: Number(p.lat), lng: Number(p.lng)})) : [];
+      ).slice(0, 150).map((p: any) => {
+        const id = String(p.id || "");
+        let observations: string[] = [];
+        let approach = "";
+        try {
+          const journal = JSON.parse(localStorage.getItem("grace-field-journal-v1-" + id) || "[]");
+          if(Array.isArray(journal)) observations = journal.filter((entry:any)=>typeof entry?.text==="string").slice(0,4).map((entry:any)=>String(entry.text).slice(0,180));
+          approach = String(localStorage.getItem("grace-field-stand-approach-v1-"+id) || "");
+        }catch{}
+        return {id,name:p.name.slice(0,120),type:String(p.type||""),mode:String(p.mode||""),lat:Number(p.lat),lng:Number(p.lng),notes:String(p.notes||"").slice(0,350),observations,approach};
+      }) : [];
       graceFrameRef.current?.contentWindow?.postMessage({type:"grace-field-context",spots},window.location.origin);
     } catch { graceFrameRef.current?.contentWindow?.postMessage({type:"grace-field-context",spots:[]},window.location.origin); }
   };
