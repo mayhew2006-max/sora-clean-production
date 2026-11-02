@@ -475,6 +475,8 @@ export default function FieldMap({
 
   const [tracking, setTracking] = useState(false);
   const [lastTrailGpsAt,setLastTrailGpsAt] = useState<number|null>(null);
+  const [lastLiveGpsAt,setLastLiveGpsAt] = useState<number|null>(null);
+  const returnWatchId = useRef<number|null>(null);
   const [heartbeat,setHeartbeat] = useState(Date.now());
   useEffect(()=>{const timer=window.setInterval(()=>setHeartbeat(Date.now()),10000);return()=>window.clearInterval(timer);},[]);
   const [trail, setTrail] = useState<TrailPoint[]>([]);
@@ -508,6 +510,7 @@ export default function FieldMap({
         const finalPoint = valid[valid.length - 1];
         setPosition([finalPoint.lat, finalPoint.lng]);
         setLastTrailGpsAt(Date.parse(finalPoint.time));
+        setLastLiveGpsAt(Date.parse(finalPoint.time));
       } catch {
         setLocationStatus("Android trail restore failed. Local trail has not been erased.");
       }
@@ -800,6 +803,7 @@ export default function FieldMap({
     ];
 
     setPosition(next);
+    setLastLiveGpsAt(Date.now());
     window.dispatchEvent(new CustomEvent("grace-field-gps-info", {detail: {
       accuracy: reportedAccuracy,
       altitude: Number.isFinite(result.coords.altitude ?? NaN) ? result.coords.altitude : null,
@@ -908,6 +912,21 @@ export default function FieldMap({
       }
     };
   }, []);
+
+  // Trail Back needs live GPS even if ordinary breadcrumb recording was stopped.
+  // Independent watch: never silently restart paid tracking or invent connector paths.
+  useEffect(() => {
+    if (!returningToStart || !navigator.geolocation) return;
+    const id = navigator.geolocation.watchPosition(
+      acceptPosition, locationError,
+      {enableHighAccuracy:true, timeout:30000, maximumAge:3000}
+    );
+    returnWatchId.current = id;
+    return () => {
+      navigator.geolocation.clearWatch(id);
+      if (returnWatchId.current===id) returnWatchId.current=null;
+    };
+  }, [returningToStart]);
 
   // Grace Field 2.0 UI bridge: reuses existing GPS, tracking and saved-spot logic.
   useEffect(() => {
@@ -1894,7 +1913,7 @@ export default function FieldMap({
     };
   }, [position, navigationTarget]);
 
-  const returnGuidance = useMemo(() => returningToStart ? calculateTrailReturn(trail,position,accuracy,lastTrailGpsAt,heartbeat) : null, [returningToStart,trail,position,accuracy,lastTrailGpsAt,heartbeat]);
+  const returnGuidance = useMemo(() => returningToStart ? calculateTrailReturn(trail,position,accuracy,lastLiveGpsAt,heartbeat) : null, [returningToStart,trail,position,accuracy,lastLiveGpsAt,heartbeat]);
   const center: [number, number] =
     position || [38.5, -80.5];
 
