@@ -15,6 +15,8 @@ import L from "leaflet";
 import { supabase } from "@/lib/supabaseClient";
 import "leaflet/dist/leaflet.css";
 import { markerOptions, markerSvg, markerColor } from "./FieldPremiumMarkers";
+import { calculateTrailReturn } from "./FieldReturnGuidance";
+import FieldDeerForecast from "./FieldDeerForecast";
 
 async function fieldElevations(points: Array<[number,number]>): Promise<number[]> {
   try {
@@ -621,6 +623,7 @@ export default function FieldMap({
     };
   }, []);
 
+ const [deerForecastOpen,setDeerForecastOpen] = useState(false);
  const [historyOpen, setHistoryOpen] =
     useState(false);
 
@@ -630,10 +633,10 @@ export default function FieldMap({
     useState<"weather" | "offline" | null>(null);
 
   useEffect(() => {
-    const open = Boolean(fieldPanel || historyOpen || toolsOpen || layersOpen || pending || (navigationTarget && !navigationCompact));
+    const open = Boolean(deerForecastOpen || fieldPanel || historyOpen || toolsOpen || layersOpen || pending || (navigationTarget && !navigationCompact));
     window.dispatchEvent(new CustomEvent("grace-field-overlay-state", {detail: {open}}));
     return () => { window.dispatchEvent(new CustomEvent("grace-field-overlay-state", {detail: {open: false}})); };
-  }, [fieldPanel, historyOpen, toolsOpen, layersOpen, pending, navigationTarget, navigationCompact]);
+  }, [deerForecastOpen, fieldPanel, historyOpen, toolsOpen, layersOpen, pending, navigationTarget, navigationCompact]);
 
   useEffect(() => {
     setNavigationCompact(false);
@@ -1454,9 +1457,9 @@ export default function FieldMap({
   }
 
   function returnToStart() {
-    if (trail.length === 0) {
+    if (trail.length < 2) {
       setLocationStatus(
-        "No breadcrumb trail yet. Start Track first."
+        "At least two recorded GPS points are required. Start Track first."
       );
       return;
     }
@@ -1482,7 +1485,7 @@ export default function FieldMap({
     setFieldPanel(null);
 
     setLocationStatus(
-      "🧭 Returning to the start of your recorded trail."
+      "🧭 Showing recorded breadcrumbs only. Terrain and hazards are not verified."
     );
   }
 
@@ -1891,6 +1894,7 @@ export default function FieldMap({
     };
   }, [position, navigationTarget]);
 
+  const returnGuidance = useMemo(() => returningToStart ? calculateTrailReturn(trail,position,accuracy,lastTrailGpsAt,heartbeat) : null, [returningToStart,trail,position,accuracy,lastTrailGpsAt,heartbeat]);
   const center: [number, number] =
     position || [38.5, -80.5];
 
@@ -1906,6 +1910,7 @@ export default function FieldMap({
         background: "#0C1411",
       }}
     >
+      <FieldDeerForecast open={deerForecastOpen} onClose={()=>setDeerForecastOpen(false)} position={position}/>
       {toolsOpen && (
         <div role="dialog" aria-label="Outdoor field tools" className="gf-premium-sheet" style={{position:"absolute",zIndex:1600,left:10,right:10,bottom:"calc(env(safe-area-inset-bottom, 0px) + 94px)",maxWidth:510,margin:"auto",maxHeight:"min(70dvh, 600px)",overflowY:"auto",borderRadius:17,padding:"17px 14px 18px",background:"linear-gradient(150deg,rgba(7,20,16,.99),rgba(13,30,22,.99))",border:"1px solid #d3ac72",boxShadow:"0 15px 50px #000d",color:"#f3e6cd"}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:"1px solid #8c785766",paddingBottom:12}}>
@@ -1920,6 +1925,7 @@ export default function FieldMap({
               [truckSpot?"NAVIGATE TO TRUCK":"MARK MY TRUCK","truck"],
               [tracking?"STOP TRACK":"START TRACK","track"],
               ["FOLLOW TRAIL BACK","return"],
+              ["DEER MOVEMENT OUTLOOK","deer"],
               ["SAVED SPOTS","history"],
               ["WEATHER & WIND","weather"],
               ["OFFLINE MAP STATUS","offline"],
@@ -1931,6 +1937,7 @@ export default function FieldMap({
               if(kind==="truck"){if(truckSpot)backToTruck();else void truckAction();}
               if(kind==="track"){if(tracking)stopTracking();else void startTracking();}
               if(kind==="return")returnToStart();
+              if(kind==="deer")setDeerForecastOpen(true);
               if(kind==="history")setHistoryOpen(true);
               if(kind==="weather"){setFieldPanel("weather");void loadFieldWeather();}
               if(kind==="offline")setFieldPanel("offline");
@@ -2628,13 +2635,14 @@ export default function FieldMap({
                   ? `GPS accuracy ±${Math.round(accuracy * 3.28084)} ft: the target is within your location uncertainty. Distance and bearing may jump even when you are standing still.`
                   : `GPS accuracy ±${Math.round(accuracy * 3.28084)} ft. Check terrain and landmarks before moving.`}
             </div>
-            {returningToStart && (
-              <div style={{fontSize:12,lineHeight:1.6,color:"#cdd7c8",marginTop:10}}>
-                {trail.length > 1
-                  ? "Use the recorded blue breadcrumb trail on the map to retrace your path. The bearing above points directly to the start, not around obstacles."
-                  : "No usable breadcrumb trail is recorded. Do not rely on a straight-line bearing to avoid cliffs, water, or other obstacles."}
-              </div>
-            )}
+            {returningToStart && <div style={{fontSize:12,lineHeight:1.6,color:"#cdd7c8",marginTop:10}}>
+              {returnGuidance ? <>
+                <strong style={{color:"#efd09a"}}>RECORDED ROUTE · {formatDistance(returnGuidance.recordedDistanceToStartMeters)} along logged points</strong>
+                <div>Next logged point: {returnGuidance.nextRecordedPoint.map(v=>v.toFixed(5)).join(", ")}. Bearing above points directly to start, not along breadcrumbs.</div>
+                {returnGuidance.warnings.map((warning,i)=><p key={i} style={{color:"#ffcf9e",margin:"5px 0"}}>⚠ {warning}</p>)}
+                <div>Follow the recorded line; GPS traces do not verify passability or terrain safety.</div>
+              </> : "Trail data insufficient; no route available."}
+            </div>}
             <a
               href={`https://www.google.com/maps/dir/?api=1&destination=${navigationTarget.lat}%2C${navigationTarget.lng}&travelmode=driving`}
               target="_blank"
@@ -2775,9 +2783,9 @@ export default function FieldMap({
             />
           )}
 
-          {returningToStart && trail.length>1 && (
-            <Polyline positions={[...trail].reverse().map(point=>[point.lat,point.lng] as [number,number])} pathOptions={{color:"#f2bc62",weight:3,opacity:.98,dashArray:"8 8",lineCap:"round"}} />
-          )}
+           {returningToStart && returnGuidance && (
+             <Polyline positions={returnGuidance.remainingRecordedPoints} pathOptions={{color:"#f2bc62",weight:4,opacity:.98,dashArray:"8 8",lineCap:"round"}} />
+           )}
 
           {position && (
             <Marker
