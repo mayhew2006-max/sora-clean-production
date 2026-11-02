@@ -628,6 +628,8 @@ export default function FieldMap({
   }, []);
 
  const [deerForecastOpen,setDeerForecastOpen] = useState(false);
+ const [forecastTarget,setForecastTarget] = useState<FieldSpot|null>(null);
+ function openStandOutlook(spot:FieldSpot){setForecastTarget(spot);setDeerForecastOpen(true);setToolsOpen(false);setHistoryOpen(false);setJournalSpot(null);}
  const [sightingsOpen,setSightingsOpen] = useState(false);
  const [historyOpen, setHistoryOpen] =
     useState(false);
@@ -1958,7 +1960,7 @@ export default function FieldMap({
         background: "#0C1411",
       }}
     >
-      <FieldDeerForecast open={deerForecastOpen} onClose={()=>setDeerForecastOpen(false)} position={position}/>
+      <FieldDeerForecast open={deerForecastOpen} onClose={()=>{setDeerForecastOpen(false);setForecastTarget(null);}} position={position} focusedSpot={forecastTarget}/>
       <FieldSightingJournal open={sightingsOpen} onClose={()=>setSightingsOpen(false)} position={position}/>
       {toolsOpen && (
         <div role="dialog" aria-label="Outdoor field tools" className="gf-premium-sheet" style={{position:"absolute",zIndex:1600,left:10,right:10,bottom:"calc(env(safe-area-inset-bottom, 0px) + 94px)",maxWidth:510,margin:"auto",maxHeight:"min(70dvh, 600px)",overflowY:"auto",borderRadius:17,padding:"17px 14px 18px",background:"linear-gradient(150deg,rgba(7,20,16,.99),rgba(13,30,22,.99))",border:"1px solid #d3ac72",boxShadow:"0 15px 50px #000d",color:"#f3e6cd"}}>
@@ -1987,7 +1989,7 @@ export default function FieldMap({
               if(kind==="truck"){if(truckSpot)backToTruck();else void truckAction();}
               if(kind==="track"){if(tracking)stopTracking();else void startTracking();}
               if(kind==="return")returnToStart();
-              if(kind==="deer")setDeerForecastOpen(true);
+              if(kind==="deer"){setForecastTarget(null);setDeerForecastOpen(true);}
               if(kind==="sightings")setSightingsOpen(true);
               if(kind==="history")setHistoryOpen(true);
               if(kind==="weather"){setFieldPanel("weather");void loadFieldWeather();}
@@ -2761,6 +2763,7 @@ export default function FieldMap({
       </section>}
       {journalSpot && <section role="dialog" aria-label="Outdoor journal" style={{position:"absolute",zIndex:1903,left:12,right:12,top:"calc(env(safe-area-inset-top,0px) + 16px)",maxWidth:350,maxHeight:"65%",overflowY:"auto",margin:"auto",background:"#10221b",color:"#f5e6ca",border:"1px solid #d3b16f",borderRadius:15,padding:14}}>
         <div style={{display:"flex",justifyContent:"space-between",gap:8}}><strong>📓 {journalSpot.name}</strong><button type="button" onClick={()=>setJournalSpot(null)} style={{color:"#f5e6ca",background:"transparent",border:0,fontSize:22}}>×</button></div>
+        <button type="button" onClick={()=>openStandOutlook(journalSpot)} style={{width:"100%",padding:10,background:"#36543c",color:"#fff3d9",border:"1px solid #d3b16f",borderRadius:8,marginTop:10,fontWeight:800}}>🦌 BEST HUNTING CONDITIONS FOR THIS SPOT</button>
         <textarea aria-label="New field observation" placeholder="Wildlife, tracks, catches, weather, camp notes…" value={journalText} onChange={e=>setJournalText(e.target.value)} maxLength={1000} rows={3} style={{width:"100%",boxSizing:"border-box",background:"#21392e",color:"#fff",border:"1px solid #9a835b",borderRadius:8,padding:8,marginTop:9}}/>
         <button type="button" onClick={()=>void saveJournalEntry()} disabled={!journalText.trim()} style={{width:"100%",padding:9,background:"#bca06b",color:"#10221b",fontWeight:800,borderRadius:8}}>Save observation</button>
         <small style={{display:"block",opacity:.75,margin:"8px 0"}}>Notes are private to this device until cloud sync is added. Saving an entry uses one free action.</small>
@@ -2891,6 +2894,7 @@ export default function FieldMap({
                     <details style={{marginBottom:8,border:"1px solid #756a4d",borderRadius:9,padding:8}}>
                       <summary style={{cursor:"pointer",fontWeight:800,color:"#efd29e",padding:5}}>🔎 Analyze Location</summary>
                       <div style={{marginTop:9}}>
+                    <button type="button" onClick={e=>{e.stopPropagation();(e.currentTarget.closest(".leaflet-popup") as HTMLElement | null)?.querySelector<HTMLElement>(".leaflet-popup-close-button")?.click();openStandOutlook(spot);}} style={{width:"100%",background:"#47602f",border:"1px solid #d6b477",padding:"11px",borderRadius:8,marginBottom:7,fontWeight:900}}>🦌 HUNT THIS SPOT · BEST CONDITIONS</button>
                     <button type="button" onClick={e=>{e.stopPropagation();(e.currentTarget.closest(".leaflet-popup") as HTMLElement | null)?.querySelector<HTMLElement>(".leaflet-popup-close-button")?.click();void analyzeSpotWind(spot);}} style={{width:"100%",background:"#314a32",border:"1px solid #d6b477",padding:"9px",borderRadius:8,marginBottom:7}}>🌬️ WIND & SCENT CONE</button>
                     <button type="button" onClick={e=>{e.stopPropagation();(e.currentTarget.closest(".leaflet-popup") as HTMLElement | null)?.querySelector<HTMLElement>(".leaflet-popup-close-button")?.click();void analyzeSpotConditions(spot);}} style={{width:"100%",background:"#233d33",border:"1px solid #d6b477",padding:9,borderRadius:8,marginBottom:7}}>☀️ SUN, ELEVATION & CONDITIONS</button>
                     <button type="button" onClick={e=>{e.stopPropagation();(e.currentTarget.closest(".leaflet-popup") as HTMLElement|null)?.querySelector<HTMLElement>(".leaflet-popup-close-button")?.click();void analyzeTerrain(spot);}} style={{width:"100%",background:"#233d33",border:"1px solid #d6b477",padding:9,borderRadius:8,marginBottom:7}}>⛰️ TERRAIN SCAN</button>
