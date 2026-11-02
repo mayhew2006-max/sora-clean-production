@@ -4,7 +4,7 @@ import { createClient } from "@supabase/supabase-js";
 
 export const dynamic = "force-dynamic";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "");
+const stripeClient = () => new Stripe(process.env.STRIPE_SECRET_KEY || "");
 
 function getSupabaseAdmin() {
   return createClient(
@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
       process.env.NEXT_PUBLIC_SITE_URL ||
       req.nextUrl.origin;
 
-    const session = await stripe.checkout.sessions.create({
+    const session = await stripeClient().checkout.sessions.create({
       mode: "subscription",
       customer_email: email,
       line_items: [
