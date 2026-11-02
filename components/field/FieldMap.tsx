@@ -16,6 +16,18 @@ import { supabase } from "@/lib/supabaseClient";
 import "leaflet/dist/leaflet.css";
 import { markerOptions, markerSvg, markerColor } from "./FieldPremiumMarkers";
 
+async function fieldElevations(points: Array<[number,number]>): Promise<number[]> {
+  try {
+    const response=await fetch("https://api.open-meteo.com/v1/elevation?"+new URLSearchParams({latitude:points.map(p=>p[0]).join(","),longitude:points.map(p=>p[1]).join(",")}));
+    if(response.ok){const data=await response.json();if(Array.isArray(data?.elevation)&&data.elevation.length===points.length&&data.elevation.every((v:unknown)=>v!==null&&Number.isFinite(Number(v))))return data.elevation.map(Number);}
+  }catch{}
+  const fallback=await fetch("https://api.opentopodata.org/v1/aster30m?"+new URLSearchParams({locations:points.map(p=>p.join(",")).join("|")}));
+  if(!fallback.ok)throw new Error("Elevation services unavailable (HTTP "+fallback.status+")");
+  const data=await fallback.json();const values=data?.results?.map((r:{elevation:number|null})=>r.elevation);
+  if(!Array.isArray(values)||values.length!==points.length||values.some((v:unknown)=>v===null||!Number.isFinite(Number(v))))throw new Error("Elevation data unavailable for this location");
+  return values.map(Number);
+}
+
 export type FieldMode = "hunt" | "fish";
 
 export type FieldSpot = {
@@ -308,7 +320,7 @@ export default function FieldMap({
     try {
       const q = new URLSearchParams({latitude:String(spot.lat),longitude:String(spot.lng),hourly:"wind_direction_10m,wind_speed_10m",wind_speed_unit:"mph",forecast_days:"2",timezone:"auto"});
       const res = await fetch("https://api.open-meteo.com/v1/forecast?"+q);
-      if (!res.ok) throw new Error("Wind forecast unavailable");
+      if (!res.ok) throw new Error("Wind service unavailable (HTTP "+res.status+")");
       const data = await res.json();
       const times:string[] = data?.hourly?.time || [];
       const directions:number[] = data?.hourly?.wind_direction_10m || [];
@@ -338,16 +350,11 @@ export default function FieldMap({
     setTerrainInfo(null);setTerrainError("");setJournalSpot(null);setScentSpot(null); setSpotIntel(null); setIntelError(""); setIntelLoading(true);
     try {
       const q = new URLSearchParams({latitude:String(spot.lat),longitude:String(spot.lng),current:"temperature_2m,precipitation",daily:"sunrise,sunset",temperature_unit:"fahrenheit",precipitation_unit:"inch",timezone:"auto",forecast_days:"1"});
-      const elevationQuery = new URLSearchParams({latitude:String(spot.lat),longitude:String(spot.lng)});
-      const [forecast,elevation] = await Promise.all([
-        fetch("https://api.open-meteo.com/v1/forecast?"+q),
-        fetch("https://api.open-meteo.com/v1/elevation?"+elevationQuery)
-      ]);
-      if (!forecast.ok) throw new Error("Location conditions unavailable");
+      const [forecast,elevationMeters] = await Promise.all([fetch("https://api.open-meteo.com/v1/forecast?"+q),fieldElevations([[spot.lat,spot.lng]]).catch(()=>[])]);
+      if (!forecast.ok) throw new Error("Weather service unavailable (HTTP "+forecast.status+")");
       const data = await forecast.json();
-      const elevationData = elevation.ok ? await elevation.json() : null;
-      const meters = Number(elevationData?.elevation?.[0]);
-      setSpotIntel({name:spot.name,sunrise:String(data?.daily?.sunrise?.[0]||""),sunset:String(data?.daily?.sunset?.[0]||""),elevation:Number.isFinite(meters)&&elevationData?.elevation?.length?Math.round(meters*3.28084):null,rain:Number.isFinite(Number(data?.current?.precipitation))?Number(data.current.precipitation):null,temperature:Number.isFinite(Number(data?.current?.temperature_2m))?Number(data.current.temperature_2m):null});
+      const meters = elevationMeters[0];
+      setSpotIntel({name:spot.name,sunrise:String(data?.daily?.sunrise?.[0]||""),sunset:String(data?.daily?.sunset?.[0]||""),elevation:Number.isFinite(meters)?Math.round(meters*3.28084):null,rain:Number.isFinite(Number(data?.current?.precipitation))?Number(data.current.precipitation):null,temperature:Number.isFinite(Number(data?.current?.temperature_2m))?Number(data.current.temperature_2m):null});
     } catch(e) {setIntelError(e instanceof Error?e.message:"Conditions unavailable");}
     finally {setIntelLoading(false);}
   }
@@ -378,12 +385,7 @@ export default function FieldMap({
     try {
       const delta=0.0027; // roughly 300 m north/south
       const longitudeDelta=delta/Math.max(.2,Math.cos(spot.lat*Math.PI/180));
-      const latitudes=[spot.lat,spot.lat+delta,spot.lat-delta,spot.lat,spot.lat].join(",");
-      const longitudes=[spot.lng,spot.lng,spot.lng,spot.lng+longitudeDelta,spot.lng-longitudeDelta].join(",");
-      const res=await fetch("https://api.open-meteo.com/v1/elevation?"+new URLSearchParams({latitude:latitudes,longitude:longitudes}));
-      if(!res.ok)throw new Error("Elevation data unavailable");
-      const json=await res.json();const heights=json?.elevation;
-      if(!Array.isArray(heights)||heights.length!==5||heights.some((v:unknown)=>!Number.isFinite(Number(v))))throw new Error("Terrain samples unavailable");
+      const heights=await fieldElevations([[spot.lat,spot.lng],[spot.lat+delta,spot.lng],[spot.lat-delta,spot.lng],[spot.lat,spot.lng+longitudeDelta],[spot.lat,spot.lng-longitudeDelta]]);
       const feet=heights.map((v:number)=>Math.round(Number(v)*3.28084));
       setTerrainInfo({name:spot.name,center:feet[0],north:feet[1],south:feet[2],east:feet[3],west:feet[4]});
     }catch(e){setTerrainError(e instanceof Error?e.message:"Terrain unavailable");}
