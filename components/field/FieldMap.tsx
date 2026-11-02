@@ -1932,6 +1932,17 @@ export default function FieldMap({
     Number.isFinite(accuracy) && accuracy > 0 && trail.length > 1 &&
     distanceMeters(position,[trail[0].lat,trail[0].lng]) <= Math.max(accuracy,8)
   );
+  const trailHealth = useMemo(() => {
+    let distance=0,largeGaps=0,longestGap=0,invalidTimes=0;
+    for(let i=1;i<trail.length;i++){
+      const gap=distanceMeters([trail[i-1].lat,trail[i-1].lng],[trail[i].lat,trail[i].lng]);
+      if(!Number.isFinite(gap))continue;
+      distance+=gap;longestGap=Math.max(longestGap,gap);
+      if(gap>120)largeGaps++;
+      if(!Number.isFinite(Date.parse(trail[i].time)))invalidTimes++;
+    }
+    return {distance,largeGaps,longestGap,invalidTimes};
+  },[trail]);
   const center: [number, number] =
     position || [38.5, -80.5];
 
@@ -1988,7 +1999,13 @@ export default function FieldMap({
           </div>
           <div style={{marginTop:13,background:"#081510",border:"1px solid #5a644e",borderRadius:11,padding:"10px 12px",fontSize:11,lineHeight:1.5,color:"#ced5c4"}}>
             <strong style={{color:tracking?"#a0e6b5":"#e8c991"}}>{tracking?"● RECORDING GPS TRAIL":"● TRAIL READY"}</strong>
-            <div>{trail.length} saved breadcrumb points. Blue lines show accepted GPS positions; inaccurate fixes are excluded.</div>
+            <div>{trail.length} saved breadcrumb points · {formatDistance(trailHealth.distance)} logged distance.</div>
+            <div style={{color:trailHealth.largeGaps?"#ffcc93":"#a5d5b2",marginTop:5}}>
+              {trailHealth.largeGaps
+                ? `⚠ ${trailHealth.largeGaps} GPS gap(s) larger than 120 m. Longest ${formatDistance(trailHealth.longestGap)}. Never assume those sections are passable.`
+                : trail.length>1?"No gaps larger than 120 m detected. This does not establish terrain safety.":"Record more GPS points to evaluate trail gaps."}
+            </div>
+            <div style={{color:"#c9c5ad",marginTop:4}}>Trail lines are stored positions, not verified paths or hazard-free routes.</div>
             <div style={{display:"flex",gap:7,flexWrap:"wrap",marginTop:9}}>
               <button type="button" onClick={exportTrailHistory} style={{padding:"9px 13px",border:"1px solid #9aab8f",borderRadius:8,background:"#19372a",color:"#f8e4cf",fontWeight:700}}>EXPORT TRAILS</button>
               {trail.length>0&&<button type="button" onClick={clearTrail} style={{padding:"9px 13px",border:"1px solid #ad8b62",borderRadius:8,background:"#342419",color:"#f8e4cf",fontWeight:700}}>CLEAR TRAIL (CONFIRM)</button>}
