@@ -573,6 +573,8 @@ export default function FieldMap({
         lng: number;
         discovery?: boolean;
         name?: string;
+        zoom?: number;
+        activity?: string;
       }>).detail;
 
       if (!detail) return;
@@ -583,12 +585,12 @@ export default function FieldMap({
       if (!Number.isFinite(lat) || !Number.isFinite(lng) ||
           Math.abs(lat) > 90 || Math.abs(lng) > 180) return;
 
-      if (detail.discovery) setDiscoveryPin({lat,lng,name: typeof detail.name === "string" ? detail.name.slice(0,100) : "Fishing destination"});
+      if (detail.discovery) setDiscoveryPin({lat,lng,name:typeof detail.name==="string"?detail.name.slice(0,100):"Searched place",activity:typeof detail.activity==="string"?detail.activity:"explore"});
       setMapCommand({
         id: Date.now(),
         lat,
         lng,
-        zoom: 16,
+        zoom: detail.discovery && Number.isFinite(detail.zoom) ? Math.min(18,Math.max(5,Number(detail.zoom))) : 16,
       });
     };
 
@@ -598,7 +600,7 @@ export default function FieldMap({
     );
   }, []);
 
- const [discoveryPin, setDiscoveryPin] = useState<{lat:number;lng:number;name:string}|null>(null);
+ const [discoveryPin, setDiscoveryPin] = useState<{lat:number;lng:number;name:string;activity?:string}|null>(null);
  const [mapCommand, setMapCommand] =
     useState<{
       id: number;
@@ -2836,7 +2838,21 @@ export default function FieldMap({
           />
 
           {scentCone && <Polygon positions={scentCone} pathOptions={{color:"#e6bd68",fillColor:"#e8bc59",fillOpacity:0.26,weight:2}} />}
-          {discoveryPin && <Marker position={[discoveryPin.lat,discoveryPin.lng]} icon={makeIcon("custom","#f2bc62")}><Popup>{discoveryPin.name} — discovered location (public access unverified)</Popup></Marker>}
+          {discoveryPin && <Marker position={[discoveryPin.lat,discoveryPin.lng]} icon={makeIcon("custom","#f2bc62")}><Popup maxWidth={290}>
+              <div style={{fontWeight:800,marginBottom:7}}>{discoveryPin.name}</div>
+              <div style={{fontSize:11,marginBottom:9}}>Temporary searched pin · exact access, facilities and safety unverified.</div>
+              <button type="button" onClick={()=>{
+                const a=discoveryPin.activity||"explore";
+                const question=a==="camp"?"Grace, would camping at "+discoveryPin.name+" be a good idea Friday night?"
+                  :a==="fish"?"Grace, what would be a good time to fish at "+discoveryPin.name+" tomorrow?"
+                  :a==="hunt"?"Grace, what are the hunting conditions around "+discoveryPin.name+" tomorrow?"
+                  :a==="paddle"?"Grace, what are the paddling conditions around "+discoveryPin.name+" Saturday?"
+                  :a==="hike"?"Grace, is hiking near "+discoveryPin.name+" a good idea Saturday?"
+                  :"Grace, what should I know about visiting "+discoveryPin.name+" this weekend?";
+                window.dispatchEvent(new CustomEvent("grace-field-ask-spot",{detail:{question,temporaryPlace:{name:discoveryPin.name,lat:discoveryPin.lat,lng:discoveryPin.lng,activity:a}}}));
+              }} style={{width:"100%",padding:10,background:"#234a3b",color:"#fae5c5",border:"1px solid #d6b477",borderRadius:8}}>💬 ASK GRACE ABOUT THIS PLACE</button>
+              <button type="button" onClick={()=>{setPending({lat:discoveryPin.lat,lng:discoveryPin.lng});setName(discoveryPin.name);setNotes("Searched location; access and use unverified.");setEditingSpotId(null);}} style={{width:"100%",marginTop:7,padding:9}}>SAVE AS WAYPOINT (CHOOSE ICON)</button>
+             </Popup></Marker>}
 
           {pending && (
             <Marker
