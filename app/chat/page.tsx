@@ -136,6 +136,7 @@ export default function GraceChat() {
   const [input, setInput] = useState("");
   const [embeddedField, setEmbeddedField] = useState(false);
   const [fieldSpotOffer, setFieldSpotOffer] = useState<{id:string;name:string;lat:number;lng:number}|null>(null);
+  const [temporaryFieldPlace,setTemporaryFieldPlace] = useState<{name:string;lat:number;lng:number;activity:string}|null>(null);
   const [fieldSpots, setFieldSpots] = useState<Array<{id:string;name:string;type:string;lat:number;lng:number;mode?:string;notes?:string;observations?:string[];approach?:string;excludeFromAdvice?:boolean}>>([]);
   useEffect(() => {
     const embedded = window.self !== window.top && new URLSearchParams(window.location.search).get("field") === "1";
@@ -153,6 +154,16 @@ export default function GraceChat() {
     window.parent.postMessage({type:"grace-field-request-context"},window.location.origin);
     return () => window.removeEventListener("message",onMessage);
   }, []);
+  useEffect(()=>{
+    const receive=(event:MessageEvent)=>{
+      if(event.origin!==window.location.origin || event.source!==window.parent || event.data?.type!=="grace-field-temporary-place")return;
+      const p=event.data.place;
+      if(!p){setTemporaryFieldPlace(null);return;}
+      if(typeof p.name==="string"&&p.name.length<=100&&Number.isFinite(p.lat)&&Number.isFinite(p.lng)&&Math.abs(p.lat)<=90&&Math.abs(p.lng)<=180)setTemporaryFieldPlace(p);
+    };
+    window.addEventListener("message",receive);
+    return()=>window.removeEventListener("message",receive);
+  },[]);
   // The Field map can prepare an activity-specific question, but the user
   // decides whether to send it. No automatic charges or external requests.
   useEffect(()=>{
@@ -2561,7 +2572,7 @@ function isMarketplaceQuery(text: string) {
         const result=await fetch("/api/field-advice",{
           method:"POST",
           headers:{"Content-Type":"application/json",...(await graceApiHeaders())},
-          body:JSON.stringify({question:clean,localDate,spots:fieldSpots,history:messagesRef.current.slice(-6),activityHint:fieldPlanContext?.activity,periodHint:fieldPlanContext?.period,spotIdsHint:fieldPlanContext?.spotIds})
+          body:JSON.stringify({question:clean,localDate,spots:fieldSpots,temporaryPlace:temporaryFieldPlace,history:messagesRef.current.slice(-6),activityHint:temporaryFieldPlace?.activity||fieldPlanContext?.activity,periodHint:fieldPlanContext?.period,spotIdsHint:fieldPlanContext?.spotIds})
         });
         const data=await result.json();
         const reply=String(data.reply||data.error||"Couldn't verify that forecast right now.");
