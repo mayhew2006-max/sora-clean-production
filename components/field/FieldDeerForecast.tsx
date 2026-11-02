@@ -65,7 +65,7 @@ function readSites():Site[]{
       const lat=Number(p.lat),lng=Number(p.lng);
       if(!id||seen.has(id)||!Number.isFinite(lat)||!Number.isFinite(lng)||Math.abs(lat)>90||Math.abs(lng)>180)return false;
       seen.add(id);return true;
-    }).slice(0,150).map((p:Record<string,unknown>)=>({id:String(p.id),name:String(p.name||"Saved spot").slice(0,80),lat:Number(p.lat),lng:Number(p.lng),mode:String(p.mode||""),type:String(p.type||"")})).sort((a:Site,b:Site)=>Number(/stand|blind/i.test(b.type))-Number(/stand|blind/i.test(a.type))||a.name.localeCompare(b.name));
+    }).slice(0,150).map((p:Record<string,unknown>)=>({id:String(p.id),name:String(p.name||"Saved spot").slice(0,80),lat:Number(p.lat),lng:Number(p.lng),mode:String(p.mode||""),type:String(p.type||"")})).sort((a:Site,b:Site)=>Number(/stand|blind/i.test(b.type ?? ""))-Number(/stand|blind/i.test(a.type ?? ""))||a.name.localeCompare(b.name));
   }catch{return [];}
 }
 const selectStyle:React.CSSProperties={width:"100%",padding:11,borderRadius:10,background:"#152d23",color:"#fff0d8",border:"1px solid #876f4e",fontSize:14};
@@ -83,7 +83,7 @@ export default function FieldDeerForecast({open,onClose,position,focusedSpot}:{o
     const saved=readSites();
     const all=focusedSpot&&!saved.some(s=>s.id===focusedSpot.id)?[focusedSpot,...saved]:saved;
     setSites(all);
-    setSelected(focusedSpot?.id||saved.find(s=>/stand|blind/i.test(s.type)||s.mode==="hunt")?.id||"gps");
+    setSelected(focusedSpot?.id||saved.find(s=>/stand|blind/i.test(s.type ?? "")||s.mode==="hunt")?.id||"gps");
     setTimeline(false);
   },[open,focusedSpot?.id,focusedSpot?.lat,focusedSpot?.lng]);
   const site=selected==="gps"?(position?{id:"gps",name:"Current GPS position",lat:position[0],lng:position[1]}:null):sites.find(p=>p.id===selected)||null;
