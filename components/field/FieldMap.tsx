@@ -7,6 +7,7 @@ import {
   Marker,
   Popup,
   Polyline,
+  Polygon,
   useMap,
   useMapEvents,
 } from "react-leaflet";
@@ -293,6 +294,40 @@ export default function FieldMap({
 
   const [pending, setPending] =
     useState<{ lat: number; lng: number } | null>(null);
+
+
+  const [scentSpot, setScentSpot] = useState<FieldSpot | null>(null);
+  const [scentForecast, setScentForecast] = useState<{time:string; direction:number; speed:number}[]>([]);
+  const [scentHour, setScentHour] = useState(0);
+  const [scentError, setScentError] = useState("");
+  const [scentLoading, setScentLoading] = useState(false);
+  async function analyzeSpotWind(spot: FieldSpot) {
+    if (!(await useFieldAction())) return;
+    setScentSpot(spot); setScentForecast([]); setScentHour(0); setScentError(""); setScentLoading(true);
+    try {
+      const q = new URLSearchParams({latitude:String(spot.lat),longitude:String(spot.lng),hourly:"wind_direction_10m,wind_speed_10m",wind_speed_unit:"mph",forecast_days:"2",timezone:"auto"});
+      const res = await fetch("https://api.open-meteo.com/v1/forecast?"+q);
+      if (!res.ok) throw new Error("Wind forecast unavailable");
+      const data = await res.json();
+      const times:string[] = data?.hourly?.time || [];
+      const directions:number[] = data?.hourly?.wind_direction_10m || [];
+      const speeds:number[] = data?.hourly?.wind_speed_10m || [];
+      const now = Date.now();
+      const forecast = times.map((time,i)=>({time,direction:Number(directions[i]),speed:Number(speeds[i])})).filter(x=>Number.isFinite(x.direction)&&Number.isFinite(x.speed)&&new Date(x.time).getTime()>=now-3600000).slice(0,30);
+      if (!forecast.length) throw new Error("No hourly wind data available");
+      setScentForecast(forecast);
+    } catch(e) { setScentError(e instanceof Error?e.message:"Wind forecast unavailable"); }
+    finally { setScentLoading(false); }
+  }
+  const scentCurrent = scentForecast[scentHour];
+  const scentCone = scentSpot && scentCurrent ? (() => {
+    const downwind = (scentCurrent.direction + 180) % 360;
+    const destination = (bearing:number,meters:number):[number,number] => {
+      const radians=bearing*Math.PI/180;
+      return [scentSpot.lat + meters*Math.cos(radians)/111320, scentSpot.lng + meters*Math.sin(radians)/(111320*Math.max(.1,Math.cos(scentSpot.lat*Math.PI/180)))];
+    };
+    return [[scentSpot.lat,scentSpot.lng] as [number,number],destination(downwind-25,400),destination(downwind+25,400)];
+  })() : null;
 
   const [name, setName] = useState("");
   const [notes, setNotes] = useState("");
@@ -2519,6 +2554,15 @@ export default function FieldMap({
           border: 0,
         }}
       >
+
+      {scentSpot && <section role="dialog" aria-label="Wind and scent forecast" style={{position:"absolute",zIndex:1900,left:12,right:12,bottom:"calc(env(safe-area-inset-bottom,0px) + 90px)",maxWidth:440,margin:"auto",background:"#10221b",color:"#f5e6ca",border:"1px solid #d3b16f",borderRadius:15,padding:15,boxShadow:"0 10px 35px #000b"}}>
+        <div style={{display:"flex",justifyContent:"space-between",gap:10,alignItems:"center"}}><strong>🌬️ Wind & Scent · {scentSpot.name}</strong><button type="button" onClick={()=>setScentSpot(null)} style={{color:"#f5e6ca",background:"transparent",border:0,fontSize:22}}>×</button></div>
+        {scentLoading ? <p>Checking hourly wind…</p> : scentError ? <p>{scentError}</p> : scentCurrent ? <>
+          <p style={{margin:"10px 0"}}>{new Date(scentCurrent.time).toLocaleString([], {weekday:"short",hour:"numeric",minute:"2-digit"})} · Wind from {Math.round(scentCurrent.direction)}° at {Math.round(scentCurrent.speed)} mph</p>
+          <label style={{display:"block"}}>Forecast hour <input aria-label="Forecast hour" type="range" min={0} max={scentForecast.length-1} value={scentHour} onChange={e=>setScentHour(Number(e.target.value))} style={{width:"100%",accentColor:"#d3b16f"}}/></label>
+          <small style={{display:"block",opacity:.85,marginTop:8}}>Gold cone estimates downwind direction for roughly 400 m. Terrain, thermals and gusts can redirect scent; not a safety or wildlife prediction.</small>
+        </> : null}
+      </section>}
         <MapContainer
           center={center}
           zoom={position ? 15 : 7}
@@ -2562,6 +2606,7 @@ export default function FieldMap({
             }}
           />
 
+          {scentCone && <Polygon positions={scentCone} pathOptions={{color:"#e6bd68",fillColor:"#e8bc59",fillOpacity:0.26,weight:2}} />}
           {discoveryPin && <Marker position={[discoveryPin.lat,discoveryPin.lng]} icon={makeIcon("custom","#f2bc62")}><Popup>{discoveryPin.name} — discovered location (public access unverified)</Popup></Marker>}
 
           {pending && (
@@ -2635,6 +2680,7 @@ export default function FieldMap({
                     <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:8}}>
                       {(["realistic","modern","tactical","topo","minimal"] as const).map(style=><button type="button" key={style} onClick={()=>setLocalSpotStyle(spot.id,style)} style={{fontSize:10,padding:"5px 7px",background:spotStyle===style?"#5d4926":"#1c3027",borderColor:spotStyle===style?"#e9c788":"#5b6b57"}}>{style}</button>)}
                     </div>
+                    <button type="button" onClick={()=>void analyzeSpotWind(spot)} style={{width:"100%",background:"#314a32",border:"1px solid #d6b477",padding:"9px",borderRadius:8,marginBottom:7}}>🌬️ WIND & SCENT CONE</button>
                     {spot.notes && <p style={{whiteSpace:"pre-wrap"}}>{spot.notes}</p>}
 
                     <small style={{display:"block",marginTop:6,color:"#c6bea8"}}>
