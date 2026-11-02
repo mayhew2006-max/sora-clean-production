@@ -13,7 +13,7 @@ export default function LoginPage() {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      if (data.session) window.location.href = "/chat";
+      if (data.session) window.location.href = "/field";
     });
   }, []);
 
@@ -61,7 +61,7 @@ export default function LoginPage() {
         return;
       }
 
-      window.location.href = "/chat";
+      window.location.href = "/field";
     } finally {
       setBusy(false);
     }
