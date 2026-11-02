@@ -1923,6 +1923,13 @@ export default function FieldMap({
   }, [position, navigationTarget]);
 
   const returnGuidance = useMemo(() => returningToStart ? calculateTrailReturn(trail,position,accuracy,lastLiveGpsAt,heartbeat) : null, [returningToStart,trail,position,accuracy,lastLiveGpsAt,heartbeat]);
+  // If GPS uncertainty overlaps the trail start, a 1-foot distance/bearing is
+  // meaningless. Never claim an exact arrival or show a compass direction.
+  const startWithinGpsUncertainty = Boolean(
+    returningToStart && returnGuidance && position && accuracy !== null &&
+    Number.isFinite(accuracy) && accuracy > 0 && trail.length > 1 &&
+    distanceMeters(position,[trail[0].lat,trail[0].lng]) <= Math.max(accuracy,8)
+  );
   const center: [number, number] =
     position || [38.5, -80.5];
 
@@ -2611,7 +2618,7 @@ export default function FieldMap({
               <div style={{fontSize:9,letterSpacing:1.3,color:"#d9b77d"}}>NAVIGATION · TAP TO EXPAND</div>
               <div style={{fontSize:14,fontWeight:800,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                 {returningToStart
-                  ? (returnGuidance ? `RECORDED PATH ${formatDistance(returnGuidance.recordedDistanceToStartMeters)} · ${returnGuidance.liveGuidanceReliable ? "GPS FIX OK" : "GPS CHECK NEEDED"}` : "TRAIL BACK · No recorded route")
+                  ? (startWithinGpsUncertainty ? "NEAR RECORDED START · VERIFY LOCATION" : returnGuidance ? `RECORDED PATH ${formatDistance(returnGuidance.recordedDistanceToStartMeters)} · ${returnGuidance.liveGuidanceReliable ? "GPS FIX OK" : "GPS CHECK NEEDED"}` : "TRAIL BACK · No recorded route")
                   : `${navigationTarget.name} · ${formatDistance(navigation.distance)} · ${navigation.direction} ${Math.round(navigation.bearing)}°`}
               </div>
             </button>
@@ -2643,11 +2650,11 @@ export default function FieldMap({
             </div>
             <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10,marginTop:14}}>
               <div style={{padding:13,borderRadius:12,border:"1px solid #8c7755",background:"#0b1a14"}}>
-                <div style={{fontSize:9,letterSpacing:1.3,color:"#c4ac84"}}>DIRECT BEARING</div>
+                <div style={{fontSize:9,letterSpacing:1.3,color:"#c4ac84"}}>{startWithinGpsUncertainty ? "BEARING UNRELIABLE" : "DIRECT BEARING"}</div>
                 <div style={{fontWeight:800,fontSize:24,color:"#f3d49d",marginTop:6,whiteSpace:"nowrap"}}>
-                  {navigation.direction} · {Math.round(navigation.bearing)}°
+                  {startWithinGpsUncertainty ? "—" : `${navigation.direction} · ${Math.round(navigation.bearing)}°`}
                 </div>
-                <div style={{fontSize:11,color:"#c6cfc0",marginTop:3}}>True north · not turn-by-turn</div>
+                <div style={{fontSize:11,color:"#c6cfc0",marginTop:3}}>{startWithinGpsUncertainty ? "Start within GPS uncertainty" : "True north · not turn-by-turn"}</div>
               </div>
               <div style={{padding:13,borderRadius:12,border:"1px solid #8c7755",background:"#0b1a14"}}>
                 <div style={{fontSize:9,letterSpacing:1.3,color:"#c4ac84"}}>DIRECT DISTANCE</div>
@@ -2667,11 +2674,15 @@ export default function FieldMap({
             </div>
             {returningToStart && <div style={{fontSize:12,lineHeight:1.6,color:"#cdd7c8",marginTop:10}}>
               {returnGuidance ? <>
-                <strong style={{color:"#efd09a"}}>RECORDED ROUTE · {formatDistance(returnGuidance.recordedDistanceToStartMeters)} along logged points</strong>
+                <strong style={{color:"#efd09a"}}>{startWithinGpsUncertainty ? "NEAR RECORDED START · LOCATION NOT EXACT" : `RECORDED ROUTE · ${formatDistance(returnGuidance.recordedDistanceToStartMeters)} along logged points`}</strong>
                 <div>Live GPS: {lastLiveGpsAt===null ? "not acquired" : `${Math.max(0,Math.floor((heartbeat-lastLiveGpsAt)/1000))} seconds since last fix`}. Straight-line bearing above is NOT breadcrumb guidance.</div>
-                {returnGuidance.liveGuidanceReliable && position
-                  ? <div><strong>Next breadcrumb: {compassDirection(bearingDegrees(position,returnGuidance.nextRecordedPoint))} {Math.round(bearingDegrees(position,returnGuidance.nextRecordedPoint))}° · {formatDistance(distanceMeters(position,returnGuidance.nextRecordedPoint))}</strong><div style={{fontSize:11}}>Approximate direction to a previously recorded point; verify terrain ahead.</div></div>
-                  : <div>Next recorded point: {returnGuidance.nextRecordedPoint.map(v=>v.toFixed(5)).join(", ")}. Live heading disabled until GPS reliability returns.</div>}
+                {startWithinGpsUncertainty
+                  ? <div role="status" style={{background:"#463020",padding:10,borderRadius:9,margin:"8px 0",border:"1px solid #d6a46f",color:"#ffe6ba"}}>
+                      Your reported GPS position overlaps the recorded start within ±{Math.round((accuracy ?? 0)*3.28084)} ft uncertainty. Do not rely on a compass direction or assume you have arrived. Confirm your start using landmarks.
+                    </div>
+                  : returnGuidance.liveGuidanceReliable && position
+                    ? <div><strong>Next breadcrumb: {compassDirection(bearingDegrees(position,returnGuidance.nextRecordedPoint))} {Math.round(bearingDegrees(position,returnGuidance.nextRecordedPoint))}° · {formatDistance(distanceMeters(position,returnGuidance.nextRecordedPoint))}</strong><div style={{fontSize:11}}>Approximate direction to a previously recorded point; verify terrain ahead.</div></div>
+                    : <div>Next recorded point: {returnGuidance.nextRecordedPoint.map(v=>v.toFixed(5)).join(", ")}. Live heading disabled until GPS reliability returns.</div>}
                 {returnGuidance.warnings.map((warning,i)=><p key={i} style={{color:"#ffcf9e",margin:"5px 0"}}>⚠ {warning}</p>)}
                 <button type="button" onClick={locateMe} style={{margin:"7px 0",padding:"10px 13px",background:"#264638",border:"1px solid #bda475",borderRadius:9,color:"#f6e5c8",fontWeight:800}}>↻ REFRESH PRECISE GPS</button>
                 <div>Follow the recorded line; GPS traces do not verify passability or terrain safety.</div>
