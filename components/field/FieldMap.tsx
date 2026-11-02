@@ -393,9 +393,10 @@ export default function FieldMap({
   const [waterInfo,setWaterInfo]=useState<{spot:string;stations:{name:string;distanceKm:number;flow:string;level:string;time:string}[]}|null>(null);
   const [waterBusy,setWaterBusy]=useState(false);
   const [waterError,setWaterError]=useState("");
+  const [waterIncludeOld,setWaterIncludeOld]=useState(false);
   async function inspectNearbyWater(spot:FieldSpot){
     if(!(await useFieldAction()))return;
-    setScentSpot(null);setSpotIntel(null);setTerrainInfo(null);setJournalSpot(null);setWaterInfo(null);setWaterError("");setWaterBusy(true);
+    setScentSpot(null);setSpotIntel(null);setTerrainInfo(null);setJournalSpot(null);setWaterInfo(null);setWaterError("");setWaterIncludeOld(false);setWaterBusy(true);
     try {
       // Public USGS stream gauge observations, not a fishing recommendation.
       const radius=0.27;const longitudeRadius=radius/Math.max(.3,Math.cos(spot.lat*Math.PI/180));
@@ -421,7 +422,7 @@ export default function FieldMap({
         }
         bySite.set(id,existing);
       }
-      setWaterInfo({spot:spot.name,stations:[...bySite.values()].sort((a,b)=>a.distanceKm-b.distanceKm).slice(0,5)});
+      setWaterInfo({spot:spot.name,stations:[...bySite.values()].sort((a,b)=>a.distanceKm-b.distanceKm).slice(0,20)});
     }catch(e){setWaterError(e instanceof Error?e.message:"Gauge information unavailable");}
     finally{setWaterBusy(false);}
   }
@@ -2688,7 +2689,7 @@ export default function FieldMap({
       </section>}
       {(waterBusy||waterError||waterInfo)&&<section role="dialog" aria-label="Nearby water gauges" style={{position:"absolute",zIndex:1904,left:12,right:12,top:"calc(env(safe-area-inset-top,0px) + 16px)",maxWidth:330,maxHeight:"65%",overflowY:"auto",margin:"auto",background:"#10221b",color:"#f5e6ca",border:"1px solid #d3b16f",borderRadius:15,padding:14}}>
         <div style={{display:"flex",justifyContent:"space-between"}}><strong>🌊 Nearby USGS Gauges</strong><button type="button" onClick={()=>{setWaterInfo(null);setWaterError("");setWaterBusy(false);}} style={{color:"#f5e6ca",background:"transparent",border:0,fontSize:22}}>×</button></div>
-        {waterBusy?<p>Checking public stream gauges…</p>:waterError?<p>{waterError}</p>:waterInfo?<div style={{fontSize:14}}><p>Near {waterInfo.spot}</p>{waterInfo.stations.length===0?<p>No reporting gauges found within roughly 30 km.</p>:waterInfo.stations.map((station,i)=><div key={i} style={{borderTop:"1px solid #526052",padding:"9px 0"}}><strong>{station.name}</strong><div>{station.distanceKm} km away · Flow: {station.flow} · Gauge height: {station.level}</div><small>{station.time?new Date(station.time).toLocaleString():"Latest observation unavailable"}</small></div>)}<small style={{opacity:.8}}>Gauge measurements may be delayed and do not establish water safety or fishing quality.</small></div>:null}
+        {waterBusy?<p>Checking public stream gauges…</p>:waterError?<p>{waterError}</p>:waterInfo?<div style={{fontSize:14}}><p>Near {waterInfo.spot}</p>{waterInfo.stations.length===0?<p>No reporting gauges found within roughly 30 km.</p>:<><label style={{display:"flex",alignItems:"center",gap:8,fontSize:13,marginBottom:8}}><input type="checkbox" checked={waterIncludeOld} onChange={e=>setWaterIncludeOld(e.target.checked)}/> Show outdated readings</label>{waterInfo.stations.filter(station=>waterIncludeOld||(station.time&&Date.now()-new Date(station.time).getTime()<=72*3600000&&Date.now()-new Date(station.time).getTime()>=-3600000)).slice(0,5).map((station,i)=><div key={i} style={{borderTop:"1px solid #526052",padding:"9px 0"}}><strong>{station.name}</strong><div>{station.distanceKm} km away · Flow: {station.flow} · Gauge height: {station.level}</div><small>{station.time?new Date(station.time).toLocaleString():"Latest observation unavailable"} {station.time&&Date.now()-new Date(station.time).getTime()>72*3600000?" · OUTDATED":""}</small></div>)}{!waterIncludeOld && !waterInfo.stations.some(station=>station.time&&Date.now()-new Date(station.time).getTime()<=72*3600000&&Date.now()-new Date(station.time).getTime()>=-3600000)&&<p>No recent gauge readings found. Turn on outdated readings to view historical data.</p>}</>}<small style={{opacity:.8}}>Gauge measurements may be delayed and do not establish water safety or fishing quality.</small></div>:null}
       </section>}
       {shareSpot&&<section role="dialog" aria-label="Confirm sharing one location" style={{position:"absolute",zIndex:1905,left:12,right:12,top:"calc(env(safe-area-inset-top,0px) + 16px)",maxWidth:330,margin:"auto",background:"#10221b",color:"#f5e6ca",border:"1px solid #d3b16f",borderRadius:15,padding:14}}>
         <strong>🤝 Share one location?</strong><p style={{fontSize:14}}>This shares the exact coordinates of <strong>{shareSpot.name}</strong> with whoever you choose. Your other saved spots, notes and journal stay private. Only share hunting spots with people you trust.</p>
