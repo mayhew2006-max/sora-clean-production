@@ -100,7 +100,15 @@ export default function GraceField() {
   }, []);
   useEffect(()=>{
     const openSpotQuestion=(event:Event)=>{
-      const question=(event as CustomEvent<{question:string}>).detail?.question;
+      const detail=(event as CustomEvent<{question:string;temporaryPlace?:{name:string;lat:number;lng:number;activity:string}}>).detail;
+      const question=detail?.question;
+      const temporaryPlace=detail?.temporaryPlace;
+      if(temporaryPlace && Number.isFinite(temporaryPlace.lat) && Number.isFinite(temporaryPlace.lng) &&
+         Math.abs(temporaryPlace.lat)<=90 && Math.abs(temporaryPlace.lng)<=180){
+        graceFrameRef.current?.contentWindow?.postMessage({type:"grace-field-temporary-place",place:temporaryPlace},window.location.origin);
+      }else{
+        graceFrameRef.current?.contentWindow?.postMessage({type:"grace-field-temporary-place",place:null},window.location.origin);
+      }
       if(typeof question!=="string" || question.length>350)return;
       setMenuOpen(false);setGraceOpen(true);setGraceExpanded(false);
       // The chat iframe is mounted while hidden, so its listener is already active.
