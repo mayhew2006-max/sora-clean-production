@@ -96,7 +96,18 @@ export default function GraceField() {
     window.addEventListener("message",onMessage);
     return () => window.removeEventListener("message",onMessage);
   }, []);
-  const [mapOverlayOpen, setMapOverlayOpen] = useState(false);
+  useEffect(()=>{
+    const openSpotQuestion=(event:Event)=>{
+      const question=(event as CustomEvent<{question:string}>).detail?.question;
+      if(typeof question!=="string" || question.length>350)return;
+      setMenuOpen(false);setGraceOpen(true);setGraceExpanded(false);
+      // The chat iframe is mounted while hidden, so its listener is already active.
+      graceFrameRef.current?.contentWindow?.postMessage({type:"grace-field-compose-question",question},window.location.origin);
+    };
+    window.addEventListener("grace-field-ask-spot",openSpotQuestion);
+    return()=>window.removeEventListener("grace-field-ask-spot",openSpotQuestion);
+  },[]);
+    const [mapOverlayOpen, setMapOverlayOpen] = useState(false);
   const [spotPopupOpen,setSpotPopupOpen] = useState(false);
   useEffect(()=>{const handle=(event:Event)=>setSpotPopupOpen(Boolean((event as CustomEvent<{open:boolean}>).detail?.open));window.addEventListener("grace-field-spot-popup",handle);return()=>window.removeEventListener("grace-field-spot-popup",handle);},[]);
   const [gps, setGps] = useState<GpsInfo>({accuracy: null, altitude: null, status: "Acquiring precise GPS…"});
