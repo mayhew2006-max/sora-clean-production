@@ -136,7 +136,7 @@ export default function GraceChat() {
   const [input, setInput] = useState("");
   const [embeddedField, setEmbeddedField] = useState(false);
   const [fieldSpotOffer, setFieldSpotOffer] = useState<{id:string;name:string;lat:number;lng:number}|null>(null);
-  const [fieldSpots, setFieldSpots] = useState<Array<{id:string;name:string;type:string;lat:number;lng:number;mode?:string;notes?:string;observations?:string[];approach?:string}>>([]);
+  const [fieldSpots, setFieldSpots] = useState<Array<{id:string;name:string;type:string;lat:number;lng:number;mode?:string;notes?:string;observations?:string[];approach?:string;excludeFromAdvice?:boolean}>>([]);
   useEffect(() => {
     const embedded = window.self !== window.top && new URLSearchParams(window.location.search).get("field") === "1";
     setEmbeddedField(embedded);
