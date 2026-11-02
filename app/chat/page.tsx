@@ -153,6 +153,7 @@ export default function GraceChat() {
     window.parent.postMessage({type:"grace-field-request-context"},window.location.origin);
     return () => window.removeEventListener("message",onMessage);
   }, []);
+  const [fieldPlanContext,setFieldPlanContext] = useState<{activity:string;period:string;spotIds:string[]}|null>(null);
   const [fieldScoutContext, setFieldScoutContext] =
     useState("");
 
@@ -2537,7 +2538,8 @@ function isMarketplaceQuery(text: string) {
     // Do not double-charge: this server endpoint owns quota validation.
     const fieldActivity = /\b(hunt|hunting|deer|stand|blind|fish|fishing|trout|bass|camp|camping|campsite|hike|hiking|paddle|paddling|kayak|canoe)\b/i.test(clean);
     const planningIntent = /\b(best|which|where should|where to|should i|recommend|good idea|worth|conditions|forecast|weather|wind|tomorrow|friday|saturday|sunday|monday|tuesday|wednesday|thursday|tonight|weekend|morning|evening)\b/i.test(clean);
-    if(embeddedField && fieldActivity && planningIntent && !emergencyRequest){
+    const fieldFollowUp = Boolean(fieldPlanContext) && /^(?:what about|how about|and (?:what about|on|for)|would|is|okay|ok|alright|so)\b/i.test(clean) && /\b(sunday|monday|tuesday|wednesday|thursday|friday|saturday|tomorrow|morning|evening|afternoon|night|weekend|there|that|it)\b/i.test(clean);
+    if(embeddedField && ((fieldActivity && planningIntent) || fieldFollowUp) && !emergencyRequest){
       const history=[...messagesRef.current,{role:"user" as const,content:clean}];
       setInput("");
       setMessages([...history,{role:"assistant",content:"Checking your saved outdoor spots and forecast…"}]);
@@ -2548,10 +2550,11 @@ function isMarketplaceQuery(text: string) {
         const result=await fetch("/api/field-advice",{
           method:"POST",
           headers:{"Content-Type":"application/json",...(await graceApiHeaders())},
-          body:JSON.stringify({question:clean,localDate,spots:fieldSpots,history:messagesRef.current.slice(-6)})
+          body:JSON.stringify({question:clean,localDate,spots:fieldSpots,history:messagesRef.current.slice(-6),activityHint:fieldPlanContext?.activity,periodHint:fieldPlanContext?.period,spotIdsHint:fieldPlanContext?.spotIds})
         });
         const data=await result.json();
         const reply=String(data.reply||data.error||"Couldn't verify that forecast right now.");
+        if(result.ok && typeof data.activity==="string" && Array.isArray(data.spotIds))setFieldPlanContext({activity:data.activity,period:String(data.period||"day"),spotIds:data.spotIds});
         setMessages([...history,{role:"assistant",content:reply}]);
         void speak(reply).catch(()=>{});
       }catch{
