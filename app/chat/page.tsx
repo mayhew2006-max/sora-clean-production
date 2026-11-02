@@ -2571,8 +2571,12 @@ function isMarketplaceQuery(text: string) {
           body:JSON.stringify({question:clean,place:temporaryFieldPlace})
         });
         const data=await response.json();
-        const sourceText=Array.isArray(data.sources)?data.sources.filter((s:any)=>typeof s.url==="string"&&/^https?:\/\//.test(s.url)).slice(0,4).map((s:any)=>"- "+String(s.title||"Source").slice(0,80)+": "+s.url).join("\n"):"";
-        const reply=String(data.reply||data.error||"Couldn't check visitor information right now.")+(sourceText?"\n\nSources to check:\n"+sourceText:"");
+        const sourceText=Array.isArray(data.sources)?data.sources
+          .filter((s:any)=>typeof s.url==="string"&&/^https?:\/\//.test(s.url))
+          .filter((s:any,i:number,all:any[])=>all.findIndex((x:any)=>x.url===s.url)===i)
+          .slice(0,3).map((s:any,i:number)=>"Source "+(i+1)+": "+String(s.title||"Visitor information").slice(0,68)+"\n"+s.url).join("\n\n"):"";
+        const answer=String(data.reply||data.error||"Couldn't check visitor information right now.");
+        const reply=answer+(sourceText?"\n\n"+sourceText:"");
         setMessages([...history,{role:"assistant",content:reply}]);
         void speak(String(data.reply||reply)).catch(()=>{});
       }catch{setMessages([...history,{role:"assistant",content:"I couldn't verify visitor information right now. Check the destination's official land manager."}]);}
