@@ -2,6 +2,7 @@ import {NextResponse} from "next/server";
 import {chargeGraceApiRequest} from "@/lib/grace-usage-guard";
 export const runtime="nodejs";
 export const maxDuration=45;
+type PlaceInfoSource={title:string;url:string;content:string};
 export async function POST(req:Request){
  const failure=await chargeGraceApiRequest(req);if(failure)return failure;
  try{
@@ -14,7 +15,7 @@ export async function POST(req:Request){
   if(!key)return NextResponse.json({reply:"I found "+name+" on the map, but my live place-information search is not configured. I can't verify camping rules, opening dates, fees, or public access yet. Check the land manager's current information before visiting."});
   const search=await fetch("https://api.tavily.com/search",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({api_key:key,query:name+" official visitor information camping fishing access rules reservations hours",search_depth:"basic",max_results:5}),signal:AbortSignal.timeout(12000)});
   if(!search.ok)throw new Error("Place research unavailable");
-  const data=await search.json();const sources=(Array.isArray(data.results)?data.results:[]).filter((r:any)=>typeof r.url==="string"&&/^https?:\/\//.test(r.url)&&typeof r.content==="string").slice(0,5).map((r:any)=>({title:String(r.title||"Source").slice(0,120),url:String(r.url).slice(0,500),content:String(r.content).slice(0,1100)}));
+  const data=await search.json();const sources:PlaceInfoSource[]=(Array.isArray(data.results)?data.results:[]).filter((r:any)=>typeof r.url==="string"&&/^https?:\/\//.test(r.url)&&typeof r.content==="string").slice(0,5).map((r:any)=>({title:String(r.title||"Source").slice(0,120),url:String(r.url).slice(0,500),content:String(r.content).slice(0,1100)}));
   if(!sources.length)return NextResponse.json({reply:"I found "+name+" on the map, but couldn't verify current visiting details. Confirm access, campground openings, reservations and local rules with the official land manager."});
   const ai=process.env.OPENAI_API_KEY;
   if(!ai)return NextResponse.json({reply:"I located information for "+name+". Check the sources below for current camping and access rules; I couldn't verify a complete summary.",sources:sources.map(({title,url})=>({title,url}))});
