@@ -304,7 +304,7 @@ export default function FieldMap({
   const [scentCollapsed, setScentCollapsed] = useState(false);
   async function analyzeSpotWind(spot: FieldSpot) {
     if (!(await useFieldAction())) return;
-    setSpotIntel(null); setIntelError(""); setScentSpot(spot); setScentCollapsed(false); setScentForecast([]); setScentHour(0); setScentError(""); setScentLoading(true);
+    setTerrainInfo(null);setTerrainError("");setJournalSpot(null);setSpotIntel(null); setIntelError(""); setScentSpot(spot); setScentCollapsed(false); setScentForecast([]); setScentHour(0); setScentError(""); setScentLoading(true);
     try {
       const q = new URLSearchParams({latitude:String(spot.lat),longitude:String(spot.lng),hourly:"wind_direction_10m,wind_speed_10m",wind_speed_unit:"mph",forecast_days:"2",timezone:"auto"});
       const res = await fetch("https://api.open-meteo.com/v1/forecast?"+q);
@@ -335,7 +335,7 @@ export default function FieldMap({
   const [intelError, setIntelError] = useState("");
   async function analyzeSpotConditions(spot: FieldSpot) {
     if (!(await useFieldAction())) return;
-    setScentSpot(null); setSpotIntel(null); setIntelError(""); setIntelLoading(true);
+    setTerrainInfo(null);setTerrainError("");setJournalSpot(null);setScentSpot(null); setSpotIntel(null); setIntelError(""); setIntelLoading(true);
     try {
       const q = new URLSearchParams({latitude:String(spot.lat),longitude:String(spot.lng),current:"temperature_2m,precipitation",daily:"sunrise,sunset",temperature_unit:"fahrenheit",precipitation_unit:"inch",timezone:"auto",forecast_days:"1"});
       const elevationQuery = new URLSearchParams({latitude:String(spot.lat),longitude:String(spot.lng)});
@@ -350,6 +350,44 @@ export default function FieldMap({
       setSpotIntel({name:spot.name,sunrise:String(data?.daily?.sunrise?.[0]||""),sunset:String(data?.daily?.sunset?.[0]||""),elevation:Number.isFinite(meters)&&elevationData?.elevation?.length?Math.round(meters*3.28084):null,rain:Number.isFinite(Number(data?.current?.precipitation))?Number(data.current.precipitation):null,temperature:Number.isFinite(Number(data?.current?.temperature_2m))?Number(data.current.temperature_2m):null});
     } catch(e) {setIntelError(e instanceof Error?e.message:"Conditions unavailable");}
     finally {setIntelLoading(false);}
+  }
+
+  // Terrain samples are approximate DEM heights, not surveyed paths or animal predictions.
+  const [terrainInfo,setTerrainInfo] = useState<{name:string;center:number;north:number;south:number;east:number;west:number}|null>(null);
+  const [terrainBusy,setTerrainBusy] = useState(false);
+  const [terrainError,setTerrainError] = useState("");
+  const [journalSpot,setJournalSpot] = useState<FieldSpot|null>(null);
+  const [journalText,setJournalText] = useState("");
+  const [journalEntries,setJournalEntries] = useState<{date:string;text:string}[]>([]);
+  const journalKey=(id:string)=>"grace-field-journal-v1-"+id;
+  function openJournal(spot:FieldSpot) {
+    setJournalSpot(spot);setJournalText("");
+    try { const value=JSON.parse(localStorage.getItem(journalKey(spot.id))||"[]");setJournalEntries(Array.isArray(value)?value.filter(x=>typeof x?.text==="string"&&typeof x?.date==="string").slice(0,100):[]); }
+    catch {setJournalEntries([]);}
+  }
+  async function saveJournalEntry(){
+    if(!journalSpot||!journalText.trim())return;
+    if(!(await useFieldAction()))return;
+    const entries=[{date:new Date().toISOString(),text:journalText.trim().slice(0,1000)},...journalEntries].slice(0,100);
+    try {localStorage.setItem(journalKey(journalSpot.id),JSON.stringify(entries));setJournalEntries(entries);setJournalText("");}
+    catch {setLocationStatus("Journal storage unavailable on this device.");}
+  }
+  async function analyzeTerrain(spot:FieldSpot) {
+    if(!(await useFieldAction()))return;
+    setScentSpot(null);setSpotIntel(null);setIntelError("");setTerrainInfo(null);setTerrainError("");setTerrainBusy(true);
+    try {
+      const delta=0.0027; // roughly 300 m north/south
+      const longitudeDelta=delta/Math.max(.2,Math.cos(spot.lat*Math.PI/180));
+      const latitudes=[spot.lat,spot.lat+delta,spot.lat-delta,spot.lat,spot.lat].join(",");
+      const longitudes=[spot.lng,spot.lng,spot.lng,spot.lng+longitudeDelta,spot.lng-longitudeDelta].join(",");
+      const res=await fetch("https://api.open-meteo.com/v1/elevation?"+new URLSearchParams({latitude:latitudes,longitude:longitudes}));
+      if(!res.ok)throw new Error("Elevation data unavailable");
+      const json=await res.json();const heights=json?.elevation;
+      if(!Array.isArray(heights)||heights.length!==5||heights.some((v:unknown)=>!Number.isFinite(Number(v))))throw new Error("Terrain samples unavailable");
+      const feet=heights.map((v:number)=>Math.round(Number(v)*3.28084));
+      setTerrainInfo({name:spot.name,center:feet[0],north:feet[1],south:feet[2],east:feet[3],west:feet[4]});
+    }catch(e){setTerrainError(e instanceof Error?e.message:"Terrain unavailable");}
+    finally{setTerrainBusy(false);}
   }
   const [name, setName] = useState("");
   const [notes, setNotes] = useState("");
@@ -2590,6 +2628,17 @@ export default function FieldMap({
         <div style={{display:"flex",justifyContent:"space-between",gap:10}}><strong>☀️ Location Conditions</strong><button type="button" onClick={()=>{setSpotIntel(null);setIntelError("");setIntelLoading(false);}} style={{background:"transparent",border:0,color:"#f5e6ca",fontSize:22}}>×</button></div>
         {intelLoading?<p>Loading conditions…</p>:intelError?<p>{intelError}</p>:spotIntel?<div style={{fontSize:14,lineHeight:1.7}}><strong>{spotIntel.name}</strong><div>Sunrise: {spotIntel.sunrise?new Date(spotIntel.sunrise).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"}):"Unavailable"}</div><div>Sunset: {spotIntel.sunset?new Date(spotIntel.sunset).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"}):"Unavailable"}</div><div>Elevation: {spotIntel.elevation===null?"Unavailable":spotIntel.elevation+" ft (approx.)"}</div><div>Temperature: {spotIntel.temperature===null?"Unavailable":Math.round(spotIntel.temperature)+"°F"}</div><div>Current precipitation: {spotIntel.rain===null?"Unavailable":spotIntel.rain.toFixed(2)+" in"}</div><small style={{opacity:.75}}>Forecast and elevation estimates; not a terrain-shadow analysis.</small></div>:null}
       </section>}
+      {(terrainBusy||terrainError||terrainInfo) && <section role="dialog" aria-label="Terrain scan" style={{position:"absolute",zIndex:1902,left:12,right:12,top:"calc(env(safe-area-inset-top,0px) + 16px)",maxWidth:330,margin:"auto",background:"#10221b",color:"#f5e6ca",border:"1px solid #d3b16f",borderRadius:15,padding:14}}>
+        <div style={{display:"flex",justifyContent:"space-between"}}><strong>⛰️ Terrain Scan</strong><button type="button" onClick={()=>{setTerrainInfo(null);setTerrainError("");setTerrainBusy(false);}} style={{color:"#f5e6ca",background:"transparent",border:0,fontSize:22}}>×</button></div>
+        {terrainBusy?<p>Sampling surrounding terrain…</p>:terrainError?<p>{terrainError}</p>:terrainInfo?<div style={{lineHeight:1.7,fontSize:14}}><strong>{terrainInfo.name}</strong><div>Spot elevation: {terrainInfo.center} ft</div><div>North (~300 m): {terrainInfo.north-terrainInfo.center>0?"+":""}{terrainInfo.north-terrainInfo.center} ft</div><div>South (~300 m): {terrainInfo.south-terrainInfo.center>0?"+":""}{terrainInfo.south-terrainInfo.center} ft</div><div>East (~300 m): {terrainInfo.east-terrainInfo.center>0?"+":""}{terrainInfo.east-terrainInfo.center} ft</div><div>West (~300 m): {terrainInfo.west-terrainInfo.center>0?"+":""}{terrainInfo.west-terrainInfo.center} ft</div><small style={{opacity:.8}}>Approximate elevation samples, not identified trails, saddles, or safe routes.</small></div>:null}
+      </section>}
+      {journalSpot && <section role="dialog" aria-label="Outdoor journal" style={{position:"absolute",zIndex:1903,left:12,right:12,top:"calc(env(safe-area-inset-top,0px) + 16px)",maxWidth:350,maxHeight:"65%",overflowY:"auto",margin:"auto",background:"#10221b",color:"#f5e6ca",border:"1px solid #d3b16f",borderRadius:15,padding:14}}>
+        <div style={{display:"flex",justifyContent:"space-between",gap:8}}><strong>📓 {journalSpot.name}</strong><button type="button" onClick={()=>setJournalSpot(null)} style={{color:"#f5e6ca",background:"transparent",border:0,fontSize:22}}>×</button></div>
+        <textarea aria-label="New field observation" placeholder="Wildlife, tracks, catches, weather, camp notes…" value={journalText} onChange={e=>setJournalText(e.target.value)} maxLength={1000} rows={3} style={{width:"100%",boxSizing:"border-box",background:"#21392e",color:"#fff",border:"1px solid #9a835b",borderRadius:8,padding:8,marginTop:9}}/>
+        <button type="button" onClick={()=>void saveJournalEntry()} disabled={!journalText.trim()} style={{width:"100%",padding:9,background:"#bca06b",color:"#10221b",fontWeight:800,borderRadius:8}}>Save observation</button>
+        <small style={{display:"block",opacity:.75,margin:"8px 0"}}>Notes are private to this device until cloud sync is added. Saving an entry uses one free action.</small>
+        {journalEntries.map((entry,i)=><div key={entry.date+"-"+i} style={{padding:"9px 0",borderTop:"1px solid #44574b",whiteSpace:"pre-wrap",fontSize:13}}><small style={{color:"#d4ba83"}}>{new Date(entry.date).toLocaleString()}</small><div>{entry.text}</div></div>)}
+      </section>}
         <MapContainer
           center={center}
           zoom={position ? 15 : 7}
@@ -2709,6 +2758,8 @@ export default function FieldMap({
                     </div>
                     <button type="button" onClick={e=>{e.stopPropagation();(e.currentTarget.closest(".leaflet-popup") as HTMLElement | null)?.querySelector<HTMLElement>(".leaflet-popup-close-button")?.click();void analyzeSpotWind(spot);}} style={{width:"100%",background:"#314a32",border:"1px solid #d6b477",padding:"9px",borderRadius:8,marginBottom:7}}>🌬️ WIND & SCENT CONE</button>
                     <button type="button" onClick={e=>{e.stopPropagation();(e.currentTarget.closest(".leaflet-popup") as HTMLElement | null)?.querySelector<HTMLElement>(".leaflet-popup-close-button")?.click();void analyzeSpotConditions(spot);}} style={{width:"100%",background:"#233d33",border:"1px solid #d6b477",padding:9,borderRadius:8,marginBottom:7}}>☀️ SUN, ELEVATION & CONDITIONS</button>
+                    <button type="button" onClick={e=>{e.stopPropagation();(e.currentTarget.closest(".leaflet-popup") as HTMLElement|null)?.querySelector<HTMLElement>(".leaflet-popup-close-button")?.click();void analyzeTerrain(spot);}} style={{width:"100%",background:"#233d33",border:"1px solid #d6b477",padding:9,borderRadius:8,marginBottom:7}}>⛰️ TERRAIN SCAN</button>
+                    <button type="button" onClick={e=>{e.stopPropagation();(e.currentTarget.closest(".leaflet-popup") as HTMLElement|null)?.querySelector<HTMLElement>(".leaflet-popup-close-button")?.click();openJournal(spot);}} style={{width:"100%",background:"#233d33",border:"1px solid #d6b477",padding:9,borderRadius:8,marginBottom:7}}>📓 OUTDOOR JOURNAL</button>
                     {spot.notes && <p style={{whiteSpace:"pre-wrap"}}>{spot.notes}</p>}
 
                     <small style={{display:"block",marginTop:6,color:"#c6bea8"}}>
