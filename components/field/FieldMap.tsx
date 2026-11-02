@@ -446,6 +446,16 @@ export default function FieldMap({
   const [notes, setNotes] = useState("");
   const [editingSpotId, setEditingSpotId] = useState<string | null>(null);
   const [spotAppearanceVersion, setSpotAppearanceVersion] = useState(0);
+  const [adviceEligibilityVersion,setAdviceEligibilityVersion] = useState(0);
+  function adviceExcluded(spot:FieldSpot){
+    void adviceEligibilityVersion;
+    try {const stored=localStorage.getItem("grace-field-advice-exclude-v1-"+spot.id);
+      return stored===null?/^(home|house|my home)$/i.test(spot.name.trim()):stored==="true";
+    }catch{return /^(home|house|my home)$/i.test(spot.name.trim());}
+  }
+  function setAdviceExcluded(spot:FieldSpot,excluded:boolean){
+    try{localStorage.setItem("grace-field-advice-exclude-v1-"+spot.id,String(excluded));setAdviceEligibilityVersion(v=>v+1);}catch{setLocationStatus("Could not save this recommendation preference.");}
+  }
   function photoKey(id: string){return `grace-field-photo-v1-${id}`;}
   function styleKey(id: string){return `grace-field-style-v1-${id}`;}
   function localSpotPhoto(id: string){try{return localStorage.getItem(photoKey(id))||"";}catch{return "";}}
@@ -2914,7 +2924,8 @@ export default function FieldMap({
                       {photo?"CHANGE PHOTO":"ADD SPOT PHOTO"}
                       <input type="file" accept="image/*" capture="environment" style={{display:"none"}} onChange={e=>{const f=e.currentTarget.files?.[0];if(f)void attachLocalSpotPhoto(spot.id,f);e.currentTarget.value="";}}/>
                     </label>
-                    <div style={{fontSize:10,color:"#cdb58c",letterSpacing:1,marginBottom:5}}>MARKER APPEARANCE</div>
+                    <label style={{display:"flex",gap:8,alignItems:"center",fontSize:12,color:"#ead7b1",padding:"8px 0"}}><input type="checkbox" checked={!adviceExcluded(spot)} onChange={e=>setAdviceExcluded(spot,!e.target.checked)}/>Include this spot in Grace's activity recommendations</label>
+                     <div style={{fontSize:10,color:"#cdb58c",letterSpacing:1,marginBottom:5}}>MARKER APPEARANCE</div>
                     <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:8}}>
                       {(["realistic","modern","tactical","topo","minimal"] as const).map(style=><button type="button" key={style} onClick={()=>setLocalSpotStyle(spot.id,style)} style={{fontSize:10,padding:"5px 7px",background:spotStyle===style?"#5d4926":"#1c3027",borderColor:spotStyle===style?"#e9c788":"#5b6b57"}}>{style}</button>)}
                     </div>
