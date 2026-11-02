@@ -304,7 +304,7 @@ export default function FieldMap({
   const [scentCollapsed, setScentCollapsed] = useState(false);
   async function analyzeSpotWind(spot: FieldSpot) {
     if (!(await useFieldAction())) return;
-    setScentSpot(spot); setScentCollapsed(false); setScentForecast([]); setScentHour(0); setScentError(""); setScentLoading(true);
+    setSpotIntel(null); setIntelError(""); setScentSpot(spot); setScentCollapsed(false); setScentForecast([]); setScentHour(0); setScentError(""); setScentLoading(true);
     try {
       const q = new URLSearchParams({latitude:String(spot.lat),longitude:String(spot.lng),hourly:"wind_direction_10m,wind_speed_10m",wind_speed_unit:"mph",forecast_days:"2",timezone:"auto"});
       const res = await fetch("https://api.open-meteo.com/v1/forecast?"+q);
@@ -335,7 +335,7 @@ export default function FieldMap({
   const [intelError, setIntelError] = useState("");
   async function analyzeSpotConditions(spot: FieldSpot) {
     if (!(await useFieldAction())) return;
-    setSpotIntel(null); setIntelError(""); setIntelLoading(true);
+    setScentSpot(null); setSpotIntel(null); setIntelError(""); setIntelLoading(true);
     try {
       const q = new URLSearchParams({latitude:String(spot.lat),longitude:String(spot.lng),current:"temperature_2m,precipitation",daily:"sunrise,sunset",temperature_unit:"fahrenheit",precipitation_unit:"inch",timezone:"auto",forecast_days:"1"});
       const elevationQuery = new URLSearchParams({latitude:String(spot.lat),longitude:String(spot.lng)});
