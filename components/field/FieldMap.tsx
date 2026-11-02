@@ -510,7 +510,7 @@ export default function FieldMap({
         const finalPoint = valid[valid.length - 1];
         setPosition([finalPoint.lat, finalPoint.lng]);
         setLastTrailGpsAt(Date.parse(finalPoint.time));
-        setLastLiveGpsAt(Date.parse(finalPoint.time));
+        // Restored breadcrumbs are historical, not a fresh live GPS fix.
       } catch {
         setLocationStatus("Android trail restore failed. Local trail has not been erased.");
       }
@@ -797,13 +797,19 @@ export default function FieldMap({
       return false;
     }
 
+    const fixTime = Number(result.timestamp);
+    // GPS callbacks may deliver an accurate BUT stale cached fix.
+    if (!Number.isFinite(fixTime) || fixTime > Date.now() + 5000 || Date.now() - fixTime > 60000) {
+      setLocationStatus("GPS fix is too old for live navigation. Request a fresh location.");
+      return false;
+    }
     const next: [number, number] = [
       result.coords.latitude,
       result.coords.longitude,
     ];
 
     setPosition(next);
-    setLastLiveGpsAt(Date.now());
+    setLastLiveGpsAt(previous => Math.max(previous ?? 0, fixTime));
     window.dispatchEvent(new CustomEvent("grace-field-gps-info", {detail: {
       accuracy: reportedAccuracy,
       altitude: Number.isFinite(result.coords.altitude ?? NaN) ? result.coords.altitude : null,
@@ -917,12 +923,15 @@ export default function FieldMap({
   // Independent watch: never silently restart paid tracking or invent connector paths.
   useEffect(() => {
     if (!returningToStart || !navigator.geolocation) return;
-    const id = navigator.geolocation.watchPosition(
-      acceptPosition, locationError,
-      {enableHighAccuracy:true, timeout:30000, maximumAge:3000}
-    );
+    const options = {enableHighAccuracy:true, timeout:20000, maximumAge:0};
+    const refresh = () => navigator.geolocation.getCurrentPosition(acceptPosition, locationError, options);
+    refresh();
+    const id = navigator.geolocation.watchPosition(acceptPosition, locationError, options);
+    // Some phone browsers stop reporting watch updates while stationary.
+    const interval = window.setInterval(refresh, 30000);
     returnWatchId.current = id;
     return () => {
+      window.clearInterval(interval);
       navigator.geolocation.clearWatch(id);
       if (returnWatchId.current===id) returnWatchId.current=null;
     };
@@ -2601,7 +2610,9 @@ export default function FieldMap({
             }}>
               <div style={{fontSize:9,letterSpacing:1.3,color:"#d9b77d"}}>NAVIGATION · TAP TO EXPAND</div>
               <div style={{fontSize:14,fontWeight:800,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                {navigationTarget.name} · {formatDistance(navigation.distance)} · {navigation.direction} {Math.round(navigation.bearing)}°
+                {returningToStart
+                  ? (returnGuidance ? `RECORDED PATH ${formatDistance(returnGuidance.recordedDistanceToStartMeters)} · ${returnGuidance.liveGuidanceReliable ? "GPS FIX OK" : "GPS CHECK NEEDED"}` : "TRAIL BACK · No recorded route")
+                  : `${navigationTarget.name} · ${formatDistance(navigation.distance)} · ${navigation.direction} ${Math.round(navigation.bearing)}°`}
               </div>
             </button>
             <button type="button" onClick={stopNavigation} aria-label="Stop navigation" style={{
@@ -2657,20 +2668,26 @@ export default function FieldMap({
             {returningToStart && <div style={{fontSize:12,lineHeight:1.6,color:"#cdd7c8",marginTop:10}}>
               {returnGuidance ? <>
                 <strong style={{color:"#efd09a"}}>RECORDED ROUTE · {formatDistance(returnGuidance.recordedDistanceToStartMeters)} along logged points</strong>
-                <div>Next logged point: {returnGuidance.nextRecordedPoint.map(v=>v.toFixed(5)).join(", ")}. Bearing above points directly to start, not along breadcrumbs.</div>
+                <div>Live GPS: {lastLiveGpsAt===null ? "not acquired" : `${Math.max(0,Math.floor((heartbeat-lastLiveGpsAt)/1000))} seconds since last fix`}. Straight-line bearing above is NOT breadcrumb guidance.</div>
+                {returnGuidance.liveGuidanceReliable && position
+                  ? <div><strong>Next breadcrumb: {compassDirection(bearingDegrees(position,returnGuidance.nextRecordedPoint))} {Math.round(bearingDegrees(position,returnGuidance.nextRecordedPoint))}° · {formatDistance(distanceMeters(position,returnGuidance.nextRecordedPoint))}</strong><div style={{fontSize:11}}>Approximate direction to a previously recorded point; verify terrain ahead.</div></div>
+                  : <div>Next recorded point: {returnGuidance.nextRecordedPoint.map(v=>v.toFixed(5)).join(", ")}. Live heading disabled until GPS reliability returns.</div>}
                 {returnGuidance.warnings.map((warning,i)=><p key={i} style={{color:"#ffcf9e",margin:"5px 0"}}>⚠ {warning}</p>)}
+                <button type="button" onClick={locateMe} style={{margin:"7px 0",padding:"10px 13px",background:"#264638",border:"1px solid #bda475",borderRadius:9,color:"#f6e5c8",fontWeight:800}}>↻ REFRESH PRECISE GPS</button>
                 <div>Follow the recorded line; GPS traces do not verify passability or terrain safety.</div>
               </> : "Trail data insufficient; no route available."}
             </div>}
-            <a
-              href={`https://www.google.com/maps/dir/?api=1&destination=${navigationTarget.lat}%2C${navigationTarget.lng}&travelmode=driving`}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{display:"block",marginTop:14,padding:"13px 12px",textAlign:"center",borderRadius:10,background:"#d4af70",color:"#12271c",fontWeight:900,textDecoration:"none"}}
-            >
-              OPEN GOOGLE MAPS · DRIVE THERE ↗
-            </a>
-            <div style={{fontSize:11,color:"#d6c6a6",marginTop:6}}>Google Maps provides road directions. Grace Field remains available for off-road navigation.</div>
+            {!returningToStart && <>
+              <a
+                href={`https://www.google.com/maps/dir/?api=1&destination=${navigationTarget.lat}%2C${navigationTarget.lng}&travelmode=driving`}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{display:"block",marginTop:14,padding:"13px 12px",textAlign:"center",borderRadius:10,background:"#d4af70",color:"#12271c",fontWeight:900,textDecoration:"none"}}
+              >
+                OPEN GOOGLE MAPS · DRIVE THERE ↗
+              </a>
+              <div style={{fontSize:11,color:"#d6c6a6",marginTop:6}}>Google Maps provides road directions only, not off-road trails.</div>
+            </>}
             <div style={{display:"flex",gap:9,marginTop:14}}>
               <button type="button" onClick={()=>setNavigationCompact(true)} style={{flex:1,padding:"12px 9px",border:"1px solid #9e926e",borderRadius:10,color:"#f4e5c8",background:"#1c3829",fontWeight:800}}>VIEW MAP</button>
               <button type="button" onClick={stopNavigation} style={{flex:1,padding:"12px 9px",border:"1px solid #c08879",borderRadius:10,color:"#ffe4d9",background:"#452420",fontWeight:800}}>STOP NAVIGATION</button>
