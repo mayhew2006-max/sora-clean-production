@@ -71,7 +71,7 @@ export default function Pay() {
           </p>
         )}
 
-        <a href="/chat" className="block text-zinc-500 text-sm mt-5">
+        <a href="/field" className="block text-zinc-500 text-sm mt-5">
           Back to Grace
         </a>
       </div>
