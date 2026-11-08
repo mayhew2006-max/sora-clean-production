@@ -1,49 +1,89 @@
-// Grace Field offline shell v3: same-origin resources ONLY.
-// Never cache API calls, personal responses, third-party map tiles or login pages.
-const CACHE_NAME="grace-offline-shell-v3";
-const CORE_PAGES=["/field","/chat"];
-const CORE_ASSETS=["/grace-field-logo.webp","/grace-avatar.png","/manifest.webmanifest"];
+// Grace Field offline shell v4. Cache only public same-origin app resources.
+// The map provider's online satellite/topo tiles are intentionally NOT cached.
+const OFFLINE_VERSION=4;
+const CACHE_NAME="grace-offline-shell-v4";
+const FIELD_PATH="/field";
+const MAP_MARKERS=["blind","cabin","camera","camp","cave","custom","deer","fire",
+  "food","game","hole","ramp","saddle","scenic","stand","trail","truck","water"]
+  .map(name=>"/field-markers/"+name+".png");
+const SHELL_FILES=["/grace-field-logo.webp","/grace-avatar.png","/manifest.json"];
+const REQUIRED_FILES=[FIELD_PATH,...MAP_MARKERS,...SHELL_FILES];
 
-function localAsset(url) {
-  if(url.origin!==self.location.origin)return false;
+function asUrl(value){try{return new URL(value,self.location.origin)}catch{return null}}
+function isSafeAsset(url){
+  if(!url || url.origin!==self.location.origin)return false;
   if(url.pathname.startsWith("/api/"))return false;
   if(/\/(?:login|pay|admin|auth|account)(?:\/|$)/.test(url.pathname))return false;
   return url.pathname.startsWith("/_next/static/") ||
-    /^\/(?:icons\/|grace-field-logo|grace-avatar)/.test(url.pathname) ||
-    url.pathname==="/manifest.webmanifest";
+    url.pathname.startsWith("/field-markers/") ||
+    url.pathname.startsWith("/icons/") ||
+    SHELL_FILES.includes(url.pathname);
 }
-async function store(cache,request,response) {
-  if(response.ok && response.type!=="opaque" && !response.redirected &&
-     (!response.headers.get("content-type")?.includes("text/html") || !request.url.includes("/_next/"))) {
-    await cache.put(request,response.clone()).catch(()=>{});
+function isFieldPage(response){
+  if(!response.ok || response.type==="opaque")return false;
+  const finalUrl=asUrl(response.url);
+  return Boolean(finalUrl && finalUrl.pathname.replace(/\/$/,"")===FIELD_PATH &&
+    response.headers.get("content-type")?.includes("text/html"));
+}
+function isUsableAsset(response){
+  return response.ok && response.type!=="opaque" &&
+    !response.headers.get("content-type")?.includes("text/html") &&
+    Boolean(asUrl(response.url)?.origin===self.location.origin);
+}
+async function saveResponse(cache,key,response){
+  try{await cache.put(key,response.clone());return true}catch{return false}
+}
+function stableFieldRequest(){return new Request(new URL(FIELD_PATH,self.location.origin).href)}
+async function cacheStatus(cache,staticAssets=[]){
+  const fieldSaved=Boolean(await cache.match(stableFieldRequest()));
+  const missingMarkers=[];
+  for(const path of MAP_MARKERS)if(!await cache.match(new URL(path,self.location.origin).href))missingMarkers.push(path);
+  const missingStatic=[];
+  const essentialStatic=staticAssets.filter(path=>{
+    const url=asUrl(path);
+    return url && url.pathname.startsWith("/_next/static/") && /\.(?:js|css)$/.test(url.pathname);
+  });
+  for(const path of essentialStatic){
+    if(!await cache.match(path,{ignoreSearch:true}))missingStatic.push(asUrl(path)?.pathname||path);
   }
+  const keys=await cache.keys();
+  const jsCount=keys.filter(req=>asUrl(req.url)?.pathname.startsWith("/_next/static/") &&
+    asUrl(req.url)?.pathname.endsWith(".js")).length;
+  const cssCount=keys.filter(req=>asUrl(req.url)?.pathname.startsWith("/_next/static/") &&
+    asUrl(req.url)?.pathname.endsWith(".css")).length;
+  // Cached HTML and imagery alone do NOT prove that the interactive map will run.
+  const ready=fieldSaved && missingMarkers.length===0 && missingStatic.length===0 && jsCount>0;
+  return {version:OFFLINE_VERSION,ready,fieldSaved,markersSaved:MAP_MARKERS.length-missingMarkers.length,
+    markersTotal:MAP_MARKERS.length,jsCount,cssCount,
+    missing:[...missingMarkers,...missingStatic].slice(0,8)};
 }
-async function warmField(extraPaths=[]) {
+async function warmField(extraAssets=[]){
   const cache=await caches.open(CACHE_NAME);
-  let successful=0;
-  const paths=[...new Set([...CORE_PAGES,...CORE_ASSETS,...extraPaths])];
-  const batches=[];
-  for(let i=0;i<paths.length;i+=8)batches.push(paths.slice(i,i+8));
-  for(const batch of batches){
-    await Promise.all(batch.map(async pathname=>{
-      const url=new URL(pathname,self.location.origin);
-      if(!CORE_PAGES.includes(url.pathname) && !localAsset(url))return;
-      // Native launch URLs add unique timestamps; use a stable cache key.
-      url.search="";
+  const candidates=[...new Set([...REQUIRED_FILES,...extraAssets])];
+  const safe=candidates.filter(path=>{
+    const url=asUrl(path);
+    return url && (url.pathname===FIELD_PATH||isSafeAsset(url));
+  }).slice(0,180);
+  let fetched=0;
+  // Concurrent, bounded requests prevent dozens of failed icons from
+  // keeping Android waiting for minutes on a weak connection.
+  for(let i=0;i<safe.length;i+=12){
+    await Promise.all(safe.slice(i,i+12).map(async path=>{
+      const url=asUrl(path);
+      if(!url)return;
+      const isPage=url.pathname===FIELD_PATH;
+      if(isPage)url.search="";
+      const request=new Request(url.href,{credentials:"same-origin",cache:"reload"});
       try{
-        const req=new Request(url.href,{credentials:"same-origin",cache:"reload"});
-        const res=await fetch(req,{signal:AbortSignal.timeout(9000)});
-        if(res.ok&&!res.redirected && (CORE_PAGES.includes(url.pathname)
-          ? res.headers.get("content-type")?.includes("text/html")
-          : true)) {
-          await store(cache,req,res); successful++;
+        const response=await fetch(request,{signal:AbortSignal.timeout(7500)});
+        if(isPage ? isFieldPage(response) : isUsableAsset(response)){
+          if(await saveResponse(cache,request,response))fetched++;
         }
       }catch{}
     }));
   }
-  const ready=(await Promise.all(CORE_PAGES.map(p=>cache.match(new URL(p,self.location.origin)))))
-    .every(Boolean);
-  return {ready,successful};
+  const result=await cacheStatus(cache,extraAssets);
+  return {...result,fetched};
 }
 self.addEventListener("install",event=>{
   self.skipWaiting();
@@ -51,61 +91,72 @@ self.addEventListener("install",event=>{
 });
 self.addEventListener("activate",event=>{
   event.waitUntil((async()=>{
-    const names=await caches.keys();
-    await Promise.all(names.filter(x=>x.startsWith("grace-")&&x!==CACHE_NAME)
-      .map(x=>caches.delete(x)));
+    const activeCache=await caches.open(CACHE_NAME);
+    // Only discard older Grace offline shell revisions after new Field HTML exists.
+    // Never delete unrelated caches for other website features.
+    if(await activeCache.match(stableFieldRequest())){
+      const keys=await caches.keys();
+      await Promise.all(keys.filter(key=>/^grace-offline-shell-v\d+$/.test(key) && key!==CACHE_NAME)
+        .map(key=>caches.delete(key)));
+    }
     await self.clients.claim();
   })());
 });
 self.addEventListener("message",event=>{
   if(event.data?.type!=="GRACE_PREPARE_OFFLINE")return;
   const port=event.ports?.[0];
-  event.waitUntil(warmField(Array.isArray(event.data.assets)?
-    event.data.assets.filter(s=>typeof s==="string").slice(0,150):[])
-    .then(result=>port?.postMessage(result))
-    .catch(()=>port?.postMessage({ready:false,successful:0})));
+  const assets=Array.isArray(event.data.assets)?event.data.assets.filter(x=>typeof x==="string").slice(0,120):[];
+  event.waitUntil(warmField(assets).then(result=>port?.postMessage(result))
+    .catch(()=>port?.postMessage({version:OFFLINE_VERSION,ready:false,fieldSaved:false,
+      markersSaved:0,markersTotal:MAP_MARKERS.length,jsCount:0,cssCount:0,missing:["Cache preparation failed"]})));
 });
 self.addEventListener("fetch",event=>{
   const request=event.request;
   if(request.method!=="GET")return;
-  const url=new URL(request.url);
-  if(url.origin!==self.location.origin || url.pathname.startsWith("/api/"))return;
-  const isPage=request.mode==="navigate"&&CORE_PAGES.includes(url.pathname);
-  if(isPage){
-    const normalized=new Request(new URL(url.pathname,self.location.origin).href);
+  const url=asUrl(request.url);
+  if(!url || url.origin!==self.location.origin || url.pathname.startsWith("/api/"))return;
+  const isField=url.pathname.replace(/\/$/,"")===FIELD_PATH;
+  const isChat=url.pathname.replace(/\/$/,"")==="/chat";
+  if(request.mode==="navigate" && (isField||isChat)){
     event.respondWith((async()=>{
       const cache=await caches.open(CACHE_NAME);
       try{
-        const response=await fetch(request,{signal:AbortSignal.timeout(4500)});
-        if(response.ok&&!response.redirected&&response.headers.get("content-type")?.includes("text/html")){
-          await store(cache,normalized,response);
-        }
+        const response=await fetch(request,{signal:AbortSignal.timeout(4000)});
+        if(isField && isFieldPage(response))await saveResponse(cache,stableFieldRequest(),response);
         return response;
       }catch{
-        if(url.pathname==="/chat" && await cache.match(new URL("/field",self.location.origin))){
-          // Android launches /chat; when disconnected, give a dependable
-          // offline entrance to Field rather than running cloud-only chat.
-          const html=`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="background:#10231c;color:#f7e4bc;font:17px system-ui;padding:35px 18px;text-align:center"><h1 style="color:#d6b477">GRACE FIELD</h1><h2>Offline Field Mode</h2><p>Live AI, research and map imagery need internet. Saved local GPS markers and trail tools may work if prepared.</p><a href="/field" style="display:block;margin:30px auto;max-width:320px;padding:17px;background:#285a3a;border:2px solid #d6b477;border-radius:12px;color:#fff;text-decoration:none;font-weight:bold">OPEN OFFLINE FIELD MAP</a><p style="font-size:13px">The map may be blank without downloaded terrain. Check your GPS accuracy and surroundings; never rely on Grace as your only navigation tool.</p></body></html>`;
+        if(isField){
+          const saved=await cache.match(stableFieldRequest());
+          if(saved)return saved;
+        }
+        if(isChat && await cache.match(stableFieldRequest())){
+          const html=['<!doctype html><html lang="en"><head><meta charset="utf-8">',
+            '<meta name="viewport" content="width=device-width,initial-scale=1"></head>',
+            '<body style="background:#10231c;color:#f7e4bc;font:17px system-ui;padding:35px 18px;text-align:center">',
+            '<h1 style="color:#d6b477">GRACE FIELD</h1><h2>Offline Field Mode</h2>',
+            '<p>Live chat and map imagery need internet. Cached Field tools may work without service.</p>',
+            '<a href="/field" style="display:block;margin:30px auto;max-width:320px;padding:17px;background:#285a3a;border:2px solid #d6b477;border-radius:12px;color:white;text-decoration:none;font-weight:bold">OPEN OFFLINE FIELD MAP</a>',
+            '<p style="font-size:13px">Downloaded terrain is not included. Verify GPS accuracy and landmarks; never rely on Grace as your only navigation method.</p>',
+            '</body></html>'].join("");
           return new Response(html,{status:200,headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store"}});
         }
-        return (await cache.match(normalized))||
-          new Response("Grace Field offline shell has not been prepared. Connect once and open Field.",{
-            status:503,headers:{"content-type":"text/plain; charset=utf-8"}});
+        return new Response("Grace Field is not yet prepared. Connect to Wi-Fi, open Field, then use Prepare Offline Field.",
+          {status:503,headers:{"content-type":"text/plain; charset=utf-8"}});
       }
     })());
     return;
   }
-  if(localAsset(url)){
-    // Cache-first for hashed assets, network-first for other same-origin assets.
+  if(isSafeAsset(url)){
     event.respondWith((async()=>{
       const cache=await caches.open(CACHE_NAME);
-      const saved=await cache.match(request);
-      if(saved && url.pathname.startsWith("/_next/static/"))return saved;
+      const saved=await cache.match(request,{ignoreSearch:true});
+      if(saved && (url.pathname.startsWith("/_next/static/") ||
+        url.pathname.startsWith("/field-markers/")))return saved;
       try{
-        const response=await fetch(request);
-        if(response.ok)event.waitUntil(store(cache,request,response));
+        const response=await fetch(request,{signal:AbortSignal.timeout(6500)});
+        if(isUsableAsset(response))event.waitUntil(saveResponse(cache,request,response));
         return response;
-      }catch{return saved||Response.error();}
+      }catch{return saved||Response.error()}
     })());
   }
 });
