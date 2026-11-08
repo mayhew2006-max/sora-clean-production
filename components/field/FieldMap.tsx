@@ -651,6 +651,36 @@ export default function FieldMap({
 
   const [fieldPanel, setFieldPanel] =
     useState<"weather" | "offline" | null>(null);
+  const [offlinePrepareStatus,setOfflinePrepareStatus]=useState("Not prepared on this device yet.");
+  const [offlinePreparing,setOfflinePreparing]=useState(false);
+  async function prepareOfflineField(){
+    if(!navigator.onLine){setOfflinePrepareStatus("Connect first, then prepare Field for offline use.");return;}
+    if(!("serviceWorker" in navigator)){setOfflinePrepareStatus("This WebView does not support the offline worker. A native update will be needed.");return;}
+    setOfflinePreparing(true);
+    setOfflinePrepareStatus("Saving Field pages and scripts on this device…");
+    try{
+      const registration=await navigator.serviceWorker.ready;
+      const worker=navigator.serviceWorker.controller||registration.active;
+      if(!worker)throw new Error("No active offline worker");
+      const assets=performance.getEntriesByType("resource").map(entry=>entry.name).filter(url=>{
+        try{
+          const parsed=new URL(url);
+          return parsed.origin===location.origin && (parsed.pathname.startsWith("/_next/static/") ||
+            /\.(?:js|css|woff2?|png|webp|svg)$/.test(parsed.pathname));
+        }catch{return false;}
+      }).slice(0,150);
+      const channel=new MessageChannel();
+      const result=await new Promise<{ready:boolean;successful:number}>((resolve,reject)=>{
+        const timeout=window.setTimeout(()=>reject(new Error("Offline preparation timed out")),30000);
+        channel.port1.onmessage=event=>{window.clearTimeout(timeout);resolve(event.data);};
+        worker.postMessage({type:"GRACE_PREPARE_OFFLINE",assets},[channel.port2]);
+      });
+      if(!result.ready)throw new Error("Field page cache is incomplete");
+      try{localStorage.setItem("grace-field-offline-prepared",new Date().toISOString());}catch{}
+      setOfflinePrepareStatus("Field shell saved. Reload Field while online, then tap PREPARE again to cache scripts. Test airplane mode before relying on it. Terrain imagery is NOT downloaded.");
+    }catch(e){setOfflinePrepareStatus("Offline preparation failed: "+(e instanceof Error?e.message:"unknown error"));}
+    finally{setOfflinePreparing(false);}
+  }
 
   useEffect(() => {
     const open = Boolean(sightingsOpen || deerForecastOpen || fieldPanel || historyOpen || toolsOpen || layersOpen || pending || (navigationTarget && !navigationCompact));
@@ -1410,6 +1440,11 @@ export default function FieldMap({
   }, [authReady, userId]);
 
   async function useFieldAction(action: "field_save" | "field_track" = "field_save") {
+    // Basic local GPS safety actions are not charged while offline.
+    if(typeof navigator!=="undefined" && navigator.onLine===false){
+      setLocationStatus("OFFLINE: "+(action==="field_track"?"GPS tracking":"Waypoint saving")+" works locally. Reconnect to sync spots.");
+      return true;
+    }
     if (!authReady) { setLocationStatus("Grace is checking your account..."); return false; }
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.access_token) { window.location.href = "/login"; return false; }
@@ -2279,7 +2314,7 @@ export default function FieldMap({
                 lineHeight: 1.5,
               }}
             >
-              <strong>Offline foundation is active.</strong>
+              <strong>Prepare Grace Field before leaving cell service.</strong>
 
               <div
                 style={{
@@ -2288,12 +2323,17 @@ export default function FieldMap({
                   fontSize: 13,
                 }}
               >
-                Your saved Field markers and breadcrumb trail
-                already remain on this device. Downloadable
-                offline map areas are the next stage so Grace
-                can keep mapping, tracking and navigating where
-                there is no service.
+                Saved Field markers and breadcrumbs remain on your device.
+                Prepare the app shell while connected, then verify it in
+                airplane mode. GPS can work without cell service, but this
+                does NOT download satellite or topographic imagery.
+                Online map tiles may appear blank without service.
               </div>
+              <button type="button" disabled={offlinePreparing} onClick={()=>{void prepareOfflineField();}}
+                style={{width:"100%",marginTop:11,padding:"11px 13px",background:"#204633",border:"1px solid #d4b67e",borderRadius:9,color:"#fbe9c8",fontWeight:800}}>
+                {offlinePreparing?"PREPARING…":"PREPARE OFFLINE FIELD"}
+              </button>
+              <div role="status" style={{fontSize:12,marginTop:9,color:"#ead4a4"}}>{offlinePrepareStatus}</div>
             </div>
           )}
         </div>
