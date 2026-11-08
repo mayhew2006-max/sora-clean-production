@@ -21,20 +21,25 @@ async function store(cache,request,response) {
 async function warmField(extraPaths=[]) {
   const cache=await caches.open(CACHE_NAME);
   let successful=0;
-  for(const pathname of [...CORE_PAGES,...CORE_ASSETS,...extraPaths]){
-    const url=new URL(pathname,self.location.origin);
-    if(!CORE_PAGES.includes(url.pathname) && !localAsset(url))continue;
-    // Use normalized URLs so native launch timestamp query strings never miss.
-    url.search="";
-    try{
-      const req=new Request(url.href,{credentials:"same-origin",cache:"reload"});
-      const res=await fetch(req);
-      if(res.ok&&!res.redirected && (CORE_PAGES.includes(url.pathname)
-        ? res.headers.get("content-type")?.includes("text/html")
-        : true)) {
-        await store(cache,req,res); successful++;
-      }
-    }catch {}
+  const paths=[...new Set([...CORE_PAGES,...CORE_ASSETS,...extraPaths])];
+  const batches=[];
+  for(let i=0;i<paths.length;i+=8)batches.push(paths.slice(i,i+8));
+  for(const batch of batches){
+    await Promise.all(batch.map(async pathname=>{
+      const url=new URL(pathname,self.location.origin);
+      if(!CORE_PAGES.includes(url.pathname) && !localAsset(url))return;
+      // Native launch URLs add unique timestamps; use a stable cache key.
+      url.search="";
+      try{
+        const req=new Request(url.href,{credentials:"same-origin",cache:"reload"});
+        const res=await fetch(req,{signal:AbortSignal.timeout(9000)});
+        if(res.ok&&!res.redirected && (CORE_PAGES.includes(url.pathname)
+          ? res.headers.get("content-type")?.includes("text/html")
+          : true)) {
+          await store(cache,req,res); successful++;
+        }
+      }catch{}
+    }));
   }
   const ready=(await Promise.all(CORE_PAGES.map(p=>cache.match(new URL(p,self.location.origin)))))
     .every(Boolean);
