@@ -657,7 +657,7 @@ export default function FieldMap({
     if(!navigator.onLine){setOfflinePrepareStatus("Connect first, then prepare Field for offline use.");return;}
     if(!("serviceWorker" in navigator)){setOfflinePrepareStatus("This WebView does not support the offline worker. A native update will be needed.");return;}
     setOfflinePreparing(true);
-    setOfflinePrepareStatus("Saving Field pages and scripts on this device…");
+    setOfflinePrepareStatus("Checking the Field page, all 18 marker icons and the app's scripts…");
     try{
       const registration=await navigator.serviceWorker.ready;
       const worker=navigator.serviceWorker.controller||registration.active;
@@ -670,14 +670,33 @@ export default function FieldMap({
         }catch{return false;}
       }).slice(0,150);
       const channel=new MessageChannel();
-      const result=await new Promise<{ready:boolean;successful:number}>((resolve,reject)=>{
-        const timeout=window.setTimeout(()=>reject(new Error("Offline preparation timed out")),30000);
+      const result=await new Promise<{
+        version?:number;ready:boolean;fieldSaved?:boolean;
+        markersSaved?:number;markersTotal?:number;jsCount?:number;cssCount?:number;
+        missing?:string[];fetched?:number;
+      }>((resolve,reject)=>{
+        const timeout=window.setTimeout(()=>reject(new Error("Offline preparation timed out")),45000);
         channel.port1.onmessage=event=>{window.clearTimeout(timeout);resolve(event.data);};
         worker.postMessage({type:"GRACE_PREPARE_OFFLINE",assets},[channel.port2]);
       });
-      if(!result.ready)throw new Error("Field page cache is incomplete");
+      const detail="Field page: "+(result.fieldSaved?"saved":"MISSING")+
+        " · Marker icons: "+(result.markersSaved??0)+"/"+(result.markersTotal??18)+
+        " · JavaScript: "+(result.jsCount??0)+" files"+
+        " · Styles: "+(result.cssCount??0)+" files";
+      if(result.version!==4){
+        setOfflinePrepareStatus("The old offline worker is still active. Close and reopen Grace while online, then try again. "+detail);
+        return;
+      }
+      if(!result.ready){
+        const missing=Array.isArray(result.missing)?result.missing.slice(0,3).join(", "):"";
+        setOfflinePrepareStatus("Offline preparation incomplete. "+detail+
+          (missing?" · Missing: "+missing:"")+
+          ". Stay online and retry. Do not depend on offline navigation yet.");
+        return;
+      }
       try{localStorage.setItem("grace-field-offline-prepared",new Date().toISOString());}catch{}
-      setOfflinePrepareStatus("Field shell saved. Reload Field while online, then tap PREPARE again to cache scripts. Test airplane mode before relying on it. Terrain imagery is NOT downloaded.");
+      setOfflinePrepareStatus("Offline Field assets prepared. "+detail+
+        ". IMPORTANT: Satellite/topo imagery is NOT downloaded. Test fully in airplane mode before relying on it.");
     }catch(e){setOfflinePrepareStatus("Offline preparation failed: "+(e instanceof Error?e.message:"unknown error"));}
     finally{setOfflinePreparing(false);}
   }
