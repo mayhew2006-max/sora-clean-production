@@ -71,7 +71,7 @@ self.addEventListener("fetch",event=>{
     event.respondWith((async()=>{
       const cache=await caches.open(CACHE_NAME);
       try{
-        const response=await fetch(request);
+        const response=await fetch(request,{signal:AbortSignal.timeout(4500)});
         if(response.ok&&!response.redirected&&response.headers.get("content-type")?.includes("text/html")){
           await store(cache,normalized,response);
         }
