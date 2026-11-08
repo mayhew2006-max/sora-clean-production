@@ -82,6 +82,12 @@ self.addEventListener("fetch",event=>{
         }
         return response;
       }catch{
+        if(url.pathname==="/chat" && await cache.match(new URL("/field",self.location.origin))){
+          // Android launches /chat; when disconnected, give a dependable
+          // offline entrance to Field rather than running cloud-only chat.
+          const html=`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="background:#10231c;color:#f7e4bc;font:17px system-ui;padding:35px 18px;text-align:center"><h1 style="color:#d6b477">GRACE FIELD</h1><h2>Offline Field Mode</h2><p>Live AI, research and map imagery need internet. Saved local GPS markers and trail tools may work if prepared.</p><a href="/field" style="display:block;margin:30px auto;max-width:320px;padding:17px;background:#285a3a;border:2px solid #d6b477;border-radius:12px;color:#fff;text-decoration:none;font-weight:bold">OPEN OFFLINE FIELD MAP</a><p style="font-size:13px">The map may be blank without downloaded terrain. Check your GPS accuracy and surroundings; never rely on Grace as your only navigation tool.</p></body></html>`;
+          return new Response(html,{status:200,headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store"}});
+        }
         return (await cache.match(normalized))||
           new Response("Grace Field offline shell has not been prepared. Connect once and open Field.",{
             status:503,headers:{"content-type":"text/plain; charset=utf-8"}});
