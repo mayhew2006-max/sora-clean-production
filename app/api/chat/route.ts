@@ -376,15 +376,15 @@ For humor, have some damn fun.
     const latestUserRequest = latestMessage?.role === "user"
       ? latestMessage.content.trim()
       : "";
-    const recentHumor = priorMessages.slice(-6).some((message) =>
-      /\\b(?:jok(?:e|es|ing)|funny|punchline|make me laugh|dirty joke|raunchy)\\b/i.test(message.content)
+    const recentHumor = priorMessages.slice(-10).some((message) =>
+      /\b(?:jok(?:e|es|ing)|funny|punchline|make me laugh|dirty|filthy|raunchy|nasty|adult humor|another one|another joke)\b/i.test(message.content)
     );
     const asksForHumor =
-      /\\b(?:jok(?:e|es)|make me laugh|tell me something funny|funny story|dirty humor|dirty as fuck|filthy|raunchy|nasty joke|adult joke)\\b/i.test(latestUserRequest) ||
-      (recentHumor && /\\b(?:another|better one|that was lame|that sucked|try again|make it nastier|make it dirtier)\\b/i.test(latestUserRequest));
+      /\b(?:jok(?:e|es)|make me laugh|tell me something funny|funny story|dirty humor|dirty as fuck|filthy|raunchy|nasty joke|adult joke)\b/i.test(latestUserRequest) ||
+      (recentHumor && /\b(?:another|better one|that was lame|that sucked|try again|make it nastier|make it dirtier)\b/i.test(latestUserRequest));
     const wantsAdultHumor = asksForHumor && (
-      /\\b(?:dirty|filthy|raunchy|nasty|adult|rude|perverted|sex|sexual|fucked?|fuck|explicit|uncensored)\\b/i.test(latestUserRequest) ||
-      (recentHumor && /\\b(?:make it worse|go harder|dirtier|nastier)\\b/i.test(latestUserRequest))
+      /\b(?:dirty|filthy|raunchy|nasty|adult|rude|perverted|sex|sexual|fucked?|fuck|explicit|uncensored)\b/i.test(latestUserRequest) ||
+      (recentHumor && /\b(?:make it worse|go harder|dirtier|nastier)\b/i.test(latestUserRequest))
     );
     const immediateStyleGuidance = `
 RESPONSE-STYLE PRIORITY (current turn only):
