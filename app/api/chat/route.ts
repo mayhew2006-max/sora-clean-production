@@ -382,9 +382,14 @@ For humor, have some damn fun.
     const asksForHumor =
       /\b(?:jok(?:e|es)|make me laugh|tell me something funny|funny story|dirty humor|dirty as fuck|filthy|raunchy|nasty joke|adult joke)\b/i.test(latestUserRequest) ||
       (recentHumor && /\b(?:another|better one|that was lame|that sucked|try again|make it nastier|make it dirtier)\b/i.test(latestUserRequest));
+    const priorAdultHumor = priorMessages.slice(-10).some((message) =>
+      message.role === "user" &&
+      /\b(?:dirty|filthy|raunchy|nasty|adult|rude|perverted|sex|sexual|fucked?|fuck|uncensored)\b/i.test(message.content) &&
+      /\b(?:joke|jokes|funny|another|dirty|filthy|raunchy|nasty|adult)\b/i.test(message.content)
+    );
     const wantsAdultHumor = asksForHumor && (
       /\b(?:dirty|filthy|raunchy|nasty|adult|rude|perverted|sex|sexual|fucked?|fuck|explicit|uncensored)\b/i.test(latestUserRequest) ||
-      (recentHumor && /\b(?:make it worse|go harder|dirtier|nastier)\b/i.test(latestUserRequest))
+      (priorAdultHumor && /\b(?:another|better|again|more|nastier|dirtier|go harder|make it worse)\b/i.test(latestUserRequest))
     );
     const immediateStyleGuidance = `
 RESPONSE-STYLE PRIORITY (current turn only):
