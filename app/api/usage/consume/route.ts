@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { refreshGracePlay } from "@/lib/googlePlayBilling";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,6 +19,26 @@ export async function POST(req: NextRequest) {
   const action = String(body?.action || "").slice(0, 60);
   if (!["chat", "field_save", "field_track"].includes(action)) {
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });
+  }
+
+  // Google Play can renew or expire without the user opening the billing page.
+  try {
+    await refreshGracePlay(user.id);
+  } catch (error) {
+    console.error("Google Play entitlement refresh:", error instanceof Error ? error.message : "unknown");
+    // If Google is temporarily unreachable, don't keep an already-expired
+    // Play subscription active forever. Preserve valid Stripe/manual access.
+    const { data: play } = await supabaseAdmin.from("grace_play_subscriptions")
+      .select("expires_at").eq("user_id", user.id).maybeSingle();
+    if (play && Date.parse(play.expires_at) <= Date.now()) {
+      const { data: usage } = await supabaseAdmin.from("grace_user_usage")
+        .select("stripe_paid,manual_paid").eq("user_id", user.id).maybeSingle();
+      await supabaseAdmin.from("grace_user_usage").update({
+        play_paid: false,
+        paid: Boolean(usage?.stripe_paid) || Boolean(usage?.manual_paid),
+        updated_at: new Date().toISOString(),
+      }).eq("user_id", user.id);
+    }
   }
 
   for (let attempt = 0; attempt < 8; attempt++) {
