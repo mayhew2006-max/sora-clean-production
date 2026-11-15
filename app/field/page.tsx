@@ -267,6 +267,7 @@ export default function GraceField() {
         <button className="gf-menu-choice" onClick={()=>doMenuAction("grace-field-open-tools")}><Icon name="weather"/> OUTDOOR TOOLS</button>
         <button className="gf-menu-choice" onClick={()=>doMenuAction("grace-field-open-mission")}><Icon name="shield"/> GUARDIAN ANGEL</button>
         <button className="gf-menu-choice" style={{gridColumn:"1 / -1"}} onClick={()=>{setMenuOpen(false);setGraceOpen(true);setGraceExpanded(true);}}><Icon name="back"/> FULL GRACE CHAT</button>
+        <a href="/billing-test" className="gf-menu-choice" style={{gridColumn:"1 / -1",textDecoration:"none"}}><Icon name="pin"/> ACCOUNT / TEST BILLING</a>
         <a className="gf-menu-choice" style={{gridColumn:"1 / -1",textDecoration:"none"}} href="/billing-test" onClick={()=>setMenuOpen(false)} aria-label="Open account and billing test">ACCOUNT / TEST BILLING</a>
       </div>
       <div className="gf-footer-note">{gps.status} · GPS and compass accuracy depend on your device and conditions.</div>
