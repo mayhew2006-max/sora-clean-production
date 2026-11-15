@@ -68,28 +68,28 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f7e3d3] text-zinc-950 flex items-center justify-center px-5 py-10">
-      <div className="w-full max-w-md rounded-[2rem] bg-white/80 border border-black/10 shadow-2xl p-7">
+    <main className="min-h-screen overflow-y-auto bg-gradient-to-br from-[#10221b] via-[#0c1915] to-[#08130e] text-[#f2e9d7] flex items-center justify-center px-5 py-10">
+      <div className="w-full max-w-md rounded-[2rem] bg-[#10221b]/95 border border-[#dfbf7f]/35 shadow-2xl shadow-black/40 p-7">
         <div className="text-center mb-7">
           <img
             src="/grace-avatar.png"
             alt="Grace"
-            className="w-24 h-24 rounded-full object-cover mx-auto border-4 border-white shadow-lg mb-4"
+            className="w-24 h-24 rounded-full object-cover mx-auto border-4 border-[#dfbf7f] shadow-lg mb-4"
           />
-          <h1 className="text-4xl font-black">Grace</h1>
-          <p className="text-zinc-600 mt-2">Sign in to continue.</p>
+          <h1 className="text-4xl font-black">Grace <span className="text-[#dfbf7f]">Field</span></h1>
+          <p className="text-[#b6bba9] mt-2">Sign in to continue.</p>
         </div>
 
-        <div className="grid grid-cols-2 bg-black/5 rounded-2xl p-1 mb-5">
+        <div className="grid grid-cols-2 bg-[#08130e] border border-[#dfbf7f]/20 rounded-2xl p-1 mb-5">
           <button
             onClick={() => setMode("login")}
-            className={`rounded-xl py-3 font-bold ${mode === "login" ? "bg-zinc-950 text-white" : "text-zinc-600"}`}
+            className={`rounded-xl py-3 font-bold ${mode === "login" ? "bg-[#dfbf7f] text-[#08130e]" : "text-[#b6bba9]"}`}
           >
             Sign In
           </button>
           <button
             onClick={() => setMode("signup")}
-            className={`rounded-xl py-3 font-bold ${mode === "signup" ? "bg-zinc-950 text-white" : "text-zinc-600"}`}
+            className={`rounded-xl py-3 font-bold ${mode === "signup" ? "bg-[#dfbf7f] text-[#08130e]" : "text-[#b6bba9]"}`}
           >
             Create
           </button>
@@ -100,7 +100,7 @@ export default function LoginPage() {
           onChange={(e) => setEmail(e.target.value)}
           type="email"
           placeholder="Email"
-          className="w-full rounded-2xl border border-black/10 bg-white px-4 py-4 mb-3 outline-none"
+          className="w-full rounded-2xl border border-[#dfbf7f]/35 bg-[#08130e] text-[#f2e9d7] placeholder:text-[#b6bba9] px-4 py-4 mb-3 outline-none focus-visible:ring-2 focus-visible:ring-[#dfbf7f]"
         />
 
         <input
@@ -108,13 +108,13 @@ export default function LoginPage() {
           onChange={(e) => setPassword(e.target.value)}
           type={showPassword ? "text" : "password"}
           placeholder="Password"
-          className="w-full rounded-2xl border border-black/10 bg-white px-4 py-4 mb-2 outline-none"
+          className="w-full rounded-2xl border border-[#dfbf7f]/35 bg-[#08130e] text-[#f2e9d7] placeholder:text-[#b6bba9] px-4 py-4 mb-2 outline-none focus-visible:ring-2 focus-visible:ring-[#dfbf7f]"
           onKeyDown={(e) => {
             if (e.key === "Enter") submit();
           }}
         />
 
-        <label className="mb-4 flex items-center gap-2 text-sm text-zinc-600">
+        <label className="mb-4 flex items-center gap-2 text-sm text-[#b6bba9]">
           <input
             type="checkbox"
             checked={showPassword}
@@ -127,22 +127,27 @@ export default function LoginPage() {
         <button
           disabled={busy}
           onClick={submit}
-          className="w-full rounded-2xl bg-zinc-950 text-white py-4 font-black disabled:opacity-60"
+          className="w-full rounded-2xl bg-[#dfbf7f] hover:bg-[#ffda8b] text-[#08130e] py-4 font-black disabled:opacity-60 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#dfbf7f] focus-visible:ring-offset-[#10221b]"
         >
           {busy ? "Please wait..." : mode === "login" ? "Sign In" : "Create Account"}
         </button>
 
-        <a href="/reset-password" className="block text-center text-sm text-zinc-500 mt-4">
+        <a href="/reset-password" className="block text-center text-sm text-[#dfbf7f] hover:text-[#ffda8b] mt-4">
           Forgot password?
         </a>
+        {mode === "login" && (
+          <p className="mt-2 text-center text-xs leading-relaxed text-[#c5b18a]">
+            Reset email not showing up? Check your Spam or Promotions folder.
+          </p>
+        )}
 
         {message && (
-          <p className="text-center text-sm text-zinc-700 bg-black/5 rounded-2xl p-3 mt-4">
+          <p className="text-center text-sm text-[#f2e9d7] bg-[#08130e] border border-[#dfbf7f]/20 rounded-2xl p-3 mt-4">
             {message}
           </p>
         )}
 
-        <a href="/" className="block text-center text-sm text-zinc-500 mt-6">
+        <a href="/" className="block text-center text-sm text-[#b6bba9] hover:text-[#dfbf7f] mt-6">
           Back to Grace
         </a>
       </div>
