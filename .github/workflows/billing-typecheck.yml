@@ -1,0 +1,27 @@
+name: Grace V12 billing TypeScript check
+on:
+  pull_request:
+    paths:
+      - "app/pay/page.tsx"
+      - "app/account/page.tsx"
+      - "app/api/google-play/**"
+      - "app/api/stripe-webhook/**"
+      - "app/api/usage/consume/**"
+      - "lib/googlePlayBilling.ts"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/billing-typecheck.yml"
+  workflow_dispatch:
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+      - run: npm ci
+      - run: npx tsc --noEmit
