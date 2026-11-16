@@ -70,7 +70,27 @@ async function googleAccessToken(): Promise<string> {
     }),
     cache: "no-store",
   });
-  if (!res.ok) throw new Error("Unable to authorize Google Play verification (" + res.status + ")");
+  if (!res.ok) {
+    // OAuth error descriptions may contain private identifiers. Log only allowlisted categories,
+    // never the JWT, service-account key, or Google's raw error response.
+    const oauthError = (await res.json().catch(() => ({}))) as {
+      error?: unknown;
+      error_description?: unknown;
+    };
+    const code = typeof oauthError.error === "string" ? oauthError.error : "";
+    const description = typeof oauthError.error_description === "string" ? oauthError.error_description : "";
+    const safeCode = ["invalid_grant", "invalid_client", "invalid_scope", "unauthorized_client"].includes(code)
+      ? code : "unclassified";
+    const safeReason = /invalid jwt signature/i.test(description) ? "invalid-jwt-signature"
+      : /disabled|deleted/i.test(description) ? "disabled-or-deleted-account"
+      : /account not found|not a valid email|invalid email|unknown service account/i.test(description)
+        ? "unrecognized-service-account"
+      : /invalid jwt|invalid assertion|jwt must/i.test(description) ? "invalid-jwt-claims"
+      : /key/i.test(description) ? "key-validation-failed"
+      : "unclassified";
+    throw new Error("Unable to authorize Google Play verification (" + res.status
+      + "; " + safeCode + "; " + safeReason + ")");
+  }
   const body = await res.json() as { access_token?: string; expires_in?: number };
   if (!body.access_token) throw new Error("No Google access token returned");
   cachedAccessToken = {
