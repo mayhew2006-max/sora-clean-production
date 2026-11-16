@@ -298,6 +298,7 @@ export default function FieldMap({
 }: {
   mode: FieldMode;
 }) {
+  const [userId, setUserId] = useState<string | null>(null);
   const [spots, setSpots] = useState<FieldSpot[]>([]);
   const [loadedOwnerId, setLoadedOwnerId] = useState<string | null>(null);
   const [position, setPosition] =
@@ -728,7 +729,7 @@ export default function FieldMap({
 
   // Grace account / shared 50-action allowance
   const FREE_LIMIT = 50;
-  const [userId, setUserId] = useState<string | null>(null);
+
   const [userEmail, setUserEmail] = useState("");
   const [accountFreeUsed, setAccountFreeUsed] = useState(0);
   const [paid, setPaid] = useState(false);
