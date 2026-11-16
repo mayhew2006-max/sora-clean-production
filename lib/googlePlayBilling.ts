@@ -187,3 +187,8 @@ export async function refreshGracePlay(userId: string, force = false) {
   }
   return { ...(await verifyGracePlayPurchase(userId, current.purchase_token)), source: "google" };
 }
+
+/** Founder-only diagnostic endpoint calls this; no purchase token or credential is returned. */
+export async function checkGracePlayServerAuthorization(): Promise<void> {
+  await googleAccessToken();
+}

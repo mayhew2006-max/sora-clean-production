@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
 declare global {
@@ -17,8 +17,16 @@ export default function Pay() {
   const [ready, setReady] = useState(false);
   const [androidPlay, setAndroidPlay] = useState(false);
   const [androidBrowser, setAndroidBrowser] = useState(false);
+  const restorePending = useRef(false);
+  const restoreTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    const finishRestore = () => {
+      restorePending.current = false;
+      if (restoreTimeout.current) clearTimeout(restoreTimeout.current);
+      restoreTimeout.current = null;
+      setBusy(false);
+    };
     const native = navigator.userAgent.includes("GraceFieldAndroid/");
     setAndroidBrowser(/Android/i.test(navigator.userAgent));
     setAndroidPlay(native || Boolean(window.GracePlayBilling));
@@ -33,6 +41,7 @@ export default function Pay() {
     const onPurchase = async (event: Event) => {
       const token = (event as CustomEvent<BillingEvent>).detail?.purchaseToken;
       if (!token) return;
+      finishRestore();
       setBusy(true);
       setMessage("Verifying your Google Play payment...");
       try {
@@ -63,13 +72,19 @@ export default function Pay() {
       }
     };
     const onError = (event: Event) => {
-      setBusy(false);
+      finishRestore();
       setMessage((event as CustomEvent<BillingEvent>).detail?.message || "Google Play is unavailable.");
     };
     const onCanceled = () => {
-      setBusy(false);
+      finishRestore();
       setMessage("Checkout canceled.");
     };
+    const onNoPurchases = () => {
+      if (!restorePending.current) return;
+      finishRestore();
+      setMessage("No active Google Play purchase was found to restore. Test subscriptions expire quickly. Do not purchase again while we fix verification.");
+    };
+    window.addEventListener("grace-play-no-purchases", onNoPurchases);
     window.addEventListener("grace-play-ready", onReady);
     window.addEventListener("grace-play-purchase", onPurchase);
     window.addEventListener("grace-play-error", onError);
@@ -77,6 +92,8 @@ export default function Pay() {
     onReady();
 
     return () => {
+      if (restoreTimeout.current) clearTimeout(restoreTimeout.current);
+      window.removeEventListener("grace-play-no-purchases", onNoPurchases);
       window.removeEventListener("grace-play-ready", onReady);
       window.removeEventListener("grace-play-purchase", onPurchase);
       window.removeEventListener("grace-play-error", onError);
@@ -120,10 +137,19 @@ export default function Pay() {
   }
 
   function restore() {
-    if (window.GracePlayBilling) {
-      setMessage("Checking your Google Play purchases...");
-      window.GracePlayBilling.restore();
-    }
+    if (!window.GracePlayBilling) return;
+    if (restoreTimeout.current) clearTimeout(restoreTimeout.current);
+    restorePending.current = true;
+    setBusy(true);
+    setMessage("Checking your Google Play purchases...");
+    restoreTimeout.current = setTimeout(() => {
+      if (!restorePending.current) return;
+      restorePending.current = false;
+      restoreTimeout.current = null;
+      setBusy(false);
+      setMessage("Google Play did not finish the restore check. No new payment is needed. Please contact support.");
+    }, 15000);
+    window.GracePlayBilling.restore();
   }
 
   return (

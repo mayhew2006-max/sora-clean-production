@@ -42,6 +42,28 @@ export default function AccountPage() {
     load();
   }, []);
 
+  async function checkGooglePlayServer() {
+    setBusy(true);
+    setMessage("Checking Google Play server credentials (no purchase required)...");
+    try {
+      const { data } = await supabase.auth.getSession();
+      if (!data.session?.access_token) {
+        setMessage("Sign in to your founder account to run the check.");
+        return;
+      }
+      const res = await fetch("/api/google-play/diagnostics", {
+        headers: { Authorization: "Bearer " + data.session.access_token },
+      });
+      const result = await res.json();
+      setMessage(result.ok ? "Google Play server authentication succeeded." :
+        (result.error || "Google Play server authentication failed. No purchase was made."));
+    } catch {
+      setMessage("Could not reach the server diagnostic. No purchase was made.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function manageWebsiteSubscription() {
     setBusy(true);
     setMessage("");
@@ -112,6 +134,12 @@ export default function AccountPage() {
             className="block w-full bg-[#dfbf7f] text-[#08130e] rounded-2xl py-4 font-bold mb-3">
             Upgrade to Grace Pro
           </a>
+        )}
+        {founder && (
+          <button type="button" onClick={checkGooglePlayServer} disabled={busy}
+            className="block w-full bg-[#08130e] border border-[#dfbf7f]/50 text-[#f2e9d7] rounded-2xl py-3 font-bold mb-3 disabled:opacity-60">
+            {busy ? "Checking..." : "Check Google Play server connection"}
+          </button>
         )}
         {message && <p className="text-sm text-[#f2e9d7] bg-[#08130e] border border-[#dfbf7f]/20 rounded-2xl p-3 mb-3">{message}</p>}
         <button onClick={signOut}
