@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
+import { supabase } from "@/lib/supabaseClient";
 import FieldMission from "@/components/field/FieldMission";
 import FieldPlaceSearch from "@/components/field/FieldPlaceSearch";
 import FieldWaypointLibrary from "@/components/field/FieldWaypointLibrary";
@@ -14,7 +15,7 @@ const FieldMap = dynamic(() => import("@/components/field/FieldMap"), {
 });
 const send = (name: string) => window.dispatchEvent(new Event(name));
 type GpsInfo = { accuracy: number | null; altitude: number | null; status: string };
-type IconName = "mountain" | "menu" | "layers" | "locate" | "search" | "compass" | "track" | "save" | "shield" | "back" | "pin" | "x" | "clock" | "weather";
+type IconName = "mountain" | "menu" | "layers" | "locate" | "search" | "compass" | "track" | "save" | "shield" | "back" | "pin" | "x" | "clock" | "weather" | "logout";
 function Icon({ name, size = 22 }: { name: IconName; size?: number }) {
   const shared = { fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
   const paths: Record<IconName, React.ReactNode> = {
@@ -32,6 +33,7 @@ function Icon({ name, size = 22 }: { name: IconName; size?: number }) {
     x: <path d="M8 8 32 32M32 8 8 32"/>,
     clock: <><circle cx="20" cy="20" r="16"/><path d="M20 10v11l7 4"/></>,
     weather: <><path d="M13 28a9 9 0 0 1 1-18 11 11 0 0 1 20 7 7 7 0 0 1-1 14H13"/><path d="M15 33v4m8-4v4m8-4v4"/></>,
+    logout: <><path d="M19 7H7v26h12M24 12l8 8-8 8M13 20h19"/></>,
   };
   return <svg aria-hidden="true" width={size} height={size} viewBox={name === "mountain" ? "0 0 51 40" : "0 0 40 40"} {...shared}>{paths[name]}</svg>;
 }
@@ -40,6 +42,8 @@ export default function GraceField() {
   const [heading, setHeading] = useState<number | null>(null);
   const [tracking, setTracking] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+  const [signOutError, setSignOutError] = useState("");
   const [placeSearchOpen,setPlaceSearchOpen] = useState(false);
   const [graceOpen, setGraceOpen] = useState(false);
   const [graceExpanded, setGraceExpanded] = useState(false);
@@ -159,6 +163,23 @@ export default function GraceField() {
   }, []);
   const cardinal = heading === null ? "NO SENSOR" : ["N", "NE", "E", "SE", "S", "SW", "W", "NW"][Math.round(heading / 45) % 8];
   const doMenuAction = (event: string) => { setMenuOpen(false); send(event); };
+  async function signOutOfGrace() {
+    if (signingOut) return;
+    setSigningOut(true);
+    setSignOutError("");
+    try {
+      // Sign out only this browser / Android WebView, not every device.
+      // Do not touch saved waypoints, tracks, or offline map data.
+      const { error } = await supabase.auth.signOut({ scope: "local" });
+      if (error) throw error;
+      localStorage.removeItem("sora_paid");
+      localStorage.removeItem("grace_founder");
+      window.location.replace("/login");
+    } catch {
+      setSignOutError("Couldn't sign out. Please try again.");
+      setSigningOut(false);
+    }
+  }
   return <main className={`grace-field-v3${mapOverlayOpen ? " gf-map-overlay-open" : ""}`}>
     <style>{`
       .grace-field-v3{position:fixed;inset:0;z-index:10000;overflow:hidden;background:#0a1513;color:#f2e9d7;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;isolation:isolate}
@@ -269,7 +290,10 @@ export default function GraceField() {
         <button className="gf-menu-choice" style={{gridColumn:"1 / -1"}} onClick={()=>{setMenuOpen(false);setGraceOpen(true);setGraceExpanded(true);}}><Icon name="back"/> FULL GRACE CHAT</button>
         <a href="/billing-test" className="gf-menu-choice" style={{gridColumn:"1 / -1",textDecoration:"none"}}><Icon name="pin"/> ACCOUNT / TEST BILLING</a>
         <a className="gf-menu-choice" style={{gridColumn:"1 / -1",textDecoration:"none"}} href="/billing-test" onClick={()=>setMenuOpen(false)} aria-label="Open account and billing test">ACCOUNT / TEST BILLING</a>
+        <button type="button" className="gf-menu-choice" style={{gridColumn:"1 / -1",borderColor:"#dfbf7f",color:"#ffda8b"}} disabled={signingOut} onClick={signOutOfGrace}><Icon name="logout"/> {signingOut ? "SIGNING OUT..." : "SIGN OUT"}</button>
       </div>
+      {signOutError && <p role="alert" style={{color:"#ffb8aa",fontSize:12,marginTop:10}}>{signOutError}</p>}
+      <div className="gf-footer-note">Signing out keeps your saved spots on this device.</div>
       <div className="gf-footer-note">{gps.status} · GPS and compass accuracy depend on your device and conditions.</div>
     </div>}
   </main>;
