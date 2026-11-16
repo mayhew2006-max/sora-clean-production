@@ -1,6 +1,13 @@
+import { checkGraceCompanionRequest } from "@/lib/grace-usage-guard";
 export async function POST(req: Request) {
+  const quotaFailure = await checkGraceCompanionRequest(req, "voice");
+  if (quotaFailure) return quotaFailure;
   try {
     const { text } = await req.json();
+    const spokenText = typeof text === "string" ? text.trim() : "";
+    if (!spokenText || spokenText.length > 2400) {
+      return Response.json({ error: "Voice text must be between 1 and 2400 characters." }, { status: 400 });
+    }
 
     const response = await fetch(
       "https://api.openai.com/v1/audio/speech",
@@ -13,7 +20,7 @@ export async function POST(req: Request) {
         body: JSON.stringify({
           model: "gpt-4o-mini-tts",
           voice: "sage",
-          input: String(text || ""),
+          input: spokenText,
           instructions: `
 Speak as a woman from South Boston, Massachusetts.
 

@@ -988,6 +988,7 @@ export default function GraceChat() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          ...(await graceApiHeaders()),
         },
         body: JSON.stringify({
           text: clean,
@@ -1081,7 +1082,7 @@ export default function GraceChat() {
     try {
       const res = await fetch("/api/speak", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(await graceApiHeaders()) },
         body: JSON.stringify({ text }),
       });
 

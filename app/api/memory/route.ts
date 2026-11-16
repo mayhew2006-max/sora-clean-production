@@ -1,6 +1,13 @@
+import { checkGraceCompanionRequest } from "@/lib/grace-usage-guard";
 export async function POST(req: Request) {
+  const quotaFailure = await checkGraceCompanionRequest(req, "memory");
+  if (quotaFailure) return quotaFailure;
   try {
     const { text, memory } = await req.json();
+    if ((typeof text === "string" && text.length > 8000) ||
+        (typeof memory === "string" && memory.length > 7000)) {
+      return Response.json({ error: "Memory request too large" }, { status: 400 });
+    }
 
     const userText =
       typeof text === "string" ? text.trim() : "";

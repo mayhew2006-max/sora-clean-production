@@ -1,8 +1,14 @@
+import { requireGracePremiumRequest } from "@/lib/grace-usage-guard";
 export async function POST(req: Request) {
+  const premiumFailure = await requireGracePremiumRequest(req);
+  if (premiumFailure) return premiumFailure;
   try {
-    const { prompt, personality, paid } = await req.json();
+    const { prompt, personality } = await req.json();
+    if (typeof prompt !== "string" || !prompt.trim() || prompt.length > 1500) {
+      return Response.json({ error: "Provide an image prompt under 1500 characters" }, { status: 400 });
+    }
 
-    if (!paid || personality !== "Unfiltered") {
+    if (personality !== "Unfiltered") {
       return Response.json(
         { error: "Unfiltered Grace only" },
         { status: 403 }
