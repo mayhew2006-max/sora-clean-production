@@ -21,6 +21,7 @@ type GoogleServiceAccount = {
   client_email: string;
   private_key: string;
   token_uri?: string;
+  private_key_id?: string;
 };
 let cachedAccessToken: { value: string; expires: number } | null = null;
 
@@ -48,7 +49,11 @@ async function googleAccessToken(): Promise<string> {
     throw new Error("Google Play service account is incomplete");
   }
   const now = Math.floor(Date.now() / 1000);
-  const header = base64url(JSON.stringify({ alg: "RS256", typ: "JWT" }));
+  const header = base64url(JSON.stringify({
+    alg: "RS256",
+    typ: "JWT",
+    ...(credentials.private_key_id ? { kid: credentials.private_key_id } : {}),
+  }));
   const claims = base64url(JSON.stringify({
     iss: credentials.client_email,
     aud: "https://oauth2.googleapis.com/token",
