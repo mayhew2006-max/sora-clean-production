@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { fieldStorageKey, useFieldAccountId } from "@/lib/fieldAccountStorage";
 
 type Waypoint = {
   id: string;
@@ -174,8 +175,9 @@ function uid() {
 }
 
 export default function FieldExpeditionPack() {
+  const userId = useFieldAccountId();
   const [open, setOpen] = useState(false);
-  const [ready, setReady] = useState(false);
+  const [readyOwnerId, setReadyOwnerId] = useState<string | null>(null);
   const [data, setData] =
     useState<Expedition>(initial);
 
@@ -188,8 +190,11 @@ export default function FieldExpeditionPack() {
   const [message, setMessage] = useState("");
 
   useEffect(() => {
+    setReadyOwnerId(null);
+    setData(initial);
+    if (!userId) return;
     try {
-      const stored = localStorage.getItem(KEY);
+      const stored = localStorage.getItem(fieldStorageKey(userId, KEY));
 
       if (stored) {
         const parsed = JSON.parse(stored);
@@ -221,15 +226,15 @@ export default function FieldExpeditionPack() {
       );
     }
 
-    setReady(true);
-  }, []);
+    setReadyOwnerId(userId);
+  }, [userId]);
 
   useEffect(() => {
-    if (!ready) return;
+    if (!userId || readyOwnerId !== userId) return;
 
     try {
       localStorage.setItem(
-        KEY,
+        fieldStorageKey(userId, KEY),
         JSON.stringify(data)
       );
     } catch {
@@ -237,7 +242,7 @@ export default function FieldExpeditionPack() {
         "Device storage is unavailable. Export a backup."
       );
     }
-  }, [data, ready]);
+  }, [data, readyOwnerId, userId]);
 
   useEffect(() => {
     const show = () => {

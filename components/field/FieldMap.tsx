@@ -13,6 +13,7 @@ import {
 } from "react-leaflet";
 import L from "leaflet";
 import { supabase } from "@/lib/supabaseClient";
+import { fieldStorageKey } from "@/lib/fieldAccountStorage";
 import "leaflet/dist/leaflet.css";
 import { markerOptions, markerSvg, markerColor } from "./FieldPremiumMarkers";
 import { calculateTrailReturn } from "./FieldReturnGuidance";
@@ -298,6 +299,7 @@ export default function FieldMap({
   mode: FieldMode;
 }) {
   const [spots, setSpots] = useState<FieldSpot[]>([]);
+  const [loadedOwnerId, setLoadedOwnerId] = useState<string | null>(null);
   const [position, setPosition] =
     useState<[number, number] | null>(null);
 
@@ -373,14 +375,14 @@ export default function FieldMap({
   const journalKey=(id:string)=>"grace-field-journal-v1-"+id;
   function openJournal(spot:FieldSpot) {
     setJournalSpot(spot);setJournalText("");
-    try { const value=JSON.parse(localStorage.getItem(journalKey(spot.id))||"[]");setJournalEntries(Array.isArray(value)?value.filter(x=>typeof x?.text==="string"&&typeof x?.date==="string").slice(0,100):[]); }
+    try { const value=JSON.parse(localStorage.getItem(fieldStorageKey(userId!, journalKey(spot.id)))||"[]");setJournalEntries(Array.isArray(value)?value.filter(x=>typeof x?.text==="string"&&typeof x?.date==="string").slice(0,100):[]); }
     catch {setJournalEntries([]);}
   }
   async function saveJournalEntry(){
     if(!journalSpot||!journalText.trim())return;
     if(!(await useFieldAction()))return;
     const entries=[{date:new Date().toISOString(),text:journalText.trim().slice(0,1000)},...journalEntries].slice(0,100);
-    try {localStorage.setItem(journalKey(journalSpot.id),JSON.stringify(entries));setJournalEntries(entries);setJournalText("");}
+    try {localStorage.setItem(fieldStorageKey(userId!, journalKey(journalSpot.id)),JSON.stringify(entries));setJournalEntries(entries);setJournalText("");}
     catch {setLocationStatus("Journal storage unavailable on this device.");}
   }
   async function analyzeTerrain(spot:FieldSpot) {
@@ -450,18 +452,18 @@ export default function FieldMap({
   const [adviceEligibilityVersion,setAdviceEligibilityVersion] = useState(0);
   function adviceExcluded(spot:FieldSpot){
     void adviceEligibilityVersion;
-    try {const stored=localStorage.getItem("grace-field-advice-exclude-v1-"+spot.id);
+    try {const stored=localStorage.getItem(fieldStorageKey(userId!, "grace-field-advice-exclude-v1-"+spot.id));
       return stored===null?/^(home|house|my home)$/i.test(spot.name.trim()):stored==="true";
     }catch{return /^(home|house|my home)$/i.test(spot.name.trim());}
   }
   function setAdviceExcluded(spot:FieldSpot,excluded:boolean){
-    try{localStorage.setItem("grace-field-advice-exclude-v1-"+spot.id,String(excluded));setAdviceEligibilityVersion(v=>v+1);}catch{setLocationStatus("Could not save this recommendation preference.");}
+    try{localStorage.setItem(fieldStorageKey(userId!, "grace-field-advice-exclude-v1-"+spot.id),String(excluded));setAdviceEligibilityVersion(v=>v+1);}catch{setLocationStatus("Could not save this recommendation preference.");}
   }
   function photoKey(id: string){return `grace-field-photo-v1-${id}`;}
   function styleKey(id: string){return `grace-field-style-v1-${id}`;}
-  function localSpotPhoto(id: string){try{return localStorage.getItem(photoKey(id))||"";}catch{return "";}}
-  function localSpotStyle(id: string){try{return localStorage.getItem(styleKey(id))||"realistic";}catch{return "realistic";}}
-  function setLocalSpotStyle(id:string,style:string){try{localStorage.setItem(styleKey(id),style);setSpotAppearanceVersion(n=>n+1);}catch{setLocationStatus("Cannot store marker style on this device.");}}
+  function localSpotPhoto(id: string){try{return localStorage.getItem(fieldStorageKey(userId!, photoKey(id)))||"";}catch{return "";}}
+  function localSpotStyle(id: string){try{return localStorage.getItem(fieldStorageKey(userId!, styleKey(id)))||"realistic";}catch{return "realistic";}}
+  function setLocalSpotStyle(id:string,style:string){try{localStorage.setItem(fieldStorageKey(userId!, styleKey(id)),style);setSpotAppearanceVersion(n=>n+1);}catch{setLocationStatus("Cannot store marker style on this device.");}}
   async function attachLocalSpotPhoto(id: string,file:File){
     if(!file.type.startsWith("image/")){setLocationStatus("Choose an image file.");return;}
     if(file.size>20*1024*1024){setLocationStatus("Photo too large (maximum 20 MB before resize).");return;}
@@ -474,7 +476,7 @@ export default function FieldMap({
       const context=canvas.getContext("2d");if(!context)throw new Error("Image processing unavailable");
       context.drawImage(photo,0,0,canvas.width,canvas.height);
       const resized=canvas.toDataURL("image/jpeg",0.7);
-      localStorage.setItem(photoKey(id),resized);
+      localStorage.setItem(fieldStorageKey(userId!, photoKey(id)),resized);
       setSpotAppearanceVersion(n=>n+1);
       setLocationStatus("Spot photo saved on this device.");
     }catch{setLocationStatus("Could not save photo. Device storage may be full.");}
@@ -497,7 +499,9 @@ export default function FieldMap({
   // Restore only verified native points; this does not upload live positions.
   useEffect(() => {
     const native = graceNativeTrail();
-    if (!native) return;
+    if (!native || !userId || loadedOwnerId !== userId) return;
+    // Native GPS records persist outside WebView storage. Only the owner can restore them.
+    if (localStorage.getItem("grace-native-trail-owner") !== userId) return;
     let lastSnapshot = "";
     const sync = () => {
       try {
@@ -538,7 +542,7 @@ export default function FieldMap({
       document.removeEventListener("visibilitychange", onResume);
       window.removeEventListener("pageshow", onResume);
     };
-  }, []);
+  }, [userId, loadedOwnerId]);
 
 
   const [navigationTarget, setNavigationTarget] =
@@ -809,34 +813,37 @@ export default function FieldMap({
   }, [mode]);
 
   useEffect(() => {
+    // Legacy unscoped locations are deliberately left untouched; do not
+    // copy somebody else's markers to the next account on this device.
+    setLoadedOwnerId(null);
+    setSpots([]);
+    setTrail([]);
+    if (!userId) return;
     try {
-      const saved = localStorage.getItem("graceFieldSpots");
-      if (saved) setSpots(JSON.parse(saved));
-
-      const savedTrail =
-        localStorage.getItem("graceFieldTrail");
-
+      const saved = localStorage.getItem(fieldStorageKey(userId, "graceFieldSpots"));
+      if (saved) setSpots(normalizeLocalFieldSpots(JSON.parse(saved)));
+      const savedTrail = localStorage.getItem(fieldStorageKey(userId, "graceFieldTrail"));
       if (savedTrail) setTrail(JSON.parse(savedTrail));
-    } catch {}
-  }, []);
+    } catch {
+      setSpots([]);
+      setTrail([]);
+    }
+    setLoadedOwnerId(userId);
+  }, [userId]);
 
   useEffect(() => {
+    if (!userId || loadedOwnerId !== userId) return;
     try {
-      localStorage.setItem(
-        "graceFieldSpots",
-        JSON.stringify(spots)
-      );
+      localStorage.setItem(fieldStorageKey(userId, "graceFieldSpots"), JSON.stringify(spots));
     } catch {}
-  }, [spots]);
+  }, [spots, userId, loadedOwnerId]);
 
   useEffect(() => {
+    if (!userId || loadedOwnerId !== userId) return;
     try {
-      localStorage.setItem(
-        "graceFieldTrail",
-        JSON.stringify(trail)
-      );
+      localStorage.setItem(fieldStorageKey(userId, "graceFieldTrail"), JSON.stringify(trail));
     } catch {}
-  }, [trail]);
+  }, [trail, userId, loadedOwnerId]);
 
   const firstGpsFix = useRef(true);
   function acceptPosition(result: GeolocationPosition) {
@@ -1253,7 +1260,7 @@ export default function FieldMap({
   }
 
   useEffect(() => {
-    if (!authReady || !userId) return;
+    if (!authReady || !userId || loadedOwnerId !== userId) return;
 
     const fieldUserId: string = userId;
     let cancelled = false;
@@ -1268,7 +1275,7 @@ export default function FieldMap({
 
       try {
         const saved =
-          localStorage.getItem("graceFieldSpots");
+          localStorage.getItem(fieldStorageKey(fieldUserId, "graceFieldSpots"));
 
         if (saved) {
           localSpots =
@@ -1330,7 +1337,7 @@ export default function FieldMap({
 
       try {
         localStorage.setItem(
-          "graceFieldSpots",
+          fieldStorageKey(fieldUserId, "graceFieldSpots"),
           JSON.stringify(merged)
         );
       } catch {}
@@ -1413,7 +1420,7 @@ export default function FieldMap({
 
           try {
             localStorage.setItem(
-              "graceFieldSpots",
+              fieldStorageKey(fieldUserId, "graceFieldSpots"),
               JSON.stringify(pending)
             );
           } catch {}
@@ -1432,7 +1439,7 @@ export default function FieldMap({
 
           try {
             localStorage.setItem(
-              "graceFieldSpots",
+              fieldStorageKey(fieldUserId, "graceFieldSpots"),
               JSON.stringify(synced)
             );
           } catch {}
@@ -1456,9 +1463,10 @@ export default function FieldMap({
     return () => {
       cancelled = true;
     };
-  }, [authReady, userId]);
+  }, [authReady, userId, loadedOwnerId]);
 
   async function useFieldAction(action: "field_save" | "field_track" = "field_save") {
+    if (!userId || loadedOwnerId !== userId) { setLocationStatus("Sign in to save locations for your account."); return false; }
     // Basic local GPS safety actions are not charged while offline.
     if(typeof navigator!=="undefined" && navigator.onLine===false){
       setLocationStatus("OFFLINE: "+(action==="field_track"?"GPS tracking":"Waypoint saving")+" works locally. Reconnect to sync spots.");
@@ -1496,10 +1504,10 @@ export default function FieldMap({
       const wantsNew = window.confirm("Start a NEW breadcrumb trail? Your previous trail will be archived on this device. Press Cancel to continue the existing trail.");
       if (wantsNew) {
         try {
-          const saved = JSON.parse(localStorage.getItem("graceFieldTrackHistory") || "[]");
+          const saved = JSON.parse(localStorage.getItem(fieldStorageKey(userId!, "graceFieldTrackHistory")) || "[]");
           const archive = Array.isArray(saved) ? saved : [];
           archive.unshift({savedAt:new Date().toISOString(),points:trail});
-          localStorage.setItem("graceFieldTrackHistory",JSON.stringify(archive.slice(0,25)));
+          localStorage.setItem(fieldStorageKey(userId!, "graceFieldTrackHistory"),JSON.stringify(archive.slice(0,25)));
           setTrail([]);
           newNativeTrail = true;
         } catch {setLocationStatus("Could not archive last trail. Continuing existing trail so nothing is lost.");}
@@ -1507,6 +1515,16 @@ export default function FieldMap({
     }
 
     if (native) {
+      const owner = localStorage.getItem("grace-native-trail-owner");
+      if (owner && owner !== userId) {
+        setLocationStatus("A native GPS trail belongs to a different account on this device. Switch back to that account to export or clear it.");
+        return;
+      }
+      if (!owner && native.getTrailSnapshot() !== "[]") {
+        setLocationStatus("An older unassigned native GPS trail is saved. Export it before starting a new trail.");
+        return;
+      }
+      localStorage.setItem("grace-native-trail-owner", userId!);
       if (!native.startTracking(newNativeTrail)) {
         setLocationStatus("Allow precise Android location, then press START TRACK again.");
         return;
@@ -1596,7 +1614,7 @@ export default function FieldMap({
 
   function exportTrailHistory() {
     try {
-      const archived = JSON.parse(localStorage.getItem("graceFieldTrackHistory") || "[]");
+      const archived = JSON.parse(localStorage.getItem(fieldStorageKey(userId!, "graceFieldTrackHistory")) || "[]");
       const exportData = { exportedAt: new Date().toISOString(), activeTrail: trail, archivedTrails: Array.isArray(archived) ? archived : [] };
       const blob = new Blob([JSON.stringify(exportData, null, 2)], {type:"application/json"});
       const url = URL.createObjectURL(blob);
@@ -1944,8 +1962,8 @@ export default function FieldMap({
 
   useEffect(() => {
     try {
-      localStorage.setItem(
-        "graceFieldSpots",
+      if (userId && loadedOwnerId === userId) localStorage.setItem(
+        fieldStorageKey(userId, "graceFieldSpots"),
         JSON.stringify(spots)
       );
     } catch (error) {
@@ -1954,7 +1972,7 @@ export default function FieldMap({
         error
       );
     }
-  }, [spots]);
+  }, [spots, userId, loadedOwnerId]);
 
   const visibleSpots = spots;
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { fieldStorageKey, useFieldAccountId } from "@/lib/fieldAccountStorage";
 
 type Point = {
   name: string;
@@ -84,6 +85,7 @@ function xml(s: string) {
 }
 
 export default function FieldOutdoorUtilities() {
+  const userId = useFieldAccountId();
   const [open, setOpen] = useState(false);
   const [gps, setGps] = useState<GPS | null>(null);
   const [points, setPoints] = useState<Point[]>([]);
@@ -96,12 +98,17 @@ export default function FieldOutdoorUtilities() {
   useEffect(() => {
     const show = () => setOpen(true);
     window.addEventListener("grace-field-open-utilities", show);
-    try {
-      const saved = JSON.parse(localStorage.getItem(KEY) || "[]");
-      if (Array.isArray(saved)) setPoints(saved);
-    } catch {}
     return () => window.removeEventListener("grace-field-open-utilities", show);
   }, []);
+
+  useEffect(() => {
+    setPoints([]);
+    if (!userId) return;
+    try {
+      const saved = JSON.parse(localStorage.getItem(fieldStorageKey(userId, KEY)) || "[]");
+      if (Array.isArray(saved)) setPoints(saved);
+    } catch {}
+  }, [userId]);
 
   useEffect(() => {
     if (!open || !navigator.geolocation) return;
@@ -119,9 +126,10 @@ export default function FieldOutdoorUtilities() {
   }, [open]);
 
   function save(list: Point[]) {
+    if (!userId) { setMessage("Sign in to save waypoints."); return; }
     setPoints(list);
     try {
-      localStorage.setItem(KEY, JSON.stringify(list));
+      localStorage.setItem(fieldStorageKey(userId, KEY), JSON.stringify(list));
     } catch {
       setMessage("Device storage failed. Export a backup.");
     }

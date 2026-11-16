@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { fieldStorageKey, useFieldAccountId } from "@/lib/fieldAccountStorage";
 
 type Fix = { lat: number; lng: number; accuracy: number; altitude: number | null; time: number };
 type Destination = { name: string; lat: number; lng: number };
@@ -15,21 +16,14 @@ const field: React.CSSProperties = {width:"100%",minWidth:0,boxSizing:"border-bo
 function distance(a: {lat:number;lng:number},b: {lat:number;lng:number}) { const r=Math.PI/180,dLat=(b.lat-a.lat)*r,dLng=(b.lng-a.lng)*r,x=Math.sin(dLat/2)**2+Math.cos(a.lat*r)*Math.cos(b.lat*r)*Math.sin(dLng/2)**2;return 6371000*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x)); }
 function bearing(a: {lat:number;lng:number},b: {lat:number;lng:number}) { const r=Math.PI/180,y=Math.sin((b.lng-a.lng)*r)*Math.cos(b.lat*r),x=Math.cos(a.lat*r)*Math.sin(b.lat*r)-Math.sin(a.lat*r)*Math.cos(b.lat*r)*Math.cos((b.lng-a.lng)*r);return (Math.atan2(y,x)*180/Math.PI+360)%360; }
 function clock(ms:number){ const n=Math.max(0,Math.floor(ms/1000));return [Math.floor(n/3600),Math.floor(n%3600/60),n%60].map(x=>String(x).padStart(2,"0")).join(":"); }
-function readStored():TripPlan {
- if(typeof window==="undefined")return DEFAULT;
- try{
-  const saved=JSON.parse(localStorage.getItem(KEY)||"null");
-  if(saved&&typeof saved==="object")return {...DEFAULT,...saved,records:Array.isArray(saved.records)?saved.records:[]};
-  // Migrate existing Guardian Angel logs and destinations without deleting original keys.
-  const old=JSON.parse(localStorage.getItem("grace-field-mission-v1")||"null");
-  const command=JSON.parse(localStorage.getItem("grace-field-guardian-command-v1")||"null");
-  const last=command?.trip||command;
-  const legacy=old&&typeof old==="object"?old:{};
-  const dest=legacy.destination&&Number.isFinite(Number(legacy.destination.lat))&&Number.isFinite(Number(legacy.destination.lng))?legacy.destination:null;
-  const oldRecords:Array<RecordItem>=Array.isArray(legacy.logs)?legacy.logs.map((r:any,i:number)=>({id:`legacy-${i}-${r.id||""}`,time:String(r.time||new Date().toISOString()),kind:"observation" as const,text:String(r.text||""),lat:Number.isFinite(Number(r.lat))?Number(r.lat):null,lng:Number.isFinite(Number(r.lng))?Number(r.lng):null})):[];
-  if(last&&typeof last==="object"&&last.destination)oldRecords.unshift({id:"legacy-trip",time:new Date().toISOString(),kind:"event",text:`Previous Guardian trip: ${last.destination}. ${last.notes||""}`,lat:null,lng:null});
-  return {...DEFAULT,destination:dest,destinationName:String(last?.destination||dest?.name||""),returnAt:String(last?.returnAt||""),contactName:String(last?.contact||""),records:oldRecords};
- }catch{return DEFAULT;}
+function readStored(userId: string):TripPlan {
+  try {
+    const saved = JSON.parse(localStorage.getItem(fieldStorageKey(userId, KEY)) || "null");
+    if (saved && typeof saved === "object") return {...DEFAULT, ...saved, records: Array.isArray(saved.records) ? saved.records : []};
+  } catch {}
+  // Older unscoped records are preserved on the device, not silently
+  // copied into whichever account signs in next.
+  return DEFAULT;
 }
 function addRecord(plan:TripPlan,kind:RecordItem["kind"],text:string,fix:Fix|null):TripPlan {return {...plan,records:[{id:`${Date.now()}-${Math.random().toString(36).slice(2,6)}`,time:new Date().toISOString(),kind,text,lat:fix?.lat??null,lng:fix?.lng??null,accuracy:fix?.accuracy},...plan.records].slice(0,1000)};}
 function localDateTime(value:string){const d=new Date(value);return Number.isNaN(d.getTime())?"":d.toLocaleString();}
@@ -41,10 +35,11 @@ function GuardianGlyph({name,size=22}:{name:GuardianGlyphName,size?:number}){
 }
 
 export default function FieldMission(){
+ const userId = useFieldAccountId();
  const [open,setOpen]=useState(false);
  const [tab,setTab]=useState<"safety"|"navigate"|"records">("safety");
  const [plan,setPlan]=useState<TripPlan>(DEFAULT);
- const [ready,setReady]=useState(false);
+ const [readyOwnerId,setReadyOwnerId]=useState<string|null>(null);
  const [fix,setFix]=useState<Fix|null>(null);
  const [gpsError,setGpsError]=useState("Acquiring GPS…");
  const [mapTracking,setMapTracking]=useState(false);
@@ -59,8 +54,8 @@ export default function FieldMission(){
  const latestPlan=useRef(plan);
  latestPlan.current=plan;
  latestFix.current=fix;
- useEffect(()=>{setPlan(readStored());setReady(true);},[]);
- useEffect(()=>{if(!ready)return;try{localStorage.setItem(KEY,JSON.stringify(plan));}catch{setMessage("Device storage unavailable. Export your trip records now.");}},[plan,ready]);
+ useEffect(()=>{setReadyOwnerId(null);setPlan(DEFAULT);if(!userId)return;setPlan(readStored(userId));setReadyOwnerId(userId);},[userId]);
+ useEffect(()=>{if(!userId||readyOwnerId!==userId)return;try{localStorage.setItem(fieldStorageKey(userId,KEY),JSON.stringify(plan));}catch{setMessage("Device storage unavailable. Export your trip records now.");}},[plan,readyOwnerId,userId]);
  useEffect(()=>{const id=window.setInterval(()=>setNow(Date.now()),1000);return()=>window.clearInterval(id);},[]);
  useEffect(()=>{
   const show=()=>{setOpen(true);setTab("safety");};

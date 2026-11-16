@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { fieldStorageKey, useFieldAccountId } from "@/lib/fieldAccountStorage";
 
 type Point = {
   key: string;
@@ -40,8 +41,9 @@ function readJSON(key: string): unknown {
   }
 }
 
-function collect(): Point[] {
+function collect(userId: string | null): Point[] {
   const result: Point[] = [];
+  if (!userId) return result;
 
   function add(
     entries: unknown,
@@ -71,14 +73,14 @@ function collect(): Point[] {
     });
   }
 
-  add(readJSON("graceFieldSpots"), "Map", "Map marker");
+  add(readJSON(fieldStorageKey(userId, "graceFieldSpots")), "Map", "Map marker");
   add(
-    readJSON("grace-field-outdoor-waypoints-v1"),
+    readJSON(fieldStorageKey(userId, "grace-field-outdoor-waypoints-v1")),
     "Outdoor Utilities",
     "Waypoint"
   );
 
-  const expedition = readJSON("grace-field-expedition-v1");
+  const expedition = readJSON(fieldStorageKey(userId, "grace-field-expedition-v1"));
 
   if (expedition && typeof expedition === "object") {
     const record = expedition as Record<string, unknown>;
@@ -89,6 +91,7 @@ function collect(): Point[] {
 }
 
 export default function FieldWaypointLibrary() {
+  const userId = useFieldAccountId();
   const [open, setOpen] = useState(false);
   const [points, setPoints] = useState<Point[]>([]);
   const [search, setSearch] = useState("");
@@ -96,13 +99,13 @@ export default function FieldWaypointLibrary() {
   const [message, setMessage] = useState("");
 
   function refresh() {
-    setPoints(collect());
+    setPoints(collect(userId));
     setMessage("Saved locations refreshed.");
   }
 
   useEffect(() => {
     const show = () => {
-      setPoints(collect());
+      setPoints(collect(userId));
       setMessage("");
       setOpen(true);
     };
@@ -112,7 +115,9 @@ export default function FieldWaypointLibrary() {
     return () => window.removeEventListener(
       "grace-field-open-waypoint-library", show
     );
-  }, []);
+  }, [userId]);
+
+  useEffect(() => { if (open) setPoints(collect(userId)); }, [open, userId]);
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();

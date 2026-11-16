@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { supabase } from "@/lib/supabaseClient";
+import { fieldStorageKey } from "@/lib/fieldAccountStorage";
 import FieldMission from "@/components/field/FieldMission";
 import FieldPlaceSearch from "@/components/field/FieldPlaceSearch";
 import FieldWaypointLibrary from "@/components/field/FieldWaypointLibrary";
@@ -48,9 +49,15 @@ export default function GraceField() {
   const [graceOpen, setGraceOpen] = useState(false);
   const [graceExpanded, setGraceExpanded] = useState(false);
   const graceFrameRef = useRef<HTMLIFrameElement>(null);
-  const sendFieldContext = () => {
+  const sendFieldContext = async () => {
     try {
-      const raw = JSON.parse(localStorage.getItem("graceFieldSpots") || "[]");
+      const { data: { session } } = await supabase.auth.getSession();
+      const ownerId = session?.user?.id;
+      if (!ownerId) {
+        graceFrameRef.current?.contentWindow?.postMessage({type:"grace-field-context",spots:[]},window.location.origin);
+        return;
+      }
+      const raw = JSON.parse(localStorage.getItem(fieldStorageKey(ownerId, "graceFieldSpots")) || "[]");
       const spots = Array.isArray(raw) ? raw.filter((p: any) =>
         p && typeof p.name === "string" && Number.isFinite(Number(p.lat)) && Number.isFinite(Number(p.lng))
       ).slice(0, 150).map((p: any) => {
@@ -58,11 +65,11 @@ export default function GraceField() {
         let observations: string[] = [];
         let approach = "";
         try {
-          const journal = JSON.parse(localStorage.getItem("grace-field-journal-v1-" + id) || "[]");
+          const journal = JSON.parse(localStorage.getItem(fieldStorageKey(ownerId, "grace-field-journal-v1-" + id)) || "[]");
           if(Array.isArray(journal)) observations = journal.filter((entry:any)=>typeof entry?.text==="string").slice(0,4).map((entry:any)=>String(entry.text).slice(0,180));
-          approach = String(localStorage.getItem("grace-field-stand-approach-v1-"+id) || "");
+          approach = String(localStorage.getItem(fieldStorageKey(ownerId, "grace-field-stand-approach-v1-"+id)) || "");
         }catch{}
-        return {id,name:p.name.slice(0,120),type:String(p.type||""),mode:String(p.mode||""),lat:Number(p.lat),lng:Number(p.lng),notes:String(p.notes||"").slice(0,350),observations,approach,excludeFromAdvice:(localStorage.getItem("grace-field-advice-exclude-v1-"+id) ?? (/^(home|house|my home)$/i.test(String(p.name||"").trim())?"true":"false"))==="true"};
+        return {id,name:p.name.slice(0,120),type:String(p.type||""),mode:String(p.mode||""),lat:Number(p.lat),lng:Number(p.lng),notes:String(p.notes||"").slice(0,350),observations,approach,excludeFromAdvice:(localStorage.getItem(fieldStorageKey(ownerId, "grace-field-advice-exclude-v1-"+id)) ?? (/^(home|house|my home)$/i.test(String(p.name||"").trim())?"true":"false"))==="true"};
       }) : [];
       graceFrameRef.current?.contentWindow?.postMessage({type:"grace-field-context",spots},window.location.origin);
     } catch { graceFrameRef.current?.contentWindow?.postMessage({type:"grace-field-context",spots:[]},window.location.origin); }
@@ -90,13 +97,16 @@ export default function GraceField() {
       if (data.type === "grace-field-focus-spot") {
         const lat = Number(data.lat), lng = Number(data.lng);
         if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat)>90 || Math.abs(lng)>180) return;
-        const spots = JSON.parse(localStorage.getItem("graceFieldSpots") || "[]");
-        if (!Array.isArray(spots) || !spots.some((p:any) => p.id === data.id && Number(p.lat) === lat && Number(p.lng) === lng)) return;
-        // Let the iframe close and the map regain its full viewport first.
-        setGraceOpen(false);
-        window.requestAnimationFrame(() => {
-          window.dispatchEvent(new CustomEvent("grace-field-focus-waypoint",{detail:{lat,lng}}));
-        });
+        void supabase.auth.getSession().then(({ data: auth }) => {
+          const ownerId = auth.session?.user?.id;
+          if (!ownerId) return;
+          const spots = JSON.parse(localStorage.getItem(fieldStorageKey(ownerId, "graceFieldSpots")) || "[]");
+          if (!Array.isArray(spots) || !spots.some((p:any) => p.id === data.id && Number(p.lat) === lat && Number(p.lng) === lng)) return;
+          setGraceOpen(false);
+          window.requestAnimationFrame(() => {
+            window.dispatchEvent(new CustomEvent("grace-field-focus-waypoint",{detail:{lat,lng}}));
+          });
+        }).catch(() => {});
       }
     };
     window.addEventListener("message",onMessage);
