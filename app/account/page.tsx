@@ -69,56 +69,56 @@ export default function AccountPage() {
   }
 
   async function signOut() {
-    await supabase.auth.signOut();
+    await supabase.auth.signOut({ scope: "local" });
     localStorage.removeItem("sora_paid");
     localStorage.removeItem("grace_founder");
     window.location.href = "/login";
   }
 
   return (
-    <main className="min-h-screen bg-[#f7e3d3] text-zinc-950 flex items-center justify-center px-6 py-10">
-      <div className="max-w-md w-full rounded-[2rem] border border-black/10 bg-white/80 shadow-2xl p-8 text-center">
+    <main className="min-h-screen overflow-y-auto bg-gradient-to-br from-[#10221b] via-[#0c1915] to-[#08130e] text-[#f2e9d7] flex items-center justify-center px-6 py-10">
+      <div className="max-w-md w-full rounded-[2rem] border border-[#dfbf7f]/35 bg-[#10221b]/95 shadow-2xl shadow-black/40 p-8 text-center">
         <img src="/grace-avatar.png" alt="Grace"
-          className="w-24 h-24 rounded-full object-cover mx-auto border-4 border-white shadow-lg mb-4" />
-        <h1 className="text-4xl font-black mb-2">Grace Account</h1>
-        <p className="text-zinc-600 mb-4 break-all">{email || "Loading..."}</p>
-        <div className="rounded-2xl bg-black/5 p-4 mb-5 text-left">
+          className="w-24 h-24 rounded-full object-cover mx-auto border-4 border-[#dfbf7f] shadow-lg mb-4" />
+        <h1 className="text-4xl font-black mb-2">Grace <span className="text-[#dfbf7f]">Field</span> Account</h1>
+        <p className="text-[#b6bba9] mb-4 break-all">{email || "Loading..."}</p>
+        <div className="rounded-2xl bg-[#08130e] border border-[#dfbf7f]/20 p-4 mb-5 text-left">
           <p className="font-bold">Status</p>
-          <p className="text-sm text-zinc-600">
+          <p className="text-sm text-[#b6bba9]">
             {founder ? "Founder access active" : paid ? "Grace Pro active" : "Free account"}
           </p>
         </div>
         {founder ? (
-          <div className="block w-full bg-black/5 text-zinc-700 rounded-2xl py-4 font-bold mb-3">
+          <div className="block w-full bg-[#08130e] text-[#dfbf7f] border border-[#dfbf7f]/20 rounded-2xl py-4 font-bold mb-3">
             Founder access — no subscription needed
           </div>
         ) : paid ? (
           <>
             {playPaid && (
               <a href={PLAY_MANAGE}
-                className="block w-full bg-zinc-950 text-white rounded-2xl py-4 font-bold mb-3">
+                className="block w-full bg-[#dfbf7f] text-[#08130e] rounded-2xl py-4 font-bold mb-3">
                 Manage Google Play Subscription
               </a>
             )}
             {stripePaid && (
               <button onClick={manageWebsiteSubscription} disabled={busy}
-                className="block w-full bg-zinc-950 text-white rounded-2xl py-4 font-bold mb-3 disabled:opacity-60">
+                className="block w-full bg-[#dfbf7f] text-[#08130e] rounded-2xl py-4 font-bold mb-3 disabled:opacity-60">
                 {busy ? "Opening billing..." : "Manage Website Subscription"}
               </button>
             )}
           </>
         ) : (
           <a href="/pay"
-            className="block w-full bg-zinc-950 text-white rounded-2xl py-4 font-bold mb-3">
+            className="block w-full bg-[#dfbf7f] text-[#08130e] rounded-2xl py-4 font-bold mb-3">
             Upgrade to Grace Pro
           </a>
         )}
-        {message && <p className="text-sm text-zinc-700 bg-black/5 rounded-2xl p-3 mb-3">{message}</p>}
+        {message && <p className="text-sm text-[#f2e9d7] bg-[#08130e] border border-[#dfbf7f]/20 rounded-2xl p-3 mb-3">{message}</p>}
         <button onClick={signOut}
-          className="block w-full bg-white border border-black/10 text-zinc-950 rounded-2xl py-4 font-bold mb-3">
+          className="block w-full bg-[#08130e] border border-[#dfbf7f]/50 text-[#f2e9d7] rounded-2xl py-4 font-bold mb-3">
           Sign Out
         </button>
-        <a href="/chat" className="block text-zinc-500 text-sm mt-5">Back to Grace</a>
+        <a href="/chat" className="block text-[#c5b18a] text-sm mt-5">Back to Grace</a>
       </div>
     </main>
   );

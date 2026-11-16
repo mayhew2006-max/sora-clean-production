@@ -447,27 +447,11 @@ export default function GraceChat() {
   }, []);
 
   useEffect(() => {
-    const graceBrandVersion = "grace-auth-v1";
-    const savedBrandVersion = localStorage.getItem("grace_brand_version");
-
-    if (savedBrandVersion !== graceBrandVersion) {
-      localStorage.setItem("grace_brand_version", graceBrandVersion);
-      localStorage.removeItem("grace_messages");
-    }
-
-    const savedMessages = localStorage.getItem("grace_messages");
-    const savedMemory = localStorage.getItem("grace_memory");
-    // Paid/founder status now comes from the signed-in Grace account.
-
-    if (savedMessages) setMessages(JSON.parse(savedMessages));
-
-    if (savedMemory) {
-      setMemory(savedMemory);
-      memoryRef.current = savedMemory;
-    }
-
-       try {
-      const savedDetails = localStorage.getItem("grace_report_details");
+    if (!userId) return;
+    // Only load browser data bound to the signed-in Supabase account.
+    // Unscoped legacy keys are retained for manual recovery but never read.
+    try {
+      const savedDetails = localStorage.getItem(`grace_report_details:${userId}`);
       if (savedDetails) {
         const details = JSON.parse(savedDetails);
         setReportTitle(details.reportTitle || "");
@@ -479,10 +463,10 @@ export default function GraceChat() {
     } catch {}
 
     try {
-      const saved = localStorage.getItem("grace_saved_reports_inside");
+      const saved = localStorage.getItem(`grace_saved_reports_inside:${userId}`);
       if (saved) setSavedReports(JSON.parse(saved));
     } catch {}
-  }, []);
+  }, [userId]);
 
   useEffect(() => {
     if (!userId) return;
@@ -582,7 +566,7 @@ export default function GraceChat() {
 
         try {
           localStorage.setItem(
-            "grace_messages",
+            `grace_messages:${userId}`,
             JSON.stringify(loadedMessages.slice(-40))
           );
         } catch {}
@@ -591,12 +575,12 @@ export default function GraceChat() {
         return;
       }
 
-      // First account-history migration:
-      // preserve the conversation already stored in this browser.
+      // Only migrate local history explicitly associated with this signed-in account.
+      // Never import the legacy cross-account browser cache.
       let localMessages: Message[] = [];
 
       try {
-        const saved = localStorage.getItem("grace_messages");
+        const saved = localStorage.getItem(`grace_messages:${userId}`);
 
         if (saved) {
           const parsed = JSON.parse(saved);
@@ -780,13 +764,15 @@ export default function GraceChat() {
       .filter((message) => message.role !== "assistant-image")
       .slice(-40);
 
-    try {
-      localStorage.setItem(
-        "grace_messages",
-        JSON.stringify(messagesForStorage)
-      );
-    } catch (error) {
-      console.warn("Grace message storage skipped:", error);
+    if (userId && historyReady) {
+      try {
+        localStorage.setItem(
+          `grace_messages:${userId}`,
+          JSON.stringify(messagesForStorage)
+        );
+      } catch (error) {
+        console.warn("Grace message storage skipped:", error);
+      }
     }
 
     const timer = window.setTimeout(() => {
@@ -796,14 +782,15 @@ export default function GraceChat() {
       }
     }, 100);
     return () => window.clearTimeout(timer);
-  }, [messages, loading, toolLoading, listening]);
+  }, [messages, loading, toolLoading, listening, userId, historyReady]);
 
   useEffect(() => {
+    if (!userId) return;
     localStorage.setItem(
-      "grace_saved_reports_inside",
+      `grace_saved_reports_inside:${userId}`,
       JSON.stringify(savedReports.slice(0, 100))
     );
-  }, [savedReports]);
+  }, [savedReports, userId]);
 
   useEffect(() => {
     const ua = navigator.userAgent || "";
@@ -948,7 +935,7 @@ export default function GraceChat() {
         typeof data?.memory === "string" ? data.memory.trim() : "";
 
       const localMemory =
-        (localStorage.getItem("grace_memory") || "").trim();
+        (localStorage.getItem(`grace_memory:${userId}`) || "").trim();
 
       // First migration: preserve an existing local Grace memory
       // by copying it into the user's account.
@@ -978,7 +965,10 @@ export default function GraceChat() {
       if (accountMemory) {
         memoryRef.current = accountMemory;
         setMemory(accountMemory);
-        localStorage.setItem("grace_memory", accountMemory);
+        localStorage.setItem(`grace_memory:${userId}`, accountMemory);
+      } else if (!localMemory) {
+        memoryRef.current = "";
+        setMemory("");
       }
     }
 
@@ -1021,7 +1011,7 @@ export default function GraceChat() {
 
       memoryRef.current = updated;
       setMemory(updated);
-      localStorage.setItem("grace_memory", updated);
+      if (userId) localStorage.setItem(`grace_memory:${userId}`, updated);
 
       if (userId) {
         const { error } = await supabase
@@ -2425,8 +2415,8 @@ function isMarketplaceQuery(text: string) {
   }
 
  function saveReportDetails() {
-    localStorage.setItem(
-      "grace_report_details",
+    if (userId) localStorage.setItem(
+      `grace_report_details:${userId}`,
       JSON.stringify({
         reportTitle,
         preparedFor,
@@ -2528,8 +2518,8 @@ function isMarketplaceQuery(text: string) {
       return;
     }
 
-    localStorage.setItem(
-      "grace_report_details",
+    if (userId) localStorage.setItem(
+      `grace_report_details:${userId}`,
       JSON.stringify({
         reportTitle,
         preparedFor,
@@ -2961,7 +2951,7 @@ function isMarketplaceQuery(text: string) {
                     setBusinessName("");
                     setProjectName("");
                     setJobLocation("");
-                    localStorage.removeItem("grace_report_details");
+                    if (userId) localStorage.removeItem(`grace_report_details:${userId}`);
                   }}
                   className="rounded-2xl border border-[#efb99f] bg-[#fff7f1] px-4 py-3 font-black text-[#6f3b2a]"
                 >

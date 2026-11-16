@@ -16,14 +16,16 @@ export default function Pay() {
   const [message, setMessage] = useState("");
   const [ready, setReady] = useState(false);
   const [androidPlay, setAndroidPlay] = useState(false);
+  const [androidBrowser, setAndroidBrowser] = useState(false);
 
   useEffect(() => {
     const native = navigator.userAgent.includes("GraceFieldAndroid/");
-    setAndroidPlay(native);
-    if (!native) return;
+    setAndroidBrowser(/Android/i.test(navigator.userAgent));
+    setAndroidPlay(native || Boolean(window.GracePlayBilling));
 
     const onReady = () => {
       if (window.GracePlayBilling) {
+        setAndroidPlay(true);
         setReady(true);
         window.GracePlayBilling.restore();
       }
@@ -125,17 +127,17 @@ export default function Pay() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f7e3d3] text-zinc-950 flex items-center justify-center px-6">
-      <div className="max-w-md w-full bg-white/85 border border-black/10 rounded-[2rem] p-8 text-center shadow-2xl">
-        <img src="/grace-avatar.png" alt="Grace" className="w-24 h-24 rounded-full object-cover mx-auto border-4 border-white shadow-lg mb-4" />
-        <h1 className="text-4xl font-black mb-4">Unlock Grace Pro</h1>
-        <p className="text-zinc-600 mb-8">
+    <main className="min-h-screen overflow-y-auto bg-gradient-to-br from-[#10221b] via-[#0c1915] to-[#08130e] text-[#f2e9d7] flex items-center justify-center px-6">
+      <div className="max-w-md w-full bg-[#10221b]/95 border border-[#dfbf7f]/35 rounded-[2rem] p-8 text-center shadow-2xl">
+        <img src="/grace-avatar.png" alt="Grace" className="w-24 h-24 rounded-full object-cover mx-auto border-4 border-[#dfbf7f] shadow-lg mb-4" />
+        <h1 className="text-4xl font-black mb-4">Unlock Grace <span className="text-[#dfbf7f]">Pro</span></h1>
+        <p className="text-[#b6bba9] mb-8">
           Conversations, voice, memory, tools, reports, PDFs, and more. Subscription renews monthly. Cancel anytime.
         </p>
         <button
           disabled={busy || (androidPlay && !ready)}
           onClick={subscribe}
-          className="block w-full bg-zinc-950 text-white py-4 rounded-2xl font-black disabled:opacity-60"
+          className="block w-full bg-[#dfbf7f] text-[#08130e] py-4 rounded-2xl font-black disabled:opacity-60"
         >
           {busy ? "Opening secure checkout..." :
             androidPlay
@@ -144,14 +146,19 @@ export default function Pay() {
         </button>
         {androidPlay && (
           <button onClick={restore} disabled={!ready || busy}
-            className="block mx-auto mt-4 underline text-sm text-zinc-700 disabled:opacity-60">
+            className="block mx-auto mt-4 underline text-sm text-[#dfbf7f] disabled:opacity-60">
             Restore Google Play purchase
           </button>
         )}
-        {message && (
-          <p className="text-sm text-zinc-700 bg-black/5 rounded-2xl p-3 mt-4">{message}</p>
+        {androidBrowser && !androidPlay && (
+          <p className="mt-4 text-xs text-[#c5b18a]">
+            Have Grace Field installed from Google Play? Open it from the app icon to use Google Play billing. Browser checkout uses Stripe.
+          </p>
         )}
-        <a href="/field" className="block text-zinc-500 text-sm mt-5">Back to Grace</a>
+        {message && (
+          <p className="text-sm text-[#f2e9d7] bg-[#08130e] border border-[#dfbf7f]/20 rounded-2xl p-3 mt-4">{message}</p>
+        )}
+        <a href="/field" className="block text-[#c5b18a] text-sm mt-5">Back to Grace</a>
       </div>
     </main>
   );
