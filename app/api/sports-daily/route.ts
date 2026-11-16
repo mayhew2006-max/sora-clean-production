@@ -68,6 +68,7 @@ export async function GET(req: Request) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: "Bearer " + expected,
         },
         body: JSON.stringify({
           query:

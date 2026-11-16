@@ -1,4 +1,7 @@
+import { chargeGraceApiRequest } from "@/lib/grace-usage-guard";
 export async function POST(req: Request) {
+  const quotaFailure = await chargeGraceApiRequest(req, { allowCron: true });
+  if (quotaFailure) return quotaFailure;
   try {
     const { query } = await req.json();
 

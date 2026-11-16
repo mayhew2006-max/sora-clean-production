@@ -5,7 +5,7 @@ import {
 } from "@/lib/grace-personality";
 
 export async function POST(req: Request) {
-  const quotaFailure = await chargeGraceApiRequest(req);
+  const quotaFailure = await chargeGraceApiRequest(req, { allowCron: true });
   if (quotaFailure) return quotaFailure;
   try {
     const body = await req.json();
@@ -366,6 +366,7 @@ ${screenshotContext}`
             method: "POST",
             headers: {
               "Content-Type": "application/json",
+              ...(process.env.CRON_SECRET ? { Authorization: "Bearer " + process.env.CRON_SECRET } : {}),
             },
             body: JSON.stringify({
               query: researchUserQuery,

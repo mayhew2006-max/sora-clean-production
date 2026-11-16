@@ -8,20 +8,8 @@ export async function POST(req: Request) {
   const quotaFailure = await chargeGraceApiRequest(req);
   if (quotaFailure) return quotaFailure;
   try {
-    const paidHeader = req.headers.get("x-grace-paid");
-
-    if (paidHeader !== "true") {
-      return new Response(
-        JSON.stringify({
-          error: "Grace Tools are a Premium feature. Upgrade to unlock photo analysis, planning, reports, and PDFs.",
-        }),
-        {
-          status: 402,
-          headers: { "Content-Type": "application/json" },
-        }
-      );
-    }
-
+    // Access is verified and metered by the server-side guard above.
+    // Never trust a paid flag supplied by the client.
     const { toolType, userPrompt, images, conversationHistory } = await req.json();
 
     const recentTurns = Array.isArray(conversationHistory)
