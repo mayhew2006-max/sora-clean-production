@@ -3230,7 +3230,7 @@ function isMarketplaceQuery(text: string) {
                <button
           onClick={tapToTalk}
           disabled={locked || loading || toolLoading}
-          className="bg-[#f3a683] text-white px-4 py-3 rounded-2xl font-black disabled:opacity-40 shadow-sm"
+          className="bg-[#284734] border border-[#C8A45A] text-[#F3E7C2] px-4 py-3 rounded-2xl font-black disabled:opacity-40 shadow-sm"
         >
           🎤
         </button>
