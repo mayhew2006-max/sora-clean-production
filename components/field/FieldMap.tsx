@@ -3369,6 +3369,11 @@ export default function FieldMap({
         </MapContainer>
       </div>
 
+      {isOffline && (
+        <div role="status" aria-live="polite" style={{position:"absolute",left:"50%",transform:"translateX(-50%)",top:70,zIndex:840,maxWidth:"min(92vw,480px)",width:"max-content",background:"#15241fe8",color:"#ffdd96",border:"1px solid #c7a574",borderRadius:8,padding:"5px 9px",fontSize:10,fontWeight:800,textAlign:"center",pointerEvents:"none"}}>
+          OFFLINE · GPS may still work; satellite/topo imagery has NOT been downloaded
+        </div>
+      )}
       {tracking && (
         <div role="status" aria-live="polite" style={{position:"absolute",top:84,left:"50%",transform:"translateX(-50%)",zIndex:850,border:"1px solid #79c69a",background:"#082018ec",color:"#d8ffdc",padding:"6px 11px",borderRadius:9,fontSize:11,fontWeight:850,whiteSpace:"nowrap",boxShadow:"0 3px 10px #000a"}}>
           {lastTrailGpsAt===null||heartbeat-lastTrailGpsAt>45000?"◌ WAITING FOR GPS POINTS":"● TRACKING"} · {recordingMode==="foreground"?"FOREGROUND ONLY":"ANDROID GPS"} · {trail.length} GPS points · {accuracy!==null?`±${Math.round(accuracy*3.28084)} ft`:"waiting for fix"}
