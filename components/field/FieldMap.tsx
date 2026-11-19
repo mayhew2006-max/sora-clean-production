@@ -505,6 +505,31 @@ export default function FieldMap({
   const [recordingMode, setRecordingMode] = useState<"native" | "foreground" | null>(null);
   const [archiveVersion, setArchiveVersion] = useState(0);
   const [previewTrail, setPreviewTrail] = useState<SavedTrail | null>(null);
+  const [trackHistoryExpanded,setTrackHistoryExpanded] = useState(false);
+  const [isOffline,setIsOffline] = useState(false);
+  const lastUsableFixRef = useRef<{point:TrailPoint;accuracy:number}|null>(null);
+  useEffect(() => {
+    const update = () => setIsOffline(!navigator.onLine);
+    update();
+    window.addEventListener("offline", update);
+    window.addEventListener("online", update);
+    return () => {
+      window.removeEventListener("offline", update);
+      window.removeEventListener("online", update);
+    };
+  }, []);
+  function mergeTrailPoints(current: TrailPoint[], incoming: TrailPoint[]): TrailPoint[] {
+    const valid = [...current,...incoming].filter(isValidTrailPoint)
+      .sort((a,b) => Date.parse(a.time)-Date.parse(b.time));
+    const merged: TrailPoint[] = [];
+    for (const point of valid) {
+      const previous=merged[merged.length-1];
+      if (previous && Math.abs(Date.parse(point.time)-Date.parse(previous.time)) < 5000 &&
+          distanceMeters([previous.lat,previous.lng],[point.lat,point.lng]) < 5) continue;
+      merged.push({lat:point.lat,lng:point.lng,time:point.time});
+    }
+    return merged;
+  }
   function isValidTrailPoint(point: unknown): point is TrailPoint {
     if (!point || typeof point !== "object") return false;
     const p = point as Record<string, unknown>;
@@ -575,10 +600,14 @@ export default function FieldMap({
         if (recordingModeRef.current === "foreground") return;
         const active = native.isTracking();
         if (!active && recordingModeRef.current !== "native") return;
+        const wasNative = recordingModeRef.current === "native";
         recordingModeRef.current = active ? "native" : null;
         setRecordingMode(active ? "native" : null);
         trackingActiveRef.current = active;
         setTracking(active);
+        if (wasNative && !active) {
+          reportTrackStatus("Android background GPS has stopped. Check Track History and confirm the points were saved.");
+        }
         const raw = native.getTrailSnapshot();
         if (!raw || raw === lastSnapshot) return;
         const parsed: unknown = JSON.parse(raw);
@@ -593,11 +622,14 @@ export default function FieldMap({
         }).map((p: TrailPoint) => ({lat:p.lat,lng:p.lng,time:p.time}));
         if (valid.length === 0) return;
         lastSnapshot = raw;
-        setTrail(valid);
+        // Merge native points with WebView GPS points. Never overwrite the
+        // live blue dot using an older, stored Android trail location.
+        setTrail(current => mergeTrailPoints(current, valid));
         const finalPoint = valid[valid.length - 1];
-        setPosition([finalPoint.lat, finalPoint.lng]);
-        setLastTrailGpsAt(Date.parse(finalPoint.time));
-        // Restored breadcrumbs are historical, not a fresh live GPS fix.
+        if (active && Date.now() - Date.parse(finalPoint.time) < 45000) {
+          setLastTrailGpsAt(Date.parse(finalPoint.time));
+        }
+        // Stored breadcrumbs are not a live GPS location fix.
       } catch {
         setLocationStatus("Android trail restore failed. Local trail has not been erased.");
       }
@@ -961,6 +993,12 @@ export default function FieldMap({
 
     setPosition(next);
     setLastLiveGpsAt(previous => Math.max(previous ?? 0, fixTime));
+    if (reportedAccuracy <= 40) {
+      lastUsableFixRef.current = {
+        point:{lat:next[0],lng:next[1],time:new Date(fixTime).toISOString()},
+        accuracy:reportedAccuracy
+      };
+    }
     window.dispatchEvent(new CustomEvent("grace-field-gps-info", {detail: {
       accuracy: reportedAccuracy,
       altitude: Number.isFinite(result.coords.altitude ?? NaN) ? result.coords.altitude : null,
@@ -976,7 +1014,10 @@ export default function FieldMap({
       `Location locked • ±${reportedAccuracy} m`
     );
 
-    if (trackingActiveRef.current && recordingModeRef.current === "foreground" && reportedAccuracy <= 40) {
+    // Always keep a live local breadcrumb backup, EVEN when native background
+    // recording reports started. A service-start acknowledgement is not proof
+    // that its own LocationManager has delivered a single point.
+    if (trackingActiveRef.current && reportedAccuracy <= 40) {
       setLastTrailGpsAt(result.timestamp);
       setTrail((current) => {
         const last = current[current.length - 1];
@@ -1648,13 +1689,14 @@ export default function FieldMap({
     }
 
     if (nativeStarted) {
-      setTrail([]);
+      const seed = lastUsableFixRef.current;
+      setTrail(seed && Date.now()-Date.parse(seed.point.time)<30000 ? [seed.point] : []);
       recordingModeRef.current = "native";
       setRecordingMode("native");
       trackingActiveRef.current = true;
       setTracking(true);
-      setLastTrailGpsAt(null);
-      reportTrackStatus("Android background GPS started. Check the ongoing tracking notification and recorded points.");
+      setLastTrailGpsAt(seed ? Date.parse(seed.point.time) : null);
+      reportTrackStatus("Android background recording REQUESTED, not yet verified. Keep Grace open until GPS points increase, and check its ongoing notification.");
       return;
     }
 
@@ -1675,12 +1717,13 @@ export default function FieldMap({
       }
     }
     // Start recording only after the GPS watcher is ready.
-    setTrail([]);
+    const seed = lastUsableFixRef.current;
+    setTrail(seed && Date.now()-Date.parse(seed.point.time)<30000 ? [seed.point] : []);
     recordingModeRef.current = "foreground";
     setRecordingMode("foreground");
     trackingActiveRef.current = true;
     setTracking(true);
-    setLastTrailGpsAt(null);
+    setLastTrailGpsAt(seed ? Date.parse(seed.point.time) : null);
     reportTrackStatus(
       nativeProblem
         ? "Foreground-only GPS RECORDING. " + nativeProblem + " Keep Grace OPEN and screen ON; locked-screen tracking requires an updated Android app."
@@ -1705,7 +1748,9 @@ export default function FieldMap({
           reportTrackStatus("Native trail could not be read safely. Tracking was not stopped or cleared.");
           return;
         }
-        finalTrail = snapshot as TrailPoint[];
+        // A native service may have no fixes even when it accepted START.
+        // Never discard accurate WebView breadcrumbs in this case.
+        finalTrail = mergeTrailPoints(trail, snapshot as TrailPoint[]);
         if (!archiveTrail(finalTrail, "completed-android-trail")) return;
         native.stopTracking();
         setTrail(finalTrail);
@@ -1720,9 +1765,13 @@ export default function FieldMap({
     recordingModeRef.current = null;
     setRecordingMode(null);
     setTracking(false);
-    reportTrackStatus(saved
-      ? "Trail stopped and saved in Track History on this device."
-      : "Trail stopped. Current breadcrumbs remain on the map, but archive storage failed. Export them.");
+    reportTrackStatus(finalTrail.length === 0
+      ? "Tracking stopped, but NO GPS POINTS were recorded. Nothing was saved as a route. Check GPS permissions/service before relying on this."
+      : finalTrail.length === 1
+        ? "Tracking stopped. Only ONE GPS point was captured and saved; that is NOT a usable return trail."
+        : saved
+          ? `Trail saved: ${finalTrail.length} GPS points. Open Menu → TRACK HISTORY to view it.`
+          : "Tracking stopped. GPS points remain on the map, but archive storage failed. Export them.");
   }
 
   function returnToStart() {
