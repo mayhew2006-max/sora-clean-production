@@ -323,6 +323,7 @@ export default function GraceField() {
       <div className="gf-menu-grid">
         <button className="gf-menu-choice" onClick={()=>doMenuAction("grace-field-open-waypoint-library")}><Icon name="pin"/> SAVED SPOTS</button>
         <button className="gf-menu-choice" onClick={()=>{setMenuOpen(false);setPlaceSearchOpen(true);}}><Icon name="search"/> FIND PLACES</button>
+        <button className="gf-menu-choice" onClick={()=>doMenuAction("grace-field-open-track-history")}><Icon name="track"/> TRACK HISTORY</button>
         <button className="gf-menu-choice" onClick={()=>doMenuAction("grace-field-v2-trail-back")}><Icon name="back"/> FOLLOW TRAIL BACK</button>
         <button className="gf-menu-choice" onClick={()=>doMenuAction("grace-field-open-layers")}><Icon name="layers"/> MAP TYPES</button>
         <button className="gf-menu-choice" onClick={()=>doMenuAction("grace-field-v2-locate")}><Icon name="locate"/> MY LOCATION</button>
