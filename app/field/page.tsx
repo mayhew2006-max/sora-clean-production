@@ -42,6 +42,8 @@ function Icon({ name, size = 22 }: { name: IconName; size?: number }) {
 export default function GraceField() {
   const [heading, setHeading] = useState<number | null>(null);
   const [tracking, setTracking] = useState(false);
+  const [trackMessage, setTrackMessage] = useState("");
+  const [trackStarting, setTrackStarting] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState("");
@@ -147,7 +149,18 @@ export default function GraceField() {
       if (typeof e.webkitCompassHeading === "number") setHeading((e.webkitCompassHeading + 360) % 360);
       else if (ev.absolute && typeof ev.alpha === "number") setHeading((360 - ev.alpha) % 360);
     };
-    const track = (e: Event) => setTracking(Boolean((e as CustomEvent<{tracking: boolean}>).detail?.tracking));
+    const track = (e: Event) => {
+      const active = Boolean((e as CustomEvent<{tracking: boolean}>).detail?.tracking);
+      setTracking(active);
+      setTrackStarting(false);
+    };
+    const trackStatus = (e: Event) => {
+      const message = (e as CustomEvent<{message?: string}>).detail?.message;
+      if (typeof message === "string") {
+        setTrackMessage(message);
+        if (!/checking GPS|starting your trail/i.test(message)) setTrackStarting(false);
+      }
+    };
     const updateGps = (e: Event) => {
       const v = (e as CustomEvent<GpsInfo>).detail;
       if (v) setGps(v);
@@ -155,11 +168,13 @@ export default function GraceField() {
     window.addEventListener("deviceorientationabsolute", orientation);
     window.addEventListener("deviceorientation", orientation);
     window.addEventListener("grace-field-tracking-state", track);
+    window.addEventListener("grace-field-track-status", trackStatus);
     window.addEventListener("grace-field-gps-info", updateGps);
     return () => {
       window.removeEventListener("deviceorientationabsolute", orientation);
       window.removeEventListener("deviceorientation", orientation);
       window.removeEventListener("grace-field-tracking-state", track);
+      window.removeEventListener("grace-field-track-status", trackStatus);
       window.removeEventListener("grace-field-gps-info", updateGps);
     };
   }, []);
@@ -283,10 +298,26 @@ export default function GraceField() {
       <iframe ref={graceFrameRef} title="Grace conversation" src="/chat?field=1" allow="microphone; camera" onLoad={sendFieldContext} />
     </section>
     <nav className="gf-bottom" aria-label="Main field actions">
-      <button className={`gf-action ${tracking?"stop":"primary"}`} onClick={()=>send(tracking?"grace-field-v2-stop-track":"grace-field-v2-start-track")}><Icon name="track"/><span>{tracking?"STOP TRACK":"START TRACK"}</span></button>
+      <button className={`gf-action ${tracking?"stop":"primary"}`} disabled={trackStarting} onClick={()=>{
+        if (!tracking) {
+          setTrackStarting(true);
+          setTrackMessage("Checking GPS and starting your trail…");
+        }
+        send(tracking?"grace-field-v2-stop-track":"grace-field-v2-start-track");
+      }}><Icon name="track"/><span>{tracking?"STOP TRACK":trackStarting?"STARTING…":"START TRACK"}</span></button>
       <button className="gf-action" onClick={()=>send("grace-field-v2-save-spot")}><Icon name="save"/><span>SAVE LOCATION</span></button>
       <button className="gf-action" onClick={()=>send("grace-field-open-mission")}><Icon name="shield"/><span>GUARDIAN ANGEL</span></button>
     </nav>
+    {trackMessage && <div role="status" aria-live="polite" style={{
+      position:"absolute",zIndex:1450,left:12,right:12,
+      bottom:"calc(env(safe-area-inset-bottom,0px) + 99px)",
+      margin:"0 auto",maxWidth:550,padding:"10px 12px",
+      border:"1px solid #c5a673",borderRadius:10,
+      background:"rgba(10,28,20,.96)",color:"#fff0d4",
+      boxShadow:"0 5px 18px #0008",fontSize:12,fontWeight:700,
+      lineHeight:1.4,textAlign:"center"
+    }}>{trackMessage} <button type="button" aria-label="Dismiss tracking message"
+      onClick={()=>setTrackMessage("")} style={{marginLeft:9,color:"#fff0d4",background:"transparent",border:0,fontSize:16}}>×</button></div>}
     {menuOpen&&<div className="gf-menu gf-panel" role="dialog" aria-label="Field tools">
       <div className="gf-menu-title"><span>FIELD OPERATIONS</span><button className="gf-icon-button" aria-label="Close field menu" onClick={()=>setMenuOpen(false)}><Icon name="x"/></button></div>
       <div className="gf-menu-grid">
