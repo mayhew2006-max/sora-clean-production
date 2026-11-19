@@ -840,6 +840,9 @@ export default function FieldMap({
 
       setUserId(user.id);
       setUserEmail(user.email || "");
+      // Offline GPS tools and saved local data must not wait for a remote
+      // billing lookup that can hang at a mountain with little service.
+      setAuthReady(true);
 
       const { data: usage, error } = await supabase
         .from("grace_user_usage")
@@ -1544,12 +1547,25 @@ export default function FieldMap({
     };
   }, [authReady, userId, loadedOwnerId]);
 
+  function localFieldReady(action: "track" | "marker"): boolean {
+    if (!userId || loadedOwnerId !== userId) {
+      const message = "Signed-in Field storage is not loaded. Open Grace while connected and confirm your saved spots before going offline.";
+      if (action === "track") reportTrackStatus(message);
+      else setLocationStatus(message);
+      return false;
+    }
+    return true;
+  }
+
   async function useFieldAction(action: "field_save" | "field_track" = "field_save") {
     const report = (message: string) => action === "field_track" ? reportTrackStatus(message) : setLocationStatus(message);
+    // Local breadcrumb tracking is an essential navigation action, not an AI
+    // request. No Supabase request, usage charge, or internet dependency.
+    // The device must still hold the signed-in account's scoped local data.
+    if (action === "field_track") return localFieldReady("track");
     if (!userId || loadedOwnerId !== userId) { report("Grace is loading your account. Please try again."); return false; }
-    // Basic local GPS safety actions are not charged while offline.
     if(typeof navigator!=="undefined" && navigator.onLine===false){
-      report("OFFLINE: "+(action==="field_track"?"GPS tracking":"Waypoint saving")+" works locally. Reconnect to sync spots.");
+      report("OFFLINE: GPS safety tools work locally; paid analysis requires a connection.");
       return true;
     }
     if (!authReady) { report("Grace is checking your account. Please try again."); return false; }
@@ -2028,7 +2044,7 @@ export default function FieldMap({
       return;
     }
 
-    if (!(await useFieldAction())) return;
+    if (!localFieldReady("marker")) return;
 
     const truck: FieldSpot = {
       id:
@@ -2055,12 +2071,14 @@ export default function FieldMap({
       truck,
     ]);
 
-    setLocationStatus("🚙 Truck location saved.");
+    setLocationStatus("🚙 Truck location saved locally. Confirm the marker is in the correct place.");
   }
 
   async function addSpot() {
     if (!pending) return;
-    if (!(await useFieldAction())) return;
+    // Recording a waypoint must work without cell service; only cloud sync
+    // needs the network. Never require a paid action just to mark safety spots.
+    if (!localFieldReady("marker")) return;
 
     const selected = markerOptions.find((item) => item.type === selectedType);
     const selectedLabel = selected?.label || types.find(([key]) => key === selectedType)?.[2] || "Saved Spot";
@@ -2083,10 +2101,15 @@ export default function FieldMap({
     setName("");
     setNotes("");
     setEditingSpotId(null);
-    void saveFieldSpotToCloud(spot).then(ok => {
-      if (ok) setSpots(current => current.map(s => s.id === spot.id && s.updatedAt === spot.updatedAt ? {...s,syncPending:false} : s));
-      else setFieldSyncStatus("Saved on device. Cloud sync pending; reconnect to sync.");
-    });
+    setLocationStatus("Waypoint saved locally. Sync to cloud when connected.");
+    if (typeof navigator !== "undefined" && navigator.onLine) {
+      void saveFieldSpotToCloud(spot).then(ok => {
+        if (ok) setSpots(current => current.map(s => s.id === spot.id && s.updatedAt === spot.updatedAt ? {...s,syncPending:false} : s));
+        else setFieldSyncStatus("Saved on device. Cloud sync pending; reconnect to sync.");
+      });
+    } else {
+      setFieldSyncStatus("Saved on device. Cloud sync pending; reconnect to sync.");
+    }
   }
 
   async function deleteSpot(id: string) {
