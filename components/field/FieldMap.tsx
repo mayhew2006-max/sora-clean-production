@@ -52,6 +52,7 @@ type TrailPoint = {
   lng: number;
   time: string;
 };
+type SavedTrail = { savedAt: string; points: TrailPoint[]; source?: string };
 
 type FieldWeather = {
   temperature: number;
@@ -500,6 +501,65 @@ export default function FieldMap({
   useEffect(()=>{const timer=window.setInterval(()=>setHeartbeat(Date.now()),10000);return()=>window.clearInterval(timer);},[]);
   const [trail, setTrail] = useState<TrailPoint[]>([]);
   const trackingActiveRef = useRef(false);
+  const recordingModeRef = useRef<"native" | "foreground" | null>(null);
+  const [recordingMode, setRecordingMode] = useState<"native" | "foreground" | null>(null);
+  const [archiveVersion, setArchiveVersion] = useState(0);
+  const [previewTrail, setPreviewTrail] = useState<SavedTrail | null>(null);
+  function isValidTrailPoint(point: unknown): point is TrailPoint {
+    if (!point || typeof point !== "object") return false;
+    const p = point as Record<string, unknown>;
+    return typeof p.lat === "number" && Number.isFinite(p.lat) && Math.abs(p.lat) <= 90 &&
+      typeof p.lng === "number" && Number.isFinite(p.lng) && Math.abs(p.lng) <= 180 &&
+      typeof p.time === "string" && Number.isFinite(Date.parse(p.time));
+  }
+  // Never replace a live or prior trail until its previous points have been
+  // saved to account-scoped history. Keep all entries, not just the last 25.
+  function archiveTrail(points: TrailPoint[], source: string): boolean {
+    if (!points.length) return true;
+    if (!userId || !points.every(isValidTrailPoint)) {
+      reportTrackStatus("Cannot archive this trail safely. Existing points were not changed.");
+      return false;
+    }
+    try {
+      const key = fieldStorageKey(userId, "graceFieldTrackHistory");
+      const value: unknown = JSON.parse(localStorage.getItem(key) || "[]");
+      if (!Array.isArray(value)) throw new Error("History has unknown format");
+      const first = points[0], last = points[points.length - 1];
+      const same = (item: unknown) => {
+        if (!item || typeof item !== "object") return false;
+        const row = item as {points?: TrailPoint[]};
+        const saved = row.points;
+        return Array.isArray(saved) && saved.length === points.length &&
+          saved[0]?.time === first.time && saved[0]?.lat === first.lat &&
+          saved[0]?.lng === first.lng && saved[saved.length - 1]?.time === last.time &&
+          saved[saved.length - 1]?.lat === last.lat && saved[saved.length - 1]?.lng === last.lng;
+      };
+      if (value.some(same)) return true;
+      const record: SavedTrail = {
+        savedAt: new Date().toISOString(), points: points.map(p => ({lat:p.lat,lng:p.lng,time:p.time})), source
+      };
+      const updated = JSON.stringify([record, ...value]);
+      localStorage.setItem(key, updated);
+      if (localStorage.getItem(key) !== updated) throw new Error("Could not verify history");
+      setArchiveVersion(v => v + 1);
+      return true;
+    } catch {
+      reportTrackStatus("Trail storage is full or unavailable. Old points were NOT overwritten. Export trails before starting another.");
+      return false;
+    }
+  }
+  const archivedTrails = useMemo<SavedTrail[]>(() => {
+    if (!userId) return [];
+    try {
+      const records: unknown = JSON.parse(localStorage.getItem(fieldStorageKey(userId, "graceFieldTrackHistory")) || "[]");
+      if (!Array.isArray(records)) return [];
+      return records.filter((item: unknown): item is SavedTrail => {
+        if (!item || typeof item !== "object") return false;
+        const row = item as SavedTrail;
+        return typeof row.savedAt === "string" && Array.isArray(row.points) && row.points.every(isValidTrailPoint);
+      });
+    } catch { return []; }
+  }, [userId, archiveVersion]);
   // Android location foreground service records while the WebView is locked.
   // Restore only verified native points; this does not upload live positions.
   useEffect(() => {
@@ -510,7 +570,13 @@ export default function FieldMap({
     let lastSnapshot = "";
     const sync = () => {
       try {
+        // The native service must never overwrite the foreground fallback's
+        // separate trail, or clear its START/STOP state every 10 seconds.
+        if (recordingModeRef.current === "foreground") return;
         const active = native.isTracking();
+        if (!active && recordingModeRef.current !== "native") return;
+        recordingModeRef.current = active ? "native" : null;
+        setRecordingMode(active ? "native" : null);
         trackingActiveRef.current = active;
         setTracking(active);
         const raw = native.getTrailSnapshot();
@@ -907,7 +973,7 @@ export default function FieldMap({
       `Location locked • ±${reportedAccuracy} m`
     );
 
-    if (trackingActiveRef.current && !graceNativeTrail() && reportedAccuracy <= 40) {
+    if (trackingActiveRef.current && recordingModeRef.current === "foreground" && reportedAccuracy <= 40) {
       setLastTrailGpsAt(result.timestamp);
       setTrail((current) => {
         const last = current[current.length - 1];
@@ -939,13 +1005,12 @@ export default function FieldMap({
 
   function locationError(error: GeolocationPositionError) {
     console.error("Grace Field GPS error:", error);
-    if (error.code === 1 && trackingActiveRef.current && !graceNativeTrail()) {
+    if (error.code === 1 && trackingActiveRef.current && recordingModeRef.current === "foreground") {
       trackingActiveRef.current = false;
+      recordingModeRef.current = null;
+      setRecordingMode(null);
       setTracking(false);
-      if (watchId.current !== null) {
-        navigator.geolocation.clearWatch(watchId.current);
-        watchId.current = null;
-      }
+      reportTrackStatus("GPS was blocked while recording. The recorded points remain saved; check Android location settings.");
     }
     window.dispatchEvent(new CustomEvent("grace-field-gps-info", {detail:{accuracy:null,altitude:null,status:`GPS error: ${error.message}`}}));
 
@@ -1511,151 +1576,118 @@ export default function FieldMap({
 
   async function startTracking() {
     if (trackingActiveRef.current) {
-      reportTrackStatus("GPS tracking is already active.");
+      reportTrackStatus("This trail is already recording.");
       return;
     }
     reportTrackStatus("Checking GPS and starting your trail…");
-
-    // Do not charge a track action or pretend to track from a 1 km
-    // approximate-location fix. Android Precise Location must be enabled.
-    if (accuracy !== null && (!Number.isFinite(accuracy) || accuracy > 100)) {
-      reportTrackStatus(`Cannot track with ±${Math.round(accuracy * 3.28084)} ft GPS uncertainty. Turn on Precise Location for Grace, tap Locate, then retry.`);
+    // Require a fresh usable GPS fix. The web geolocation has already been
+    // granted by Android; no repeated permissions or old-trail dialogs.
+    if (accuracy === null || !Number.isFinite(accuracy) || accuracy > 40 ||
+        lastLiveGpsAt === null || Date.now() - lastLiveGpsAt > 60000) {
+      reportTrackStatus("Wait for fresh, precise GPS (±130 ft or better), then tap START TRACK.");
+      locateMe();
       return;
     }
     const native = graceNativeTrail();
     if (!native && !navigator.geolocation) {
-      reportTrackStatus("This device has no available GPS interface.");
+      reportTrackStatus("This device cannot obtain GPS locations.");
       return;
     }
     if (!(await useFieldAction("field_track"))) return;
 
-    let newNativeTrail = false;
-    if (trail.length > 1) {
-      const wantsNew = window.confirm("Start a NEW breadcrumb trail? Your previous trail will be archived on this device. Press Cancel to continue the existing trail.");
-      if (wantsNew) {
-        try {
-          const saved = JSON.parse(localStorage.getItem(fieldStorageKey(userId!, "graceFieldTrackHistory")) || "[]");
-          const archive = Array.isArray(saved) ? saved : [];
-          archive.unshift({ savedAt: new Date().toISOString(), points: trail });
-          localStorage.setItem(fieldStorageKey(userId!, "graceFieldTrackHistory"), JSON.stringify(archive.slice(0, 25)));
-          newNativeTrail = true;
-        } catch {
-          reportTrackStatus("Could not archive the previous trail. Continuing it to protect existing points.");
-        }
-      }
-    }
+    // Preserve the previous recorded session before making room for a new one.
+    // A failed archive means NO new recording and NO deleted breadcrumbs.
+    if (!archiveTrail(trail, "previous-field-trail")) return;
 
+    let nativeStarted = false;
+    let nativeProblem = "";
     if (native) {
       try {
         const owner = localStorage.getItem("grace-native-trail-owner");
         if (owner && owner !== userId) {
-          reportTrackStatus("This Android trail belongs to another signed-in account. Switch back to export or clear it.");
-          return;
-        }
-        if (!owner) {
-          // Older Android builds may have saved a trail before the owner tag
-          // existed. Never silently discard or claim another person's trail.
+          nativeProblem = "Android background trail is owned by a different Grace account.";
+        } else {
           const raw = native.getTrailSnapshot();
-          let snapshot: unknown;
-          try {
-            snapshot = JSON.parse(raw || "[]");
-          } catch {
-            reportTrackStatus("Could not read the older Android trail. It has NOT been erased.");
-            return;
-          }
-          if (!Array.isArray(snapshot)) {
-            reportTrackStatus("Older Android trail has an unknown format. Nothing was erased.");
-            return;
-          }
-          if (snapshot.length > 0) {
-            const valid = snapshot.every((point: unknown) => {
-              if (!point || typeof point !== "object") return false;
-              const p = point as Record<string, unknown>;
-              return typeof p.lat === "number" && Number.isFinite(p.lat) && Math.abs(p.lat) <= 90 &&
-                typeof p.lng === "number" && Number.isFinite(p.lng) && Math.abs(p.lng) <= 180 &&
-                typeof p.time === "string" && Number.isFinite(Date.parse(p.time));
-            });
-            if (!valid) {
-              reportTrackStatus("The earlier Android trail needs recovery before tracking. Nothing was erased.");
-              return;
-            }
-            const consent = window.confirm(
-              "Grace found a trail from an older Android app version. Is this YOUR trail? " +
-              "OK = save a copy in this account's local trail history and start a fresh trail. " +
-              "Cancel = keep the old trail untouched."
-            );
-            if (!consent) {
-              reportTrackStatus("Older Android trail preserved. No new tracking started.");
-              return;
-            }
-            try {
-              const key = fieldStorageKey(userId!, "graceFieldTrackHistory");
-              const historyRaw = JSON.parse(localStorage.getItem(key) || "[]");
-              if (!Array.isArray(historyRaw)) throw new Error("Invalid existing archive");
-              const history = [
-                { savedAt: new Date().toISOString(), points: snapshot, source: "legacy-android-recovered" },
-                ...historyRaw
-              ];
-              // Keep every existing archive; don't truncate during recovery.
-              localStorage.setItem(key, JSON.stringify(history));
-              if (localStorage.getItem(key) !== JSON.stringify(history)) throw new Error("Archive verification failed");
-              // A new native trail is safe only AFTER the old one is archived.
-              newNativeTrail = true;
-            } catch {
-              reportTrackStatus("Couldn't save the older trail. Nothing was erased or replaced.");
-              return;
+          const parsed: unknown = JSON.parse(raw || "[]");
+          if (!Array.isArray(parsed) || !parsed.every(isValidTrailPoint)) {
+            nativeProblem = "An older Android trail has an unreadable format and was preserved.";
+          } else if (!archiveTrail(parsed, owner ? "previous-android-trail" : "legacy-android-trail")) {
+            // Do not reset native storage if we cannot securely archive it.
+            nativeProblem = "Could not archive the old Android trail.";
+          } else {
+            // A fresh trail is allowed only AFTER backing up every native point.
+            // Android may still reject starting its foreground location service
+            // due to native permissions, manifest or OS service restrictions.
+            nativeStarted = native.startTracking(true) === true;
+            if (!nativeStarted) nativeProblem = "Android background recorder could not start.";
+            if (nativeStarted) {
+              try { localStorage.setItem("grace-native-trail-owner", userId!); }
+              catch { native.stopTracking(); nativeStarted = false; nativeProblem = "Could not save native trail ownership."; }
             }
           }
         }
-        if (!native.startTracking(newNativeTrail)) {
-          reportTrackStatus("Android denied GPS tracking. Enable Precise Location for Grace and allow its location permission, then retry.");
-          return;
-        }
-        localStorage.setItem("grace-native-trail-owner", userId!);
       } catch {
-        reportTrackStatus("Android GPS service could not start. Check Grace location permissions; the app may need a native update.");
-        return;
+        nativeProblem = "Android background recorder failed; the previous trail was preserved.";
       }
-      if (newNativeTrail) setTrail([]);
+    }
+
+    if (nativeStarted) {
+      setTrail([]);
+      recordingModeRef.current = "native";
+      setRecordingMode("native");
       trackingActiveRef.current = true;
-      setLastTrailGpsAt(null);
       setTracking(true);
-      reportTrackStatus("Android GPS recording requested. Check the tracking notification and wait for accurate points.");
+      setLastTrailGpsAt(null);
+      reportTrackStatus("Android background GPS started. Check the ongoing tracking notification and recorded points.");
       return;
     }
 
-    // The foreground map already watches precise GPS. A web track records
-    // only accepted fixes and must not imply background recording.
-    trackingActiveRef.current = true;
-    setLastTrailGpsAt(null);
-    setTracking(true);
-    if (newNativeTrail) setTrail([]);
+    // Keep recording usable with the existing precise WebView GPS while the
+    // older APK's native service is broken. NEVER claim locked-screen support.
+    if (!navigator.geolocation) {
+      reportTrackStatus(nativeProblem || "GPS recording unavailable on this Android build.");
+      return;
+    }
     if (watchId.current === null) {
       try {
         watchId.current = navigator.geolocation.watchPosition(
-          acceptPosition, locationError,
-          { enableHighAccuracy: true, timeout: 30000, maximumAge: 0 }
+          acceptPosition, locationError, { enableHighAccuracy: true, timeout: 30000, maximumAge: 0 }
         );
       } catch {
-        trackingActiveRef.current = false;
-        setTracking(false);
-        reportTrackStatus("Could not start GPS. Allow Precise Location for Grace and try again.");
+        reportTrackStatus("Could not start foreground GPS. Previous tracks are unchanged.");
         return;
       }
     }
-    reportTrackStatus("Foreground trail started. Waiting for precise GPS points; keep Grace open.");
+    // Start recording only after the GPS watcher is ready.
+    setTrail([]);
+    recordingModeRef.current = "foreground";
+    setRecordingMode("foreground");
+    trackingActiveRef.current = true;
+    setTracking(true);
+    setLastTrailGpsAt(null);
+    reportTrackStatus(
+      nativeProblem
+        ? "Foreground-only GPS RECORDING. " + nativeProblem + " Keep Grace OPEN and screen ON; locked-screen tracking requires an updated Android app."
+        : "Foreground GPS RECORDING. Keep Grace OPEN and screen ON; the trail saves locally."
+    );
   }
 
   function stopTracking() {
-    const native = graceNativeTrail();
-    try { if (native) native.stopTracking(); } catch {
-      reportTrackStatus("Could not stop the Android GPS service. Check its tracking notification.");
-      return;
+    const mode = recordingModeRef.current;
+    if (mode === "native") {
+      const native = graceNativeTrail();
+      try { native?.stopTracking(); }
+      catch { reportTrackStatus("Could not stop Android background recording. Use its tracking notification."); return; }
     }
-    // Keep the map's GPS watcher alive; stop recording breadcrumbs only.
+    // Keep a recoverable copy of every completed outing.
+    const saved = archiveTrail(trail, mode === "native" ? "completed-android-trail" : "completed-foreground-trail");
     trackingActiveRef.current = false;
+    recordingModeRef.current = null;
+    setRecordingMode(null);
     setTracking(false);
-    reportTrackStatus("GPS trail stopped and saved on this device.");
+    reportTrackStatus(saved
+      ? "Trail stopped and saved in Track History on this device."
+      : "Trail stopped. Current breadcrumbs remain on the map, but archive storage failed. Export them.");
   }
 
   function returnToStart() {
@@ -1715,18 +1747,33 @@ export default function FieldMap({
   }
 
   function clearTrail() {
-    if (
-      typeof window !== "undefined" &&
-      !window.confirm("Clear your breadcrumb trail?")
-    ) {
+    if (trackingActiveRef.current) {
+      reportTrackStatus("Stop tracking before archiving your current trail.");
       return;
     }
+    if (!trail.length || !window.confirm("Archive this trail and clear its line from the map? Track History will keep every point.")) return;
+    if (!archiveTrail(trail, "manually-archived-trail")) return;
     const native = graceNativeTrail();
-    if (native && !native.clearTrail()) {
-      setLocationStatus("Stop native tracking before clearing the trail.");
-      return;
+    if (native && localStorage.getItem("grace-native-trail-owner") === userId) {
+      try {
+        const raw: unknown = JSON.parse(native.getTrailSnapshot() || "[]");
+        if (!Array.isArray(raw) || !raw.every(isValidTrailPoint) ||
+            !archiveTrail(raw, "archived-android-trail")) {
+          reportTrackStatus("Android trail could not be archived. No points were cleared.");
+          return;
+        }
+        if (!native.clearTrail()) {
+          reportTrackStatus("Android GPS service must be stopped before clearing the active line.");
+          return;
+        }
+      } catch {
+        reportTrackStatus("Could not safely archive the Android trail. Nothing was erased.");
+        return;
+      }
     }
     setTrail([]);
+    setPreviewTrail(null);
+    reportTrackStatus("Current trail archived. All prior tracks remain in local Track History.");
   }
 
   function markHere() {
@@ -2178,9 +2225,30 @@ export default function FieldMap({
                 : trail.length>1?"No gaps larger than 120 m detected. This does not establish terrain safety.":"Record more GPS points to evaluate trail gaps."}
             </div>
             <div style={{color:"#c9c5ad",marginTop:4}}>Trail lines are stored positions, not verified paths or hazard-free routes.</div>
+            <div style={{color:"#f3d6a7",marginTop:6}}>
+              {recordingMode === "foreground" ? "FOREGROUND ONLY — keep Grace open and screen awake." :
+               recordingMode === "native" ? "Android background recorder requested; confirm its ongoing notification." :
+               "Recording off. Saved history is local to this account and device."}
+            </div>
+            <details style={{marginTop:10}}>
+              <summary style={{cursor:"pointer",fontWeight:800,color:"#dceecb"}}>TRACK HISTORY — {archivedTrails.length} saved outings</summary>
+              <div style={{maxHeight:190,overflowY:"auto",paddingTop:7}}>
+                {archivedTrails.length === 0 ? <div>No past tracks archived yet.</div> :
+                archivedTrails.map((item,i) => (
+                  <button key={i} type="button" onClick={() => {
+                    setPreviewTrail(item);
+                    setToolsOpen(false);
+                    const p=item.points[0];
+                    if(p) centerMapOn(p.lat,p.lng,15);
+                  }} style={{width:"100%",display:"block",textAlign:"left",padding:9,marginBottom:5,borderRadius:7,background:"#1e3a2b",border:"1px solid #718b69",color:"#f5ead5"}}>
+                    {new Date(item.savedAt).toLocaleString()} · {item.points.length} points · View on map
+                  </button>
+                ))}
+              </div>
+            </details>
             <div style={{display:"flex",gap:7,flexWrap:"wrap",marginTop:9}}>
               <button type="button" onClick={exportTrailHistory} style={{padding:"9px 13px",border:"1px solid #9aab8f",borderRadius:8,background:"#19372a",color:"#f8e4cf",fontWeight:700}}>EXPORT TRAILS</button>
-              {trail.length>0&&<button type="button" onClick={clearTrail} style={{padding:"9px 13px",border:"1px solid #ad8b62",borderRadius:8,background:"#342419",color:"#f8e4cf",fontWeight:700}}>CLEAR TRAIL (CONFIRM)</button>}
+              {trail.length>0&&<button type="button" onClick={clearTrail} style={{padding:"9px 13px",border:"1px solid #ad8b62",borderRadius:8,background:"#342419",color:"#f8e4cf",fontWeight:700}}>ARCHIVE CURRENT TRAIL</button>}
             </div>
           </div>
         </div>
@@ -3028,6 +3096,10 @@ export default function FieldMap({
             </Marker>
           )}
 
+          {previewTrail && previewTrail.points.length > 1 && (
+            <Polyline positions={previewTrail.points.map(p=>[p.lat,p.lng])}
+              pathOptions={{color:"#e8b76d",weight:5,opacity:.9,dashArray:"10 7",lineCap:"round"}} />
+          )}
           {trail.length > 1 && (
             <Polyline
               positions={trail.map((point) => [
@@ -3193,7 +3265,7 @@ export default function FieldMap({
 
       {tracking && (
         <div role="status" aria-live="polite" style={{position:"absolute",top:84,left:"50%",transform:"translateX(-50%)",zIndex:850,border:"1px solid #79c69a",background:"#082018ec",color:"#d8ffdc",padding:"6px 11px",borderRadius:9,fontSize:11,fontWeight:850,whiteSpace:"nowrap",boxShadow:"0 3px 10px #000a"}}>
-          {lastTrailGpsAt===null||heartbeat-lastTrailGpsAt>45000?"◌ GPS SIGNAL STALE":"● TRACKING"} · {trail.length} GPS points · {accuracy!==null?`±${Math.round(accuracy*3.28084)} ft`:"waiting for fix"}
+          {lastTrailGpsAt===null||heartbeat-lastTrailGpsAt>45000?"◌ WAITING FOR GPS POINTS":"● TRACKING"} · {recordingMode==="foreground"?"FOREGROUND ONLY":"ANDROID GPS"} · {trail.length} GPS points · {accuracy!==null?`±${Math.round(accuracy*3.28084)} ft`:"waiting for fix"}
         </div>
       )}
 
