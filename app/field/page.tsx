@@ -42,7 +42,6 @@ function Icon({ name, size = 22 }: { name: IconName; size?: number }) {
 export default function GraceField() {
   const [heading, setHeading] = useState<number | null>(null);
   const [tracking, setTracking] = useState(false);
-  const [trackStatus, setTrackStatus] = useState("");
   const [trackMessage, setTrackMessage] = useState("");
   const [trackStarting, setTrackStarting] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -162,7 +161,6 @@ export default function GraceField() {
         if (!/checking GPS|starting your trail/i.test(message)) setTrackStarting(false);
       }
     };
-    const updateTrackStatus = (e: Event) => setTrackStatus(String((e as CustomEvent<{message?:string}>).detail?.message || "GPS status unavailable."));
     const updateGps = (e: Event) => {
       const v = (e as CustomEvent<GpsInfo>).detail;
       if (v) setGps(v);
@@ -170,14 +168,12 @@ export default function GraceField() {
     window.addEventListener("deviceorientationabsolute", orientation);
     window.addEventListener("deviceorientation", orientation);
     window.addEventListener("grace-field-tracking-state", track);
-    window.addEventListener("grace-field-track-status", updateTrackStatus);
     window.addEventListener("grace-field-track-status", trackStatus);
     window.addEventListener("grace-field-gps-info", updateGps);
     return () => {
       window.removeEventListener("deviceorientationabsolute", orientation);
       window.removeEventListener("deviceorientation", orientation);
       window.removeEventListener("grace-field-tracking-state", track);
-      window.removeEventListener("grace-field-track-status", updateTrackStatus);
       window.removeEventListener("grace-field-track-status", trackStatus);
       window.removeEventListener("grace-field-gps-info", updateGps);
     };
@@ -301,7 +297,6 @@ export default function GraceField() {
       <div className="gf-grace-sheet-head"><span>Grace · Your companion</span><button type="button" onClick={()=>setGraceExpanded(v=>!v)} aria-label={graceExpanded?"Shrink chat":"Expand chat"} style={{color:"white",background:"transparent",border:0,padding:"7px 10px"}}>{graceExpanded?"Shrink":"Expand"}</button><button type="button" onClick={()=>setGraceOpen(false)} aria-label="Close Grace chat and return to map" style={{color:"white",background:"transparent",border:0,padding:"7px 10px"}}>✕ Back to map</button></div>
       <iframe ref={graceFrameRef} title="Grace conversation" src="/chat?field=1" allow="microphone; camera" onLoad={sendFieldContext} />
     </section>
-    {trackStatus && <div role="status" aria-live="polite" style={{position:"absolute",zIndex:1350,left:12,right:12,bottom:"calc(env(safe-area-inset-bottom,0px) + 92px)",maxWidth:650,margin:"auto",padding:"10px 34px 10px 12px",border:"1px solid #d6b67f",borderRadius:11,background:"#10231feF",color:"#fff0cd",fontSize:12,lineHeight:1.45,boxShadow:"0 4px 16px #000b"}}>{trackStatus}<button type="button" onClick={()=>setTrackStatus("")} aria-label="Dismiss tracking status" style={{position:"absolute",right:6,top:4,padding:"5px 8px",border:0,color:"#f0d6a2",background:"transparent"}}>✕</button></div>}
     <nav className="gf-bottom" aria-label="Main field actions">
       <button className={`gf-action ${tracking?"stop":"primary"}`} disabled={trackStarting} onClick={()=>{
         if (!tracking) {
