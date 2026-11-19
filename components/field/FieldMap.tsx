@@ -1674,13 +1674,32 @@ export default function FieldMap({
 
   function stopTracking() {
     const mode = recordingModeRef.current;
+    let finalTrail = trail;
     if (mode === "native") {
       const native = graceNativeTrail();
-      try { native?.stopTracking(); }
-      catch { reportTrackStatus("Could not stop Android background recording. Use its tracking notification."); return; }
+      if (!native) {
+        reportTrackStatus("Android GPS bridge unavailable. Existing points are preserved.");
+        return;
+      }
+      // The native service may have gathered points while the screen was off,
+      // beyond the last web sync. Fetch them before requesting STOP.
+      try {
+        const snapshot: unknown = JSON.parse(native.getTrailSnapshot() || "[]");
+        if (!Array.isArray(snapshot) || !snapshot.every(isValidTrailPoint)) {
+          reportTrackStatus("Native trail could not be read safely. Tracking was not stopped or cleared.");
+          return;
+        }
+        finalTrail = snapshot as TrailPoint[];
+        if (!archiveTrail(finalTrail, "completed-android-trail")) return;
+        native.stopTracking();
+        setTrail(finalTrail);
+      } catch {
+        reportTrackStatus("Android GPS snapshot/stop failed. Trail was not cleared; check the tracking notification.");
+        return;
+      }
     }
     // Keep a recoverable copy of every completed outing.
-    const saved = archiveTrail(trail, mode === "native" ? "completed-android-trail" : "completed-foreground-trail");
+    const saved = mode === "native" || archiveTrail(finalTrail, "completed-foreground-trail");
     trackingActiveRef.current = false;
     recordingModeRef.current = null;
     setRecordingMode(null);
@@ -1732,7 +1751,15 @@ export default function FieldMap({
   function exportTrailHistory() {
     try {
       const archived = JSON.parse(localStorage.getItem(fieldStorageKey(userId!, "graceFieldTrackHistory")) || "[]");
-      const exportData = { exportedAt: new Date().toISOString(), activeTrail: trail, archivedTrails: Array.isArray(archived) ? archived : [] };
+      let nativeTrail: TrailPoint[] = [];
+      try {
+        const native = graceNativeTrail();
+        if (native && localStorage.getItem("grace-native-trail-owner") === userId) {
+          const snapshot: unknown = JSON.parse(native.getTrailSnapshot() || "[]");
+          if (Array.isArray(snapshot) && snapshot.every(isValidTrailPoint)) nativeTrail = snapshot;
+        }
+      } catch { /* Export known web history even when the native bridge fails. */ }
+      const exportData = { exportedAt: new Date().toISOString(), activeTrail: trail, nativeTrail, archivedTrails: Array.isArray(archived) ? archived : [] };
       const blob = new Blob([JSON.stringify(exportData, null, 2)], {type:"application/json"});
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
