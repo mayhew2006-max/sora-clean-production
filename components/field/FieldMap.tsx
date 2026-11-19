@@ -739,10 +739,17 @@ export default function FieldMap({
       setToolsOpen(false);
       setLayersOpen(true);
     };
+    const showTrailHistory=()=>{
+      setLayersOpen(false);
+      setTrackHistoryExpanded(true);
+      setToolsOpen(true);
+    };
     window.addEventListener("grace-field-open-tools", showTools);
+    window.addEventListener("grace-field-open-track-history", showTrailHistory);
     window.addEventListener("grace-field-open-layers", showLayers);
     return () => {
       window.removeEventListener("grace-field-open-tools", showTools);
+      window.removeEventListener("grace-field-open-track-history", showTrailHistory);
       window.removeEventListener("grace-field-open-layers", showLayers);
     };
   }, []);
@@ -2326,13 +2333,13 @@ export default function FieldMap({
             <div style={{color:"#c9c5ad",marginTop:4}}>Trail lines are stored positions, not verified paths or hazard-free routes.</div>
             <div style={{color:"#f3d6a7",marginTop:6}}>
               {recordingMode === "foreground" ? "FOREGROUND ONLY — keep Grace open and screen awake." :
-               recordingMode === "native" ? "Android background recorder requested; confirm its ongoing notification." :
+               recordingMode === "native" ? "Android background service requested. Confirm the GPS point count increases; startup alone isn't proof of recording." :
                "Recording off. Saved history is local to this account and device."}
             </div>
-            <details style={{marginTop:10}}>
-              <summary style={{cursor:"pointer",fontWeight:800,color:"#dceecb"}}>TRACK HISTORY — {archivedTrails.length} saved outings</summary>
+            <details open={trackHistoryExpanded} onToggle={e=>setTrackHistoryExpanded(e.currentTarget.open)} style={{marginTop:10}}>
+              <summary style={{cursor:"pointer",fontWeight:800,color:"#dceecb"}}>TRACK HISTORY — {archivedTrails.length} saved recordings</summary>
               <div style={{maxHeight:190,overflowY:"auto",paddingTop:7}}>
-                {archivedTrails.length === 0 ? <div>No past tracks archived yet.</div> :
+                {archivedTrails.length === 0 ? <div>No previously recorded GPS points found in this account's local archive. A previous START/STOP without points is not a saved route.</div> :
                 archivedTrails.map((item,i) => (
                   <button key={i} type="button" onClick={() => {
                     setPreviewTrail(item);
@@ -2340,7 +2347,7 @@ export default function FieldMap({
                     const p=item.points[0];
                     if(p) centerMapOn(p.lat,p.lng,15);
                   }} style={{width:"100%",display:"block",textAlign:"left",padding:9,marginBottom:5,borderRadius:7,background:"#1e3a2b",border:"1px solid #718b69",color:"#f5ead5"}}>
-                    {new Date(item.savedAt).toLocaleString()} · {item.points.length} points · View on map
+                    {new Date(item.savedAt).toLocaleString()} · {item.points.length} point{item.points.length===1?" (not a route)":"s"} · View on map
                   </button>
                 ))}
               </div>
@@ -2616,7 +2623,7 @@ export default function FieldMap({
                 Prepare the app shell while connected, then verify it in
                 airplane mode. GPS can work without cell service, but this
                 does NOT download satellite or topographic imagery.
-                Online map tiles may appear blank without service.
+                Online map tiles may appear blank without service. The blue dot, saved markers and recorded trail lines may still show over a blank background if Grace's offline app shell is prepared. Never mistake a blank background for downloaded terrain.
               </div>
               <button type="button" disabled={offlinePreparing} onClick={()=>{void prepareOfflineField();}}
                 style={{width:"100%",marginTop:11,padding:"11px 13px",background:"#204633",border:"1px solid #d4b67e",borderRadius:9,color:"#fbe9c8",fontWeight:800}}>
