@@ -487,6 +487,10 @@ export default function FieldMap({
 
   const [locationStatus, setLocationStatus] =
     useState("Finding your location...");
+  function reportTrackStatus(message: string) {
+    setLocationStatus(message);
+    window.dispatchEvent(new CustomEvent("grace-field-track-status", { detail: { message } }));
+  }
 
   const [tracking, setTracking] = useState(false);
   const [lastTrailGpsAt,setLastTrailGpsAt] = useState<number|null>(null);
@@ -853,20 +857,24 @@ export default function FieldMap({
     );
 
     /*
-      Desktop browsers sometimes return a network/IP estimate
-      many miles away. Grace Field refuses extremely coarse
-      positions instead of pretending they are real GPS.
+      A roughly 1 km Android approximate-location fix is NOT suitable
+      for waypoints, blue-dot navigation or breadcrumb tracking.
+      Only GPS fixes within 100 m may position the user on the map;
+      individual breadcrumb points still require 40 m or better.
     */
     if (
       !Number.isFinite(reportedAccuracy) ||
-      reportedAccuracy > 1500
+      reportedAccuracy > 100 ||
+      !Number.isFinite(result.coords.latitude) ||
+      !Number.isFinite(result.coords.longitude) ||
+      Math.abs(result.coords.latitude) > 90 ||
+      Math.abs(result.coords.longitude) > 180
     ) {
       setAccuracy(reportedAccuracy);
 
-      setLocationStatus(
-        `Location rejected — accuracy is only about ${reportedAccuracy} m.`
-      );
-      window.dispatchEvent(new CustomEvent("grace-field-gps-info", {detail:{accuracy:reportedAccuracy,altitude:null,status:`Location rejected — ±${reportedAccuracy} m is too inaccurate`}}));
+      const message = `GPS NOT READY — ±${reportedAccuracy} m is too inaccurate. Enable Precise Location in Android Settings, then tap Locate.`;
+      setLocationStatus(message);
+      window.dispatchEvent(new CustomEvent("grace-field-gps-info", {detail:{accuracy:reportedAccuracy,altitude:null,status:message}}));
 
       return false;
     }
@@ -982,13 +990,18 @@ export default function FieldMap({
 
   useEffect(() => {
     locateMe();
-
+    // Keep obtaining fresh device fixes while the map is open. A one-time
+    // approximate fix must not become a permanently misplaced blue dot.
+    if (navigator.geolocation) {
+      watchId.current = navigator.geolocation.watchPosition(
+        acceptPosition, locationError,
+        { enableHighAccuracy: true, timeout: 30000, maximumAge: 0 }
+      );
+    }
     return () => {
-      if (
-        watchId.current !== null &&
-        navigator.geolocation
-      ) {
+      if (watchId.current !== null && navigator.geolocation) {
         navigator.geolocation.clearWatch(watchId.current);
+        watchId.current = null;
       }
     };
   }, []);
@@ -1467,39 +1480,55 @@ export default function FieldMap({
   }, [authReady, userId, loadedOwnerId]);
 
   async function useFieldAction(action: "field_save" | "field_track" = "field_save") {
-    if (!userId || loadedOwnerId !== userId) { setLocationStatus("Sign in to save locations for your account."); return false; }
+    const report = (message: string) => action === "field_track" ? reportTrackStatus(message) : setLocationStatus(message);
+    if (!userId || loadedOwnerId !== userId) { report("Grace is loading your account. Please try again."); return false; }
     // Basic local GPS safety actions are not charged while offline.
     if(typeof navigator!=="undefined" && navigator.onLine===false){
-      setLocationStatus("OFFLINE: "+(action==="field_track"?"GPS tracking":"Waypoint saving")+" works locally. Reconnect to sync spots.");
+      report("OFFLINE: "+(action==="field_track"?"GPS tracking":"Waypoint saving")+" works locally. Reconnect to sync spots.");
       return true;
     }
-    if (!authReady) { setLocationStatus("Grace is checking your account..."); return false; }
+    if (!authReady) { report("Grace is checking your account. Please try again."); return false; }
     const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.access_token) { window.location.href = "/login"; return false; }
+    if (!session?.access_token) { report("Sign in to start tracking."); window.location.href = "/login"; return false; }
     try {
       const res = await fetch("/api/usage/consume", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: "Bearer " + session.access_token },
         body: JSON.stringify({ action }),
       });
-      if (res.status === 402) { setAccountFreeUsed(FREE_LIMIT); window.location.href = "/pay"; return false; }
-      if (res.status === 401) { window.location.href = "/login"; return false; }
+      if (res.status === 402) { report("Free actions exhausted. Upgrade to start tracking."); setAccountFreeUsed(FREE_LIMIT); window.location.href = "/pay"; return false; }
+      if (res.status === 401) { report("Session expired. Sign in to start tracking."); window.location.href = "/login"; return false; }
       if (!res.ok) throw new Error("Usage check failed");
       const result = await res.json() as { used: number; paid: boolean };
       setAccountFreeUsed(result.used);
       setPaid(result.paid);
       return true;
     } catch {
-      setLocationStatus("Could not verify your free actions. Please try again.");
+      report("Could not verify your free actions. Check signal and try again.");
       return false;
     }
   }
 
   async function startTracking() {
-    if (trackingActiveRef.current) return;
-    if (!(await useFieldAction("field_track"))) return;
+    if (trackingActiveRef.current) {
+      reportTrackStatus("GPS tracking is already active.");
+      return;
+    }
+    reportTrackStatus("Checking GPS and starting your trail…");
+
+    // Do not charge a track action or pretend to track from a 1 km
+    // approximate-location fix. Android Precise Location must be enabled.
+    if (accuracy !== null && (!Number.isFinite(accuracy) || accuracy > 100)) {
+      reportTrackStatus(`Cannot track with ±${Math.round(accuracy * 3.28084)} ft GPS uncertainty. Turn on Precise Location for Grace, tap Locate, then retry.`);
+      return;
+    }
     const native = graceNativeTrail();
-    if (!native && !navigator.geolocation) return;
+    if (!native && !navigator.geolocation) {
+      reportTrackStatus("This device has no available GPS interface.");
+      return;
+    }
+    if (!(await useFieldAction("field_track"))) return;
+
     let newNativeTrail = false;
     if (trail.length > 1) {
       const wantsNew = window.confirm("Start a NEW breadcrumb trail? Your previous trail will be archived on this device. Press Cancel to continue the existing trail.");
@@ -1507,71 +1536,75 @@ export default function FieldMap({
         try {
           const saved = JSON.parse(localStorage.getItem(fieldStorageKey(userId!, "graceFieldTrackHistory")) || "[]");
           const archive = Array.isArray(saved) ? saved : [];
-          archive.unshift({savedAt:new Date().toISOString(),points:trail});
-          localStorage.setItem(fieldStorageKey(userId!, "graceFieldTrackHistory"),JSON.stringify(archive.slice(0,25)));
-          setTrail([]);
+          archive.unshift({ savedAt: new Date().toISOString(), points: trail });
+          localStorage.setItem(fieldStorageKey(userId!, "graceFieldTrackHistory"), JSON.stringify(archive.slice(0, 25)));
           newNativeTrail = true;
-        } catch {setLocationStatus("Could not archive last trail. Continuing existing trail so nothing is lost.");}
+        } catch {
+          reportTrackStatus("Could not archive the previous trail. Continuing it to protect existing points.");
+        }
       }
     }
 
     if (native) {
-      const owner = localStorage.getItem("grace-native-trail-owner");
-      if (owner && owner !== userId) {
-        setLocationStatus("A native GPS trail belongs to a different account on this device. Switch back to that account to export or clear it.");
+      try {
+        const owner = localStorage.getItem("grace-native-trail-owner");
+        if (owner && owner !== userId) {
+          reportTrackStatus("This Android trail belongs to another signed-in account. Switch back to export or clear it.");
+          return;
+        }
+        if (!owner && native.getTrailSnapshot() !== "[]") {
+          reportTrackStatus("An older Android trail needs exporting before a new one can be started.");
+          return;
+        }
+        if (!native.startTracking(newNativeTrail)) {
+          reportTrackStatus("Android denied GPS tracking. Enable Precise Location for Grace and allow its location permission, then retry.");
+          return;
+        }
+        localStorage.setItem("grace-native-trail-owner", userId!);
+      } catch {
+        reportTrackStatus("Android GPS service could not start. Check Grace location permissions; the app may need a native update.");
         return;
       }
-      if (!owner && native.getTrailSnapshot() !== "[]") {
-        setLocationStatus("An older unassigned native GPS trail is saved. Export it before starting a new trail.");
-        return;
-      }
-      localStorage.setItem("grace-native-trail-owner", userId!);
-      if (!native.startTracking(newNativeTrail)) {
-        setLocationStatus("Allow precise Android location, then press START TRACK again.");
-        return;
-      }
+      if (newNativeTrail) setTrail([]);
       trackingActiveRef.current = true;
+      setLastTrailGpsAt(null);
       setTracking(true);
-      setLocationStatus("Android background GPS requested. Check the ongoing tracking notification.");
+      reportTrackStatus("Android GPS recording requested. Check the tracking notification and wait for accurate points.");
       return;
     }
 
-    if (watchId.current !== null) {
-      navigator.geolocation.clearWatch(watchId.current);
-    }
-
-    if (trackingActiveRef.current) return;
+    // The foreground map already watches precise GPS. A web track records
+    // only accepted fixes and must not imply background recording.
     trackingActiveRef.current = true;
     setLastTrailGpsAt(null);
     setTracking(true);
-    setLocationStatus("Live GPS tracking started...");
-
-    watchId.current =
-      navigator.geolocation.watchPosition(
-        acceptPosition,
-        locationError,
-        {
-          enableHighAccuracy: true,
-          timeout: 30000,
-          maximumAge: 3000,
-        }
-      );
+    if (newNativeTrail) setTrail([]);
+    if (watchId.current === null) {
+      try {
+        watchId.current = navigator.geolocation.watchPosition(
+          acceptPosition, locationError,
+          { enableHighAccuracy: true, timeout: 30000, maximumAge: 0 }
+        );
+      } catch {
+        trackingActiveRef.current = false;
+        setTracking(false);
+        reportTrackStatus("Could not start GPS. Allow Precise Location for Grace and try again.");
+        return;
+      }
+    }
+    reportTrackStatus("Foreground trail started. Waiting for precise GPS points; keep Grace open.");
   }
 
   function stopTracking() {
     const native = graceNativeTrail();
-    if (native) native.stopTracking();
-    if (
-      watchId.current !== null &&
-      navigator.geolocation
-    ) {
-      navigator.geolocation.clearWatch(watchId.current);
-      watchId.current = null;
+    try { if (native) native.stopTracking(); } catch {
+      reportTrackStatus("Could not stop the Android GPS service. Check its tracking notification.");
+      return;
     }
-
+    // Keep the map's GPS watcher alive; stop recording breadcrumbs only.
     trackingActiveRef.current = false;
     setTracking(false);
-    setLocationStatus("Live tracking stopped.");
+    reportTrackStatus("GPS trail stopped and saved on this device.");
   }
 
   function returnToStart() {
