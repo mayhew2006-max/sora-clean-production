@@ -1552,9 +1552,60 @@ export default function FieldMap({
           reportTrackStatus("This Android trail belongs to another signed-in account. Switch back to export or clear it.");
           return;
         }
-        if (!owner && native.getTrailSnapshot() !== "[]") {
-          reportTrackStatus("An older Android trail needs exporting before a new one can be started.");
-          return;
+        if (!owner) {
+          // Older Android builds may have saved a trail before the owner tag
+          // existed. Never silently discard or claim another person's trail.
+          const raw = native.getTrailSnapshot();
+          let snapshot: unknown;
+          try {
+            snapshot = JSON.parse(raw || "[]");
+          } catch {
+            reportTrackStatus("Could not read the older Android trail. It has NOT been erased.");
+            return;
+          }
+          if (!Array.isArray(snapshot)) {
+            reportTrackStatus("Older Android trail has an unknown format. Nothing was erased.");
+            return;
+          }
+          if (snapshot.length > 0) {
+            const valid = snapshot.every((point: unknown) => {
+              if (!point || typeof point !== "object") return false;
+              const p = point as Record<string, unknown>;
+              return typeof p.lat === "number" && Number.isFinite(p.lat) && Math.abs(p.lat) <= 90 &&
+                typeof p.lng === "number" && Number.isFinite(p.lng) && Math.abs(p.lng) <= 180 &&
+                typeof p.time === "string" && Number.isFinite(Date.parse(p.time));
+            });
+            if (!valid) {
+              reportTrackStatus("The earlier Android trail needs recovery before tracking. Nothing was erased.");
+              return;
+            }
+            const consent = window.confirm(
+              "Grace found a trail from an older Android app version. Is this YOUR trail? " +
+              "OK = save a copy in this account's local trail history and start a fresh trail. " +
+              "Cancel = keep the old trail untouched."
+            );
+            if (!consent) {
+              reportTrackStatus("Older Android trail preserved. No new tracking started.");
+              return;
+            }
+            try {
+              const key = fieldStorageKey(userId!, "graceFieldTrackHistory");
+              const historyRaw = JSON.parse(localStorage.getItem(key) || "[]");
+              if (!Array.isArray(historyRaw)) throw new Error("Invalid existing archive");
+              const history = [
+                { savedAt: new Date().toISOString(), points: snapshot, source: "legacy-android-recovered" },
+                ...historyRaw
+              ];
+              // Keep every existing archive; don't truncate during recovery.
+              localStorage.setItem(key, JSON.stringify(history));
+              if (localStorage.getItem(key) !== JSON.stringify(history)) throw new Error("Archive verification failed");
+              // A new native trail is safe only AFTER the old one is archived.
+              newNativeTrail = true;
+            } catch {
+              reportTrackStatus("Couldn't save the older trail. Nothing was erased or replaced.");
+              return;
+            }
+          }
         }
         if (!native.startTracking(newNativeTrail)) {
           reportTrackStatus("Android denied GPS tracking. Enable Precise Location for Grace and allow its location permission, then retry.");
